@@ -6,19 +6,24 @@ function getTransporter(): nodemailer.Transporter | null {
   const port = process.env.EMAIL_PORT
   const user = process.env.EMAIL_USER
   const pass = process.env.EMAIL_PASS
+  const portNum = Number(port) || 587
   return nodemailer.createTransport({
     host,
-    port: Number(port) || 587,
-    secure: false,
+    port: portNum,
+    secure: portNum === 465,
     auth: { user, pass },
   })
 }
 
+/**
+ * Returns the OTP string when no email transporter is configured (dev/no-smtp mode),
+ * so callers can include it in the API response for testing. Returns null when email was sent.
+ */
 export async function sendOTPEmail(
   to: string,
   otp: string,
   type: 'email_verify' | 'login'
-): Promise<void> {
+): Promise<string | null> {
   const subject =
     type === 'email_verify'
       ? 'Verify your email — SchoolVoting'
@@ -86,7 +91,7 @@ export async function sendOTPEmail(
     console.log(`  Type:    ${type}`)
     console.log(`  OTP:     ${otp}`)
     console.log('='.repeat(60) + '\n')
-    return
+    return otp
   }
 
   await transporter.sendMail({
@@ -95,4 +100,5 @@ export async function sendOTPEmail(
     subject,
     html,
   })
+  return null
 }

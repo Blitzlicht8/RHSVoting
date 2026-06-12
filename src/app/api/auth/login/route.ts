@@ -62,9 +62,9 @@ export async function POST(request: NextRequest) {
       sql: 'INSERT INTO otps (user_id, code, type, expires_at, used) VALUES (?, ?, ?, ?, ?)',
       args: [Number(user.id), code, 'login', expiresAt, 0],
     })
-    await sendOTPEmail(email, code, 'login')
+    const devOtp = await sendOTPEmail(email, code, 'login')
 
-    return NextResponse.json({ data: { requiresOTP: true, email }, message: 'OTP sent to your email' })
+    return NextResponse.json({ data: { requiresOTP: true, email, ...(devOtp ? { devOtp } : {}) }, message: 'OTP sent to your email' })
   }
 
   const token = await signJWT({

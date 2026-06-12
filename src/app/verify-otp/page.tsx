@@ -98,8 +98,9 @@ function VerifyOtpInner() {
   const searchParams = useSearchParams()
   const { addToast } = useToast()
 
-  const email = searchParams.get('email') ?? ''
-  const type  = searchParams.get('type')  ?? 'email_verify'
+  const email  = searchParams.get('email')  ?? ''
+  const type   = searchParams.get('type')   ?? 'email_verify'
+  const devOtp = searchParams.get('devOtp') ?? null
 
   const [otp, setOtp]         = useState('')
   const [loading, setLoading] = useState(false)
@@ -215,6 +216,12 @@ function VerifyOtpInner() {
             </p>
             {email && (
               <p className="text-sm font-semibold text-gray-800 break-all">{email}</p>
+            )}
+            {devOtp && (
+              <div className="mt-2 rounded-lg bg-yellow-50 border border-yellow-300 px-4 py-2 text-sm text-yellow-800">
+                <span className="font-semibold">No email configured — dev code: </span>
+                <span className="font-mono font-bold tracking-widest">{devOtp}</span>
+              </div>
             )}
           </div>
         </div>

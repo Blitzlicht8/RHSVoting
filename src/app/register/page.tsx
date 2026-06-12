@@ -179,9 +179,9 @@ export default function RegisterPage() {
         return
       }
 
-      router.push(
-        '/verify-otp?email=' + encodeURIComponent(email.trim().toLowerCase()) + '&type=email_verify'
-      )
+      const params = new URLSearchParams({ email: email.trim().toLowerCase(), type: 'email_verify' })
+      if (json.data?.devOtp) params.set('devOtp', json.data.devOtp)
+      window.location.href = '/verify-otp?' + params.toString()
     } catch {
       addToast('Network error. Please check your connection.', 'error')
     } finally {

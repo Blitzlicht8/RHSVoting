@@ -97,6 +97,7 @@ export default function LoginPage() {
 
   // OTP step
   const [otp, setOtp] = useState('')
+  const [devOtp, setDevOtp] = useState<string | null>(null)
 
   // Shared
   const [loading, setLoading] = useState(false)
@@ -153,18 +154,20 @@ export default function LoginPage() {
       }
 
       if (json.data?.requiresOTP) {
+        if (json.data?.devOtp) setDevOtp(json.data.devOtp)
         setStep('otp')
         startCountdown()
         return
       }
 
       if (json.data?.requiresEmailVerification) {
-        router.push(`/verify-otp?email=${encodeURIComponent(email.trim().toLowerCase())}&type=email_verify`)
+        const params = new URLSearchParams({ email: email.trim().toLowerCase(), type: 'email_verify' })
+        window.location.href = '/verify-otp?' + params.toString()
         return
       }
 
       // Fully authenticated
-      router.push('/dashboard')
+      window.location.href = '/dashboard'
     } catch {
       addToast('Network error. Please check your connection.', 'error')
     } finally {
@@ -195,7 +198,7 @@ export default function LoginPage() {
         return
       }
 
-      router.push('/dashboard')
+      window.location.href = '/dashboard'
     } catch {
       addToast('Network error. Please check your connection.', 'error')
     } finally {
@@ -332,6 +335,12 @@ export default function LoginPage() {
               <p className="text-sm text-gray-500">
                 Code sent to <span className="font-medium text-gray-700">{email}</span>
               </p>
+              {devOtp && (
+                <div className="mt-2 rounded-lg bg-yellow-50 border border-yellow-300 px-4 py-2 text-sm text-yellow-800">
+                  <span className="font-semibold">No email configured — dev code: </span>
+                  <span className="font-mono font-bold tracking-widest">{devOtp}</span>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-center">

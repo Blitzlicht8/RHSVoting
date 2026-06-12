@@ -47,10 +47,10 @@ export async function POST(request: NextRequest) {
     args: [userId, code, 'email_verify', expiresAt, 0],
   })
 
-  await sendOTPEmail(email, code, 'email_verify')
+  const devOtp = await sendOTPEmail(email, code, 'email_verify')
 
   return NextResponse.json(
-    { data: { userId, email }, message: 'Account created. Please verify your email.' },
+    { data: { userId, email, ...(devOtp ? { devOtp } : {}) }, message: 'Account created. Please verify your email.' },
     { status: 201 }
   )
 }
