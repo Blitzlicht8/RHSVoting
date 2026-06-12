@@ -27,8 +27,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Password must be at least 8 characters long' }, { status: 400 })
   }
 
-  const existing = await db.execute({ sql: 'SELECT id FROM users WHERE email = ?', args: [email] })
+  const existing = await db.execute({
+    sql: 'SELECT id, email_verified FROM users WHERE email = ?',
+    args: [email],
+  })
+
   if (existing.rows.length > 0) {
+    const existingUser = existing.rows[0]
+    // If account exists but email is not yet verified, resend the OTP so they can continue
+    if (!existingUser.email_verified) {
+      const userId = Number(existingUser.id)
+      await db.execute({
+        sql: 'UPDATE otps SET used = 1 WHERE user_id = ? AND type = ? AND used = 0',
+        args: [userId, 'email_verify'],
+      })
+      const code = randomInt(100000, 999999).toString()
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+      await db.execute({
+        sql: 'INSERT INTO otps (user_id, code, type, expires_at, used) VALUES (?, ?, ?, ?, ?)',
+        args: [userId, code, 'email_verify', expiresAt, 0],
+      })
+      const devOtp = await sendOTPEmail(email, code, 'email_verify')
+      return NextResponse.json(
+        { data: { userId, email, ...(devOtp ? { devOtp } : {}) }, message: 'A new verification code has been sent to your email.' },
+        { status: 200 }
+      )
+    }
     return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 })
   }
 
@@ -47,16 +71,7 @@ export async function POST(request: NextRequest) {
     args: [userId, code, 'email_verify', expiresAt, 0],
   })
 
-  let devOtp: string | null = null
-  try {
-    devOtp = await sendOTPEmail(email, code, 'email_verify')
-  } catch (emailErr) {
-    console.error('Failed to send verification email:', emailErr)
-    return NextResponse.json(
-      { error: 'Account created but we could not send the verification email. Please try logging in and request a new code.' },
-      { status: 500 }
-    )
-  }
+  const devOtp = await sendOTPEmail(email, code, 'email_verify')
 
   return NextResponse.json(
     { data: { userId, email, ...(devOtp ? { devOtp } : {}) }, message: 'Account created. Please verify your email.' },

@@ -94,11 +94,15 @@ export async function sendOTPEmail(
     return otp
   }
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM || 'voting@school.edu',
-    to,
-    subject,
-    html,
-  })
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || 'voting@school.edu',
+      to,
+      subject,
+      html,
+    })
+  } catch (err) {
+    console.error('[sendOTPEmail] SMTP delivery failed:', err)
+  }
   return null
 }

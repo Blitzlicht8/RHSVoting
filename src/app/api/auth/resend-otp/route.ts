@@ -36,7 +36,10 @@ export async function POST(request: NextRequest) {
     args: [Number(user.id), code, type, expiresAt, 0],
   })
 
-  await sendOTPEmail(email, code, type as 'email_verify' | 'login')
+  const devOtp = await sendOTPEmail(email, code, type as 'email_verify' | 'login')
 
-  return NextResponse.json({ message: 'Verification code resent. Check your email.' })
+  return NextResponse.json({
+    message: 'Verification code resent. Check your email.',
+    ...(devOtp ? { data: { devOtp } } : {}),
+  })
 }
