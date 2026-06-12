@@ -3,6 +3,20 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import {
+  LayoutDashboard,
+  UserCircle,
+  Newspaper,
+  Vote,
+  ShieldCheck,
+  Users,
+  BookOpen,
+  ListChecks,
+  Flag,
+  FileText,
+  Settings,
+  LogOut,
+} from 'lucide-react'
 import { useAuth } from '@/components/providers/AuthProvider'
 import Badge from '@/components/ui/Badge'
 
@@ -19,135 +33,70 @@ const NAV_ITEMS: NavItem[] = [
     href: '/dashboard',
     label: 'Dashboard',
     adminOnly: false,
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="7" height="7" rx="1" />
-        <rect x="14" y="3" width="7" height="7" rx="1" />
-        <rect x="3" y="14" width="7" height="7" rx="1" />
-        <rect x="14" y="14" width="7" height="7" rx="1" />
-      </svg>
-    ),
+    icon: <LayoutDashboard className="w-5 h-5" />,
   },
   {
     href: '/profile',
     label: 'Profile',
     adminOnly: false,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
+    icon: <UserCircle className="w-5 h-5" />,
   },
   {
     href: '/feed',
     label: 'Feed',
     adminOnly: false,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-      </svg>
-    ),
+    icon: <Newspaper className="w-5 h-5" />,
   },
   {
     href: '/elections',
     label: 'Elections',
     adminOnly: false,
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 18V9l9-6 9 6v9" />
-        <path d="M9 18V12h6v6" />
-        <path d="M3 18h18" />
-        <path d="M7 9h.01M17 9h.01" />
-      </svg>
-    ),
+    icon: <Vote className="w-5 h-5" />,
   },
   {
     href: '/admin/verifications',
     label: 'Verifications',
     adminOnly: true,
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        <polyline points="9 12 11 14 15 10" />
-      </svg>
-    ),
+    icon: <ShieldCheck className="w-5 h-5" />,
   },
   {
     href: '/admin/users',
     label: 'Users',
     adminOnly: true,
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-      </svg>
-    ),
+    icon: <Users className="w-5 h-5" />,
   },
   {
     href: '/admin/academic',
     label: 'Academic Structure',
     adminOnly: true,
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 6h16M4 10h16M4 14h8M4 18h8" />
-      </svg>
-    ),
+    icon: <BookOpen className="w-5 h-5" />,
   },
   {
     href: '/admin/elections',
     label: 'Manage Elections',
     adminOnly: true,
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-        <path d="M4.93 4.93a10 10 0 0 0 0 14.14" />
-        <path d="M16.24 7.76a6 6 0 0 1 0 8.49" />
-        <path d="M7.76 7.76a6 6 0 0 0 0 8.49" />
-      </svg>
-    ),
+    icon: <ListChecks className="w-5 h-5" />,
   },
   {
     href: '/admin/reports',
     label: 'Reports',
     adminOnly: true,
     adminRoles: ['master_admin', 'teacher_admin'],
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
-      </svg>
-    ),
+    icon: <Flag className="w-5 h-5" />,
   },
   {
     href: '/admin/logs',
     label: 'Activity Logs',
     adminOnly: true,
     adminRoles: ['master_admin', 'teacher_admin'],
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <polyline points="14 2 14 8 20 8" />
-        <line x1="16" y1="13" x2="8" y2="13" />
-        <line x1="16" y1="17" x2="8" y2="17" />
-        <polyline points="10 9 9 9 8 9" />
-      </svg>
-    ),
+    icon: <FileText className="w-5 h-5" />,
   },
   {
     href: '/admin/settings',
     label: 'Settings',
     adminOnly: true,
     adminRoles: ['master_admin'],
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 6h16M4 12h16M4 18h16" />
-        <circle cx="8" cy="6" r="2" fill="currentColor" stroke="none" />
-        <circle cx="16" cy="12" r="2" fill="currentColor" stroke="none" />
-        <circle cx="8" cy="18" r="2" fill="currentColor" stroke="none" />
-      </svg>
-    ),
+    icon: <Settings className="w-5 h-5" />,
   },
 ]
 
@@ -273,11 +222,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             onClick={logout}
             className="w-full flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors px-2 py-1.5 rounded-lg hover:bg-gray-800"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
+            <LogOut className="w-4 h-4" />
             Sign out
           </button>
         </div>

@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
   let whereClause = admin ? '' : `WHERE e.status IN ('active', 'ended')`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const queryArgs: any[] = []
+  let voterIdArg: number | null = null
 
   if (isStudentRole) {
     const userResult = await db.execute({
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
       args: [authUser.id],
     })
     const u = userResult.rows[0]
+    voterIdArg = authUser.id as number
 
     if (!u?.id_verified) {
       // Unverified students: only global elections that are active or ended
@@ -55,16 +57,29 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // For student roles, LEFT JOIN votes to return hasVoted in one query (eliminates N+1).
+  // The JOIN ? must be the first arg since it appears before the WHERE ? args in SQL.
+  const hasVotedJoin = voterIdArg !== null
+    ? `LEFT JOIN votes vhv ON vhv.election_id = e.id AND vhv.voter_id = ?`
+    : ''
+  const hasVotedSelect = voterIdArg !== null
+    ? `, CASE WHEN vhv.id IS NOT NULL THEN 1 ELSE 0 END AS hasVoted`
+    : ''
+  // Prepend voterIdArg so it lines up with the JOIN placeholder that precedes WHERE placeholders
+  const finalArgs = voterIdArg !== null ? [voterIdArg, ...queryArgs] : queryArgs
+
   const result = await db.execute({
     sql: `SELECT
             e.*,
             (SELECT COUNT(*) FROM positions p WHERE p.election_id = e.id) AS position_count,
             (SELECT COUNT(*) FROM candidates c WHERE c.election_id = e.id) AS candidate_count,
             (SELECT COUNT(*) FROM votes v WHERE v.election_id = e.id) AS vote_count
+            ${hasVotedSelect}
           FROM elections e
+          ${hasVotedJoin}
           ${whereClause}
           ORDER BY e.created_at DESC`,
-    args: queryArgs,
+    args: finalArgs,
   })
 
   return NextResponse.json({ data: { elections: result.rows } })

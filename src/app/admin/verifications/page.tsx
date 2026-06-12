@@ -5,7 +5,7 @@ import Layout from '@/components/Layout'
 import Modal from '@/components/ui/Modal'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
-import Spinner from '@/components/ui/Spinner'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 
@@ -323,8 +323,10 @@ export default function VerificationsPage() {
 
         {/* Content */}
         {loadingList ? (
-          <div className="flex justify-center py-16">
-            <Spinner />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-32 w-full" />
+            ))}
           </div>
         ) : verifications.length === 0 ? (
           <div className="text-center py-16 text-gray-400">

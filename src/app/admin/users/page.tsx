@@ -6,6 +6,7 @@ import Modal from '@/components/ui/Modal'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Spinner from '@/components/ui/Spinner'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 
@@ -334,8 +335,14 @@ export default function UsersPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex justify-center py-16">
-            <Spinner />
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex gap-4 items-center">
+                <Skeleton className="h-9 w-9 rounded-full flex-shrink-0" />
+                <Skeleton className="h-9 flex-1" />
+                <Skeleton className="h-9 w-24" />
+              </div>
+            ))}
           </div>
         )}
 

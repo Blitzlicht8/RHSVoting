@@ -7,6 +7,7 @@ import { useAuth } from '@/components/providers/AuthProvider'
 import Sidebar from '@/components/Sidebar'
 import Navbar from '@/components/Navbar'
 import Spinner from '@/components/ui/Spinner'
+import BottomNav from '@/components/BottomNav'
 import { useToast } from '@/components/providers/ToastProvider'
 
 interface LayoutProps {
@@ -98,12 +99,13 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         ) : null}
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
           <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
             {children}
           </div>
         </main>
       </div>
+      <BottomNav onOpenSidebar={() => setSidebarOpen(true)} />
     </div>
   )
 }

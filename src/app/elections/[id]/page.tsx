@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Layout from '@/components/Layout'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
-import Spinner from '@/components/ui/Spinner'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 interface Candidate {
   id: number
@@ -546,8 +546,14 @@ export default function ElectionDetailPage() {
   if (loading) {
     return (
       <Layout>
-        <div className="flex items-center justify-center h-64">
-          <Spinner size="xl" />
+        <div className="space-y-6 max-w-3xl mx-auto">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-8 w-64" />
+          <div className="space-y-4">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <Skeleton key={i} className="h-40 w-full" />
+            ))}
+          </div>
         </div>
       </Layout>
     )

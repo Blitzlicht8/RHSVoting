@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Layout from '@/components/Layout'
 import { useAuth } from '@/components/providers/AuthProvider'
-import Spinner from '@/components/ui/Spinner'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 interface Election {
   id: number
@@ -31,7 +31,7 @@ interface StatCard {
 function StatCardItem({ card }: { card: StatCard }) {
   const inner = (
     <div
-      className={`bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow ${card.href ? 'cursor-pointer' : ''}`}
+      className={`bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow duration-200 ${card.href ? 'cursor-pointer' : ''}`}
     >
       <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${card.color}`}>
         {card.icon}
@@ -72,7 +72,7 @@ function ElectionCard({ election, isAdmin }: { election: Election; isAdmin: bool
   const idVerified = !!user?.id_verified
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden">
       <Link href={`/elections/${election.id}`} className="block p-5">
         <div className="flex items-start justify-between gap-2 mb-2">
           <h3 className="font-semibold text-gray-900 truncate text-base">{election.title}</h3>
@@ -143,27 +143,12 @@ export default function DashboardPage() {
     if (!user) return
     const fetchData = async () => {
       try {
-        const [electionsRes, voteRes] = await Promise.all([
-          fetch('/api/elections'),
-          Promise.resolve(null),
-        ])
+        const electionsRes = await fetch('/api/elections')
         const electionsJson = await electionsRes.json()
         const rawElections: Election[] = electionsJson.data?.elections ?? []
 
-        // Fetch hasVoted for each active election
-        const activeElections = rawElections.filter((e) => e.status === 'active')
-        const voteChecks = await Promise.all(
-          activeElections.map((e) =>
-            fetch(`/api/elections/${e.id}/vote`)
-              .then((r) => r.json())
-              .then((j) => ({ id: e.id, hasVoted: j.data?.hasVoted ?? false }))
-              .catch(() => ({ id: e.id, hasVoted: false }))
-          )
-        )
-        const voteMap: Record<number, boolean> = {}
-        for (const v of voteChecks) voteMap[v.id] = v.hasVoted
-
-        setElections(rawElections.map((e) => ({ ...e, hasVoted: voteMap[e.id] ?? false })))
+        // hasVoted is returned directly from the elections API (no N+1 per-election fetch)
+        setElections(rawElections.map((e) => ({ ...e, hasVoted: !!e.hasVoted })))
 
         if (isAdmin) {
           const [usersRes, verificationsRes] = await Promise.all([
@@ -185,8 +170,21 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <Layout>
-        <div className="flex items-center justify-center h-64">
-          <Spinner size="xl" />
+        <div className="space-y-8">
+          <div>
+            <Skeleton className="h-8 w-48 mb-2" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-40 w-full" />
+            ))}
+          </div>
         </div>
       </Layout>
     )
