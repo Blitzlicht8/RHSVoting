@@ -5,15 +5,14 @@ import { useRouter } from 'next/navigation'
 
 export interface User {
   id: number
-  username: string
   email: string
+  name: string
   role: 'master_admin' | 'teacher_admin' | 'student_admin' | 'teacher' | 'student'
-  first_name: string
-  last_name: string
-  email_verified: boolean
-  id_verified: boolean
+  email_verified: boolean | number
+  id_verified: boolean | number
+  id_image: string | null
+  active: boolean | number
   created_at: string
-  updated_at: string
 }
 
 interface AuthContextValue {
