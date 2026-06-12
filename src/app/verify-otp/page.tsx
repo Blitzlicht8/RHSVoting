@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Button from '@/components/ui/Button'
 import OTPInput from '@/components/ui/OTPInput'
 import { useToast } from '@/components/providers/ToastProvider'
+import { verifyOTPAction } from '@/app/actions/auth'
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -145,26 +146,14 @@ function VerifyOtpInner() {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code: otp, type }),
-      })
-      const json = await res.json()
-
-      if (!res.ok) {
-        addToast(json.error ?? 'Invalid or expired code. Please try again.', 'error')
+      const result = await verifyOTPAction(email, otp, type)
+      if (!result.ok) {
+        addToast(result.error, 'error')
         return
       }
-
-      // Full page navigation so the browser sends the newly set cookie
-      if (type === 'email_verify') {
-        window.location.href = '/verify-id'
-      } else {
-        window.location.href = '/dashboard'
-      }
+      window.location.href = result.redirect
     } catch {
-      addToast('Network error. Please check your connection.', 'error')
+      addToast('Something went wrong. Please try again.', 'error')
     } finally {
       setLoading(false)
     }

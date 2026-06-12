@@ -147,7 +147,7 @@ async function _init(): Promise<void> {
     'write'
   )
 
-  // Seed master admin only if no admin exists yet
+  // Seed default admin@school.edu if missing
   const adminCheck = await db.execute({
     sql: `SELECT id FROM users WHERE email = 'admin@school.edu'`,
     args: [],
@@ -158,6 +158,26 @@ async function _init(): Promise<void> {
       sql: `INSERT INTO users (email, password_hash, name, role, email_verified, id_verified)
             VALUES ('admin@school.edu', ?, 'Master Admin', 'master_admin', 1, 1)`,
       args: [hash],
+    })
+  }
+
+  // Ensure rhenallenpabalan@gmail.com is always master_admin
+  const rhenaCheck = await db.execute({
+    sql: `SELECT id FROM users WHERE email = 'rhenallenpabalan@gmail.com'`,
+    args: [],
+  })
+  if (rhenaCheck.rows.length === 0) {
+    const hash = await bcrypt.hash('Admin@123', 12)
+    await db.execute({
+      sql: `INSERT INTO users (email, password_hash, name, role, email_verified, id_verified)
+            VALUES ('rhenallenpabalan@gmail.com', ?, 'Rhena', 'master_admin', 1, 1)`,
+      args: [hash],
+    })
+  } else {
+    await db.execute({
+      sql: `UPDATE users SET role = 'master_admin', email_verified = 1, id_verified = 1, active = 1
+            WHERE email = 'rhenallenpabalan@gmail.com'`,
+      args: [],
     })
   }
 }
