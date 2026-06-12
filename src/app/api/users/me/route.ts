@@ -40,7 +40,7 @@ export async function PATCH(request: NextRequest) {
 
   const body = await request.json()
   const sets: string[] = []
-  const vals: unknown[] = []
+  const vals: (string | number | null)[] = []
 
   if (body.name !== undefined) {
     if (!body.name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 })
