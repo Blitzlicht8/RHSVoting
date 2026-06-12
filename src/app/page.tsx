@@ -186,21 +186,22 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
+      // redirect:'follow' (default) — browser stores the Set-Cookie from the
+      // 303 BEFORE following the redirect, so the cookie is in the jar when
+      // we navigate to /dashboard below.
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim().toLowerCase(), code: otp, type: 'login', rememberMe }),
-        redirect: 'manual',
       })
 
-      if (res.type === 'opaqueredirect') {
-        window.location.href = '/dashboard'
-        return
-      }
-
-      const json = await res.json()
       if (!res.ok) {
-        addToast(json.error ?? 'Invalid code. Please try again.', 'error')
+        try {
+          const json = await res.json()
+          addToast(json.error ?? 'Invalid code. Please try again.', 'error')
+        } catch {
+          addToast('Invalid code. Please try again.', 'error')
+        }
         return
       }
 

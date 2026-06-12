@@ -145,27 +145,28 @@ function VerifyOtpInner() {
 
     setLoading(true)
     try {
+      // redirect:'follow' (default) lets the browser process Set-Cookie from the
+      // 303 redirect BEFORE following it, so the cookie is in the jar by the time
+      // we call window.location.href.
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, code: otp, type }),
-        redirect: 'manual', // browser stores Set-Cookie but doesn't follow redirect
       })
 
-      // opaqueredirect = 303 was returned (login success, cookie set)
-      if (res.type === 'opaqueredirect') {
-        window.location.href = '/dashboard'
-        return
-      }
-
       if (!res.ok) {
-        const json = await res.json()
-        addToast(json.error ?? 'Invalid or expired code. Please try again.', 'error')
+        try {
+          const json = await res.json()
+          addToast(json.error ?? 'Invalid or expired code. Please try again.', 'error')
+        } catch {
+          addToast('Invalid or expired code. Please try again.', 'error')
+        }
         return
       }
 
-      // email_verify success (returns JSON 200)
-      window.location.href = '/verify-id'
+      // For login: fetch followed the 303→/dashboard, cookie is now stored
+      // For email_verify: 200 JSON returned, navigate to next step
+      window.location.href = type === 'email_verify' ? '/verify-id' : '/dashboard'
     } catch {
       addToast('Network error. Please check your connection.', 'error')
     } finally {
