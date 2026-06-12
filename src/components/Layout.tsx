@@ -40,12 +40,12 @@ export default function Layout({ children }: LayoutProps) {
       const res = await fetch('/api/auth/resend-otp', { method: 'POST' })
       const json = await res.json()
       if (res.ok) {
-        toast?.success(json.message ?? 'Verification email sent. Check your inbox.')
+        toast?.addToast(json.message ?? 'Verification email sent. Check your inbox.', 'success')
       } else {
-        toast?.error(json.error ?? 'Failed to resend verification email.')
+        toast?.addToast(json.error ?? 'Failed to resend verification email.', 'error')
       }
     } catch {
-      toast?.error('Something went wrong. Please try again.')
+      toast?.addToast('Something went wrong. Please try again.', 'error')
     }
   }
 

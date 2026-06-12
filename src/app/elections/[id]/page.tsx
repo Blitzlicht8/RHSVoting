@@ -154,15 +154,15 @@ function VotingView({
       })
       const json = await res.json()
       if (res.ok) {
-        toast?.success(json.message ?? 'Your votes have been submitted!')
+        toast?.addToast(json.message ?? 'Your votes have been submitted!', 'success')
         setShowConfirm(false)
         onVoteSuccess()
       } else {
-        toast?.error(json.error ?? 'Failed to submit votes.')
+        toast?.addToast(json.error ?? 'Failed to submit votes.', 'error')
         setShowConfirm(false)
       }
     } catch {
-      toast?.error('Something went wrong. Please try again.')
+      toast?.addToast('Something went wrong. Please try again.', 'error')
       setShowConfirm(false)
     } finally {
       setSubmitting(false)
@@ -470,7 +470,7 @@ export default function ElectionDetailPage() {
       setElection(electionJson.data?.election ?? null)
       setUserVotes(voteJson.data?.votes ?? [])
     } catch {
-      toast?.error('Failed to load election.')
+      toast?.addToast('Failed to load election.', 'error')
     } finally {
       setLoading(false)
     }
