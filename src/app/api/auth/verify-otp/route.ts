@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { signJWT, setAuthCookie } from '@/lib/auth'
+import { Role } from '@/types'
 
 export async function POST(request: NextRequest) {
   await ensureInit()
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
       id: Number(user.id),
       email: user.email as string,
       name: user.name as string,
-      role: user.role as string,
+      role: user.role as Role,
     }, rememberMe)
     await setAuthCookie(token, rememberMe)
 

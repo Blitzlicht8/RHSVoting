@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { randomInt } from 'crypto'
 import { db, ensureInit } from '@/lib/db'
 import { signJWT, setAuthCookie } from '@/lib/auth'
+import { Role } from '@/types'
 import { sendOTPEmail } from '@/lib/email'
 
 export async function POST(request: NextRequest) {
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
     id: Number(user.id),
     email: user.email as string,
     name: user.name as string,
-    role: user.role as string,
+    role: user.role as Role,
   }, rememberMe)
   await setAuthCookie(token, rememberMe)
 
