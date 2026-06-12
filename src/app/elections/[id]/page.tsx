@@ -451,7 +451,7 @@ export default function ElectionDetailPage() {
 
   const adminRoles = ['master_admin', 'teacher_admin', 'student_admin']
   const isAdmin = user ? adminRoles.includes(user.role) : false
-  const idVerified = user?.id_verified ?? false
+  const idVerified = !!user?.id_verified
 
   const fetchElection = useCallback(async () => {
     if (!id) return

@@ -69,7 +69,7 @@ function StatusBadge({ status }: { status: Election['status'] }) {
 
 function ElectionCard({ election, isAdmin }: { election: Election; isAdmin: boolean }) {
   const { user } = useAuth()
-  const idVerified = user?.id_verified ?? false
+  const idVerified = !!user?.id_verified
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
