@@ -7,6 +7,7 @@ import Layout from '@/components/Layout'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 import { Skeleton } from '@/components/ui/Skeleton'
+import Spinner from '@/components/ui/Spinner'
 
 interface Candidate {
   id: number
