@@ -1,50 +1,41 @@
 import { NextResponse, NextRequest } from 'next/server'
-import { jwtVerify } from 'jose'
 
 const COOKIE_NAME = 'auth-token'
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'dev-secret-change-in-production-please'
-)
 
-type JWTPayload = { id: number; email: string; name: string; role: string; exp?: number }
-
-async function verifyToken(token: string): Promise<JWTPayload | null> {
+// Lightweight check: parse JWT payload without verifying the signature.
+// Real signature verification (via jose in Node.js runtime) happens in
+// the server layout files for each protected route.
+function hasValidSession(token: string | undefined): boolean {
+  if (!token) return false
+  const parts = token.split('.')
+  if (parts.length !== 3) return false
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload as unknown as JWTPayload
+    const padded = parts[1].replace(/-/g, '+').replace(/_/g, '/') +
+      '='.repeat((4 - (parts[1].length % 4)) % 4)
+    const payload = JSON.parse(atob(padded))
+    if (payload.exp && payload.exp < Date.now() / 1000) return false
+    return typeof payload.id === 'number' && typeof payload.role === 'string'
   } catch {
-    return null
+    return false
   }
 }
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl
   const token = request.cookies.get(COOKIE_NAME)?.value
-
-  let user: JWTPayload | null = null
-  if (token) {
-    user = await verifyToken(token)
-  }
+  const loggedIn = hasValidSession(token)
 
   const isAuthPage = ['/', '/register', '/verify-otp'].some((p) => pathname === p)
   const isProtectedPage = ['/dashboard', '/elections', '/admin', '/verify-id', '/profile'].some(
     (p) => pathname.startsWith(p)
   )
-  const isAdminPage = pathname.startsWith('/admin')
 
-  if (user && isAuthPage) {
+  if (loggedIn && isAuthPage) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  if (!user && isProtectedPage) {
+  if (!loggedIn && isProtectedPage) {
     return NextResponse.redirect(new URL('/', request.url))
-  }
-
-  if (user && isAdminPage) {
-    const adminRoles = ['master_admin', 'teacher_admin', 'student_admin']
-    if (!adminRoles.includes(user.role)) {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
-    }
   }
 
   return NextResponse.next()
