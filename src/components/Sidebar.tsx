@@ -29,6 +29,26 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: '/profile',
+    label: 'Profile',
+    adminOnly: false,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  {
+    href: '/feed',
+    label: 'Feed',
+    adminOnly: false,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+      </svg>
+    ),
+  },
+  {
     href: '/elections',
     label: 'Elections',
     adminOnly: false,
@@ -66,6 +86,16 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    href: '/admin/academic',
+    label: 'Academic Structure',
+    adminOnly: true,
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 6h16M4 10h16M4 14h8M4 18h8" />
+      </svg>
+    ),
+  },
+  {
     href: '/admin/elections',
     label: 'Manage Elections',
     adminOnly: true,
@@ -76,6 +106,17 @@ const NAV_ITEMS: NavItem[] = [
         <path d="M4.93 4.93a10 10 0 0 0 0 14.14" />
         <path d="M16.24 7.76a6 6 0 0 1 0 8.49" />
         <path d="M7.76 7.76a6 6 0 0 0 0 8.49" />
+      </svg>
+    ),
+  },
+  {
+    href: '/admin/reports',
+    label: 'Reports',
+    adminOnly: true,
+    adminRoles: ['master_admin', 'teacher_admin'],
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
       </svg>
     ),
   },
@@ -156,12 +197,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Logo */}
       <div className="px-6 py-5 border-b border-gray-800">
         <div className="flex items-center gap-3">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-400 flex-shrink-0">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#D69A23] flex-shrink-0">
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <path d="M9 9h6M9 12h6M9 15h4" />
             <path d="M7 9v6" strokeWidth="2" />
           </svg>
-          <span className="text-white font-bold text-lg">SchoolVoting</span>
+          <span className="text-white font-bold text-lg">RHS E-Voting</span>
         </div>
       </div>
 
@@ -175,7 +216,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             className={
               'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ' +
               (isActive(item.href)
-                ? 'bg-indigo-600/20 text-indigo-400 font-medium'
+                ? 'bg-[#84050C]/20 text-[#F87171] font-medium'
                 : 'text-gray-400 hover:bg-gray-800 hover:text-white')
             }
           >
@@ -199,7 +240,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 className={
                   'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ' +
                   (isActive(item.href)
-                    ? 'bg-indigo-600/20 text-indigo-400 font-medium'
+                    ? 'bg-[#84050C]/20 text-[#F87171] font-medium'
                     : 'text-gray-400 hover:bg-gray-800 hover:text-white')
                 }
               >
@@ -220,7 +261,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       {user && (
         <div className="border-t border-gray-800 p-4">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+            <div className="w-9 h-9 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
               {user.name.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">

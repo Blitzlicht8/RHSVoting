@@ -26,12 +26,18 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   }
 
   const admin = isAdmin(authUser.role)
+  const role = authUser.role as string
+  const isStudentRole = role === 'student' || role === 'student_admin'
+
   if (!admin && election.status !== 'ended') {
     return NextResponse.json(
       { error: 'Results are only available after the election has ended' },
       { status: 403 }
     )
   }
+
+  // Students never see individual voter identity — only aggregates are returned below.
+  // teacher_admin/master_admin can see individual records if needed via separate endpoints.
 
   const positionsResult = await db.execute({
     sql: 'SELECT * FROM positions WHERE election_id = ? ORDER BY order_index ASC',
@@ -71,5 +77,19 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     return { ...pos, candidates }
   })
 
-  return NextResponse.json({ data: { election, positions: positionsWithResults } })
+  // For students: strip any voter identity fields from candidate entries (aggregates only)
+  const safePositions = isStudentRole
+    ? positionsWithResults.map((pos) => ({
+        ...pos,
+        candidates: pos.candidates.map(({ ...c }) => {
+          // Remove any field that would identify individual voters
+          const { ...safe } = c as Record<string, unknown>
+          delete safe.voter_id
+          delete safe.voters
+          return safe
+        }),
+      }))
+    : positionsWithResults
+
+  return NextResponse.json({ data: { election, positions: safePositions } })
 }

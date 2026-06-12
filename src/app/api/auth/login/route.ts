@@ -55,7 +55,9 @@ export async function POST(request: NextRequest) {
     sql: `SELECT value FROM settings WHERE key = 'otp_required_login'`,
     args: [],
   })
-  if (otpSettingResult.rows[0]?.value === 'true') {
+  const otpRequired = otpSettingResult.rows[0]?.value !== 'false'
+
+  if (otpRequired) {
     await db.execute({
       sql: `UPDATE otps SET used = 1 WHERE user_id = ? AND type = 'login' AND used = 0`,
       args: [Number(user.id)],
@@ -82,9 +84,10 @@ export async function POST(request: NextRequest) {
 
   await logActivity(Number(user.id), 'login_success', 'Logged in directly (OTP disabled)', ip)
 
-  const response = NextResponse.json({
-    data: { user: { id: user.id, email: user.email, name: user.name, role: user.role } },
-  })
+  const response = NextResponse.json(
+    { data: { redirectTo: '/dashboard' }, message: 'Login successful.' },
+    { status: 200 }
+  )
   response.headers.set('Set-Cookie', buildSetCookieHeader(token, rememberMe))
   return response
 }

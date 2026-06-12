@@ -166,7 +166,12 @@ export default function LoginPage() {
         return
       }
 
-      // Fully authenticated
+      if (json.data?.redirectTo) {
+        window.location.href = json.data.redirectTo
+        return
+      }
+
+      // Fully authenticated (fallback)
       window.location.href = '/dashboard'
     } catch {
       addToast('Network error. Please check your connection.', 'error')
@@ -237,14 +242,14 @@ export default function LoginPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-indigo-50/30 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-gradient-to-br from-[#FEE2E2] via-white to-[#FEE2E2]/30 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 w-full max-w-md">
 
         {/* Header */}
         <div className="flex flex-col items-center gap-3 mb-8">
           <LogoIcon />
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900">SchoolVoting</h1>
+            <h1 className="text-2xl font-bold text-gray-900">RHS E-Voting</h1>
             <p className="text-sm text-gray-500 mt-1">
               {step === 'creds' ? 'Sign in to your account' : 'Two-factor authentication'}
             </p>
@@ -298,7 +303,7 @@ export default function LoginPage() {
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
                 disabled={loading}
-                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                className="w-4 h-4 rounded border-gray-300 text-[#84050C] focus:ring-[#84050C] cursor-pointer"
               />
               <span className="text-sm text-gray-600">Remember me for 30 days</span>
             </label>
@@ -318,7 +323,7 @@ export default function LoginPage() {
               Don&apos;t have an account?{' '}
               <Link
                 href="/register"
-                className="text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
+                className="text-[#84050C] hover:text-[#6B0409] font-medium transition-colors"
               >
                 Create one
               </Link>
@@ -369,7 +374,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={handleResend}
-                  className="text-sm text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
+                  className="text-sm text-[#84050C] hover:text-[#6B0409] font-medium transition-colors"
                 >
                   Resend code
                 </button>

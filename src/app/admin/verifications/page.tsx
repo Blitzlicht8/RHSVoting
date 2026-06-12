@@ -12,6 +12,11 @@ import { useToast } from '@/components/providers/ToastProvider'
 type VerifStatus = 'pending' | 'approved' | 'rejected'
 type TabKey = 'pending' | 'approved' | 'rejected' | 'all'
 
+interface VerifDocument {
+  id: number
+  file_path: string
+}
+
 interface VerifRequest {
   id: number
   user_id: number
@@ -26,6 +31,8 @@ interface VerifRequest {
   intended_role: string | null
   grade_level: string | null
   section: string | null
+  doc_type: string | null
+  documents: VerifDocument[]
 }
 
 const TAB_LABELS: Record<TabKey, string> = {
@@ -50,7 +57,7 @@ const ROLE_LABELS: Record<string, string> = {
 }
 
 const AVATAR_COLORS = [
-  'bg-indigo-500', 'bg-purple-500', 'bg-pink-500', 'bg-blue-500',
+  'bg-[#84050C]', 'bg-purple-500', 'bg-pink-500', 'bg-blue-500',
   'bg-teal-500', 'bg-green-500', 'bg-yellow-500', 'bg-orange-500',
 ]
 
@@ -242,7 +249,15 @@ export default function VerificationsPage() {
     <Layout>
       <div className="p-6">
         {/* Header */}
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">ID Verifications</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">ID Verifications</h1>
+
+        {/* Teacher-scoped note */}
+        {user?.role === 'teacher' && (
+          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 flex items-center gap-2 text-sm text-blue-700">
+            <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
+            Showing requests for your assigned grades and sections only.
+          </div>
+        )}
 
         {/* Auto-verify toggle card */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
@@ -257,8 +272,8 @@ export default function VerificationsPage() {
               disabled={loadingSettings || togglingAuto}
               onClick={() => toggleSetting('auto_verify_id')}
               className={[
-                'relative inline-flex h-6 w-11 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0',
-                autoVerifyOn ? 'bg-indigo-600' : 'bg-gray-300',
+                'relative inline-flex h-6 w-11 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0',
+                autoVerifyOn ? 'bg-[#84050C]' : 'bg-gray-300',
               ].join(' ')}
               aria-label="Toggle auto-approve"
             >
@@ -348,21 +363,48 @@ export default function VerificationsPage() {
                       {req.intended_role === 'teacher' && (
                         <Badge variant="default" size="sm">Teacher</Badge>
                       )}
+                      {req.doc_type && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                          {req.doc_type}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* ID Image */}
+                {/* Document gallery */}
                 <div
                   className="cursor-pointer"
                   onClick={() => { setSelectedImageRequest(req); setShowImageModal(true) }}
-                  title="Click to view full size"
+                  title="Click to view documents"
                 >
-                  <img
-                    src={req.id_image}
-                    alt="School ID"
-                    className="w-full h-40 object-cover border-y border-gray-100 hover:opacity-90 transition-opacity"
-                  />
+                  {(req.documents && req.documents.length > 0) ? (
+                    <div className={`grid border-y border-gray-100 ${req.documents.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                      {req.documents.slice(0, 4).map((doc, i) => (
+                        doc.file_path.toLowerCase().endsWith('.pdf') ? (
+                          <div key={doc.id} className="h-40 bg-gray-100 flex flex-col items-center justify-center gap-2 border-r border-gray-100 last:border-r-0">
+                            <svg className="w-8 h-8 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                            </svg>
+                            <span className="text-xs text-gray-500">PDF {i + 1}</span>
+                          </div>
+                        ) : (
+                          <img
+                            key={doc.id}
+                            src={doc.file_path}
+                            alt={`Document ${i + 1}`}
+                            className="h-40 w-full object-cover border-r border-gray-100 last:border-r-0 hover:opacity-90 transition-opacity"
+                          />
+                        )
+                      ))}
+                    </div>
+                  ) : (
+                    <img
+                      src={req.id_image}
+                      alt="School ID"
+                      className="w-full h-40 object-cover border-y border-gray-100 hover:opacity-90 transition-opacity"
+                    />
+                  )}
                 </div>
 
                 {/* Meta + status */}
@@ -452,11 +494,39 @@ export default function VerificationsPage() {
                 {selectedImageRequest.status}
               </Badge>
             </div>
-            <img
-              src={selectedImageRequest.id_image}
-              alt="Full size School ID"
-              className="w-full rounded-lg object-contain border border-gray-200 max-h-[65vh]"
-            />
+            {(selectedImageRequest.documents && selectedImageRequest.documents.length > 0) ? (
+              <div className="space-y-3">
+                {selectedImageRequest.documents.map((doc, i) => (
+                  doc.file_path.toLowerCase().endsWith('.pdf') ? (
+                    <a
+                      key={doc.id}
+                      href={doc.file_path}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                    >
+                      <svg className="w-6 h-6 text-red-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-sm text-indigo-600 underline">Document {i + 1} (PDF)</span>
+                    </a>
+                  ) : (
+                    <img
+                      key={doc.id}
+                      src={doc.file_path}
+                      alt={`Document ${i + 1}`}
+                      className="w-full rounded-lg object-contain border border-gray-200 max-h-[40vh]"
+                    />
+                  )
+                ))}
+              </div>
+            ) : (
+              <img
+                src={selectedImageRequest.id_image}
+                alt="Full size School ID"
+                className="w-full rounded-lg object-contain border border-gray-200 max-h-[65vh]"
+              />
+            )}
           </div>
         )}
       </Modal>

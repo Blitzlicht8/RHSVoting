@@ -38,21 +38,48 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const newStatus = action === 'approve' ? 'approved' : 'rejected'
   const idVerified = action === 'approve' ? 1 : 0
 
-  await db.batch(
-    [
-      {
-        sql: `UPDATE verification_requests
-              SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), notes = ?
-              WHERE id = ?`,
-        args: [newStatus, authUser.id, notes ?? null, requestId],
-      },
-      {
-        sql: `UPDATE users SET id_verified = ?, updated_at = datetime('now') WHERE id = ?`,
-        args: [idVerified, Number(verReq.user_id)],
-      },
-    ],
-    'write'
-  )
+  if (action === 'approve') {
+    await db.batch(
+      [
+        {
+          sql: `UPDATE verification_requests
+                SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), notes = ?
+                WHERE id = ?`,
+          args: [newStatus, authUser.id, notes ?? null, requestId],
+        },
+        {
+          sql: `UPDATE users SET id_verified = ?, updated_at = datetime('now') WHERE id = ?`,
+          args: [idVerified, Number(verReq.user_id)],
+        },
+        {
+          // Sync grade_level_id, subtype_id, section_id from the verification request to the user
+          sql: `UPDATE users
+                SET grade_level_id = (SELECT grade_level_id FROM verification_requests WHERE id = ?),
+                    subtype_id     = (SELECT subtype_id     FROM verification_requests WHERE id = ?),
+                    section_id     = (SELECT section_id     FROM verification_requests WHERE id = ?)
+                WHERE id = (SELECT user_id FROM verification_requests WHERE id = ?)`,
+          args: [requestId, requestId, requestId, requestId],
+        },
+      ],
+      'write'
+    )
+  } else {
+    await db.batch(
+      [
+        {
+          sql: `UPDATE verification_requests
+                SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), notes = ?
+                WHERE id = ?`,
+          args: [newStatus, authUser.id, notes ?? null, requestId],
+        },
+        {
+          sql: `UPDATE users SET id_verified = ?, updated_at = datetime('now') WHERE id = ?`,
+          args: [idVerified, Number(verReq.user_id)],
+        },
+      ],
+      'write'
+    )
+  }
 
   const updated = await db.execute({
     sql: 'SELECT * FROM verification_requests WHERE id = ?',

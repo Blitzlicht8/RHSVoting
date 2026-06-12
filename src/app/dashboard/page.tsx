@@ -95,15 +95,18 @@ function ElectionCard({ election, isAdmin }: { election: Election; isAdmin: bool
         {election.status === 'active' && !election.hasVoted && idVerified && (
           <Link
             href={`/elections/${election.id}`}
-            className="inline-flex items-center gap-1 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-1.5 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1 text-sm font-medium text-white bg-[#84050C] hover:bg-[#6B0409] px-4 py-1.5 rounded-lg transition-colors"
           >
             Vote Now →
           </Link>
         )}
         {election.status === 'active' && !election.hasVoted && !idVerified && (
-          <span className="inline-flex items-center gap-1 text-sm font-medium text-gray-400 bg-gray-100 px-4 py-1.5 rounded-lg cursor-not-allowed">
-            ID Required
-          </span>
+          <Link
+            href="/verify-id"
+            className="inline-flex items-center gap-1 text-sm font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 px-4 py-1.5 rounded-lg transition-colors"
+          >
+            Verify to Vote →
+          </Link>
         )}
         {election.status === 'active' && election.hasVoted && (
           <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700 bg-green-50 px-4 py-1.5 rounded-lg">
@@ -116,7 +119,7 @@ function ElectionCard({ election, isAdmin }: { election: Election; isAdmin: bool
         {election.status === 'ended' && (
           <Link
             href={`/elections/${election.id}`}
-            className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-700 px-4 py-1.5 rounded-lg border border-indigo-200 hover:border-indigo-300 transition-colors"
+            className="inline-flex items-center gap-1 text-sm font-medium text-[#84050C] hover:text-[#6B0409] px-4 py-1.5 rounded-lg border border-[#84050C]/30 hover:border-[#84050C]/60 transition-colors"
           >
             View Results
           </Link>
@@ -222,7 +225,7 @@ export default function DashboardPage() {
       {
         label: 'Total Users',
         value: totalUsers,
-        color: 'bg-indigo-100 text-indigo-700',
+        color: 'bg-[#FEE2E2] text-[#6B0409]',
         icon: (
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -297,7 +300,7 @@ export default function DashboardPage() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Active Elections</h2>
-            <Link href="/elections" className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
+            <Link href="/elections" className="text-sm text-[#84050C] hover:text-[#6B0409] font-medium">
               View all →
             </Link>
           </div>
@@ -329,10 +332,10 @@ export default function DashboardPage() {
                 <Link
                   key={action.href}
                   href={action.href}
-                  className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col items-center gap-2 text-center hover:border-indigo-300 hover:shadow-md transition-all group"
+                  className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col items-center gap-2 text-center hover:border-[#84050C]/50 hover:shadow-md transition-all group"
                 >
                   <span className="text-3xl">{action.icon}</span>
-                  <span className="text-sm font-medium text-gray-700 group-hover:text-indigo-600 transition-colors">
+                  <span className="text-sm font-medium text-gray-700 group-hover:text-[#84050C] transition-colors">
                     {action.label}
                   </span>
                 </Link>

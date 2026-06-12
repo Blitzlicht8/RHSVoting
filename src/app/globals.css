@@ -1,18 +1,20 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --color-primary: #84050C;
+  --color-primary-hover: #6B0409;
+  --color-primary-tint: #FEE2E2;
+  --color-accent: #D69A23;
+  --color-accent-light: #FEF9C3;
+}
 
 @layer base {
   *,
   *::before,
   *::after {
     box-sizing: border-box;
-  }
-
-  body {
-    font-family: 'Inter', system-ui, sans-serif;
   }
 }
 

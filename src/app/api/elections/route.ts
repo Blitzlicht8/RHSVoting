@@ -11,7 +11,49 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = isAdmin(authUser.role)
-  const statusFilter = admin ? '' : `WHERE e.status IN ('active', 'ended')`
+  const role = authUser.role as string
+  const isStudentRole = role === 'student' || role === 'student_admin'
+
+  let whereClause = admin ? '' : `WHERE e.status IN ('active', 'ended')`
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const queryArgs: any[] = []
+
+  if (isStudentRole) {
+    const userResult = await db.execute({
+      sql: `SELECT email_verified, id_verified, grade_level_id, subtype_id, section_id FROM users WHERE id = ?`,
+      args: [authUser.id],
+    })
+    const u = userResult.rows[0]
+
+    if (!u?.id_verified) {
+      // Unverified students: only global elections that are active or ended
+      whereClause = `WHERE e.status IN ('active', 'ended') AND e.is_global = 1`
+    } else {
+      // Verified students: global elections OR elections they're eligible for,
+      // minus any elections with an exclusion rule matching this user
+      whereClause = `WHERE e.status IN ('active', 'ended') AND (
+        e.is_global = 1
+        OR EXISTS (
+          SELECT 1 FROM election_eligibility ee
+          WHERE ee.election_id = e.id AND ee.is_exclude = 0 AND (
+            ee.is_all_grade = 1
+            OR ee.grade_level_id = ?
+          )
+        )
+      ) AND NOT EXISTS (
+        SELECT 1 FROM election_eligibility ee2
+        WHERE ee2.election_id = e.id AND ee2.is_exclude = 1 AND (
+          ee2.grade_level_id = ?
+          OR (ee2.section_id IS NOT NULL AND ee2.section_id = ?)
+        )
+      )`
+      queryArgs.push(
+        u.grade_level_id ?? null,
+        u.grade_level_id ?? null,
+        u.section_id ?? null,
+      )
+    }
+  }
 
   const result = await db.execute({
     sql: `SELECT
@@ -20,9 +62,9 @@ export async function GET(request: NextRequest) {
             (SELECT COUNT(*) FROM candidates c WHERE c.election_id = e.id) AS candidate_count,
             (SELECT COUNT(*) FROM votes v WHERE v.election_id = e.id) AS vote_count
           FROM elections e
-          ${statusFilter}
+          ${whereClause}
           ORDER BY e.created_at DESC`,
-    args: [],
+    args: queryArgs,
   })
 
   return NextResponse.json({ data: { elections: result.rows } })
@@ -104,6 +146,34 @@ export async function POST(request: NextRequest) {
 
   if (Array.isArray(body.positions) && body.positions.length > 0) {
     await syncPositions(electionId, body.positions)
+  }
+
+  // Save is_global and allow_teacher_vote
+  const isGlobal = body.is_global ? 1 : 0
+  const allowTeacherVote = body.allow_teacher_vote ? 1 : 0
+  await db.execute({
+    sql: `UPDATE elections SET is_global = ?, allow_teacher_vote = ? WHERE id = ?`,
+    args: [isGlobal, allowTeacherVote, electionId],
+  })
+
+  // Save eligibility rules
+  if (Array.isArray(body.eligibility) && body.eligibility.length > 0) {
+    for (const rule of body.eligibility) {
+      await db.execute({
+        sql: `INSERT INTO election_eligibility (election_id, grade_level_id, subtype_id, section_id, is_all_grade, is_all_subtype, is_all_section, is_exclude)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          electionId,
+          rule.grade_level_id ?? null,
+          rule.subtype_id ?? null,
+          rule.section_id ?? null,
+          rule.is_all_grade ? 1 : 0,
+          rule.is_all_subtype ? 1 : 0,
+          rule.is_all_section ? 1 : 0,
+          rule.is_exclude ? 1 : 0,
+        ],
+      })
+    }
   }
 
   const election = await db.execute({

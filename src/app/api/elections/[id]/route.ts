@@ -97,8 +97,14 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   })
   const hasVoted = Number(voteCountResult.rows[0]?.count ?? 0) > 0
 
+  const eligibilityResult = await db.execute({
+    sql: 'SELECT * FROM election_eligibility WHERE election_id = ?',
+    args: [electionId],
+  })
+  const eligibility = eligibilityResult.rows
+
   return NextResponse.json({
-    data: { election: { ...election, positions: positionsWithCandidates, hasVoted } },
+    data: { election: { ...election, positions: positionsWithCandidates, hasVoted, eligibility } },
   })
 }
 
@@ -173,9 +179,20 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     values.push(body.status)
   }
 
-  const hasPositions = Array.isArray(body.positions)
+  if (body.is_global !== undefined) {
+    setClauses.push('is_global = ?')
+    values.push(body.is_global ? 1 : 0)
+  }
 
-  if (setClauses.length === 0 && !hasPositions) {
+  if (body.allow_teacher_vote !== undefined) {
+    setClauses.push('allow_teacher_vote = ?')
+    values.push(body.allow_teacher_vote ? 1 : 0)
+  }
+
+  const hasPositions = Array.isArray(body.positions)
+  const hasEligibility = Array.isArray(body.eligibility)
+
+  if (setClauses.length === 0 && !hasPositions && !hasEligibility) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
   }
 
@@ -194,6 +211,29 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: 'Positions can only be modified on draft elections' }, { status: 400 })
     }
     await syncPositions(electionId, body.positions as PositionInput[])
+  }
+
+  if (hasEligibility) {
+    await db.execute({
+      sql: 'DELETE FROM election_eligibility WHERE election_id = ?',
+      args: [electionId],
+    })
+    for (const rule of body.eligibility) {
+      await db.execute({
+        sql: `INSERT INTO election_eligibility (election_id, grade_level_id, subtype_id, section_id, is_all_grade, is_all_subtype, is_all_section, is_exclude)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          electionId,
+          rule.grade_level_id ?? null,
+          rule.subtype_id ?? null,
+          rule.section_id ?? null,
+          rule.is_all_grade ? 1 : 0,
+          rule.is_all_subtype ? 1 : 0,
+          rule.is_all_section ? 1 : 0,
+          rule.is_exclude ? 1 : 0,
+        ],
+      })
+    }
   }
 
   const updated = await db.execute({ sql: 'SELECT * FROM elections WHERE id = ?', args: [electionId] })

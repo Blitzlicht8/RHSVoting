@@ -16,6 +16,25 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'Invalid election ID' }, { status: 400 })
   }
 
+  const role = authUser.role as string
+  const isStudentRole = role === 'student' || role === 'student_admin'
+
+  if (isStudentRole) {
+    // Students only see their own vote selections — no aggregates
+    const result = await db.execute({
+      sql: 'SELECT v.candidate_id, v.position_id FROM votes v WHERE v.election_id = ? AND v.voter_id = ?',
+      args: [electionId, authUser.id],
+    })
+    return NextResponse.json({
+      data: {
+        hasVoted: result.rows.length > 0,
+        myVotes: result.rows.map((r) => r.candidate_id),
+        votes: result.rows.length > 0 ? result.rows : undefined,
+      },
+    })
+  }
+
+  // Teachers and admins get full vote data
   const result = await db.execute({
     sql: 'SELECT * FROM votes WHERE election_id = ? AND voter_id = ?',
     args: [electionId, authUser.id],
@@ -24,6 +43,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   return NextResponse.json({
     data: {
       hasVoted: result.rows.length > 0,
+      myVotes: result.rows.map((r) => r.candidate_id),
       votes: result.rows.length > 0 ? result.rows : undefined,
     },
   })

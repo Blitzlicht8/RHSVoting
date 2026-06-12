@@ -67,6 +67,14 @@ const ACTION_BADGE: Record<string, { label: string; className: string }> = {
     label: 'ID Approved',
     className: 'bg-cyan-100 text-cyan-700 border border-cyan-200',
   },
+  user_created: {
+    label: 'User Created',
+    className: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+  },
+  student_academic_removed: {
+    label: 'Academic Removed',
+    className: 'bg-yellow-100 text-yellow-700 border border-yellow-200',
+  },
 }
 
 function ActionBadge({ action }: { action: string }) {
@@ -191,7 +199,7 @@ export default function LogsPage() {
         <div className="flex items-center gap-3 mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Activity Logs</h1>
           {data && (
-            <span className="bg-indigo-100 text-indigo-700 text-sm font-semibold px-3 py-1 rounded-full">
+            <span className="bg-[#FEE2E2] text-[#6B0409] text-sm font-semibold px-3 py-1 rounded-full">
               {data.total.toLocaleString()} entries
             </span>
           )}
@@ -213,7 +221,7 @@ export default function LogsPage() {
               placeholder="Search by action, email, or details..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
             />
           </div>
         </div>

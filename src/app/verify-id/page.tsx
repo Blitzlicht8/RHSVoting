@@ -88,7 +88,11 @@ function LogoIcon() {
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif', 'application/pdf']
+const MAX_FILES = 3
+
+const DOC_TYPE_OPTIONS = ['School ID', 'Enrollment Form', 'Registration Form', 'Other Document'] as const
+type DocType = typeof DOC_TYPE_OPTIONS[number]
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -102,19 +106,60 @@ export default function VerifyIdPage() {
   // Multi-step state (for uiState === 'upload')
   const [verifyStep, setVerifyStep]     = useState<VerifyStep>('type_select')
   const [intendedRole, setIntendedRole] = useState<'student' | 'teacher' | ''>('')
-  const [gradeLevel, setGradeLevel]     = useState('')
-  const [section, setSection]           = useState('')
   const [stepError, setStepError]       = useState<string | null>(null)
 
+  // Cascading dropdowns
+  const [gradeLevels, setGradeLevels] = useState<Array<{id: number, name: string}>>([])
+  const [subtypes, setSubtypes]       = useState<Array<{id: number, name: string}>>([])
+  const [sections, setSections]       = useState<Array<{id: number, name: string}>>([])
+  const [gradeLevelId, setGradeLevelId] = useState<string>('')
+  const [subtypeId, setSubtypeId]       = useState<string>('')
+  const [sectionId, setSectionId]       = useState<string>('')
+
+  // Document type
+  const [docType, setDocType] = useState<DocType>('School ID')
+
   // Upload form state
-  const [selectedFile, setSelectedFile]   = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl]       = useState<string | null>(null)
-  const [isDragging, setIsDragging]       = useState(false)
-  const [uploading, setUploading]         = useState(false)
-  const [fileError, setFileError]         = useState<string | null>(null)
+  const [files, setFiles]           = useState<File[]>([])
+  const [isDragging, setIsDragging] = useState(false)
+  const [uploading, setUploading]   = useState(false)
+  const [fileError, setFileError]   = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dragCounter  = useRef(0)
+
+  // ── Fetch grade levels on mount ────────────────────────────────────────────
+
+  useEffect(() => {
+    fetch('/api/academic/grade-levels').then(r => r.json()).then(j => setGradeLevels(j.data ?? []))
+  }, [])
+
+  // ── Cascade: grade level → subtypes ───────────────────────────────────────
+
+  useEffect(() => {
+    setSubtypeId('')
+    setSectionId('')
+    setSubtypes([])
+    setSections([])
+    if (!gradeLevelId) return
+    fetch(`/api/academic/subtypes?gradeLevelId=${gradeLevelId}`)
+      .then(r => r.json())
+      .then(j => setSubtypes(j.data ?? []))
+  }, [gradeLevelId])
+
+  // ── Cascade: subtype → sections ────────────────────────────────────────────
+
+  useEffect(() => {
+    setSectionId('')
+    setSections([])
+    if (!gradeLevelId) return
+    const url = subtypeId
+      ? `/api/academic/sections?gradeLevelId=${gradeLevelId}&subtypeId=${subtypeId}`
+      : `/api/academic/sections?gradeLevelId=${gradeLevelId}`
+    fetch(url)
+      .then(r => r.json())
+      .then(j => setSections(j.data ?? []))
+  }, [gradeLevelId, subtypeId])
 
   // ── Fetch current user ─────────────────────────────────────────────────────
 
@@ -160,37 +205,39 @@ export default function VerifyIdPage() {
 
   // ── File selection logic ───────────────────────────────────────────────────
 
-  const validateAndSetFile = (file: File) => {
-    setFileError(null)
-
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      setFileError('File must be a JPEG, PNG, WebP, or HEIC image.')
-      return
+  const validateIncoming = (incoming: File[]): string | null => {
+    for (const f of incoming) {
+      if (!ALLOWED_TYPES.includes(f.type)) {
+        return `"${f.name}" is not a supported type. Use images or PDF.`
+      }
+      if (f.size > MAX_FILE_SIZE_BYTES) {
+        return `"${f.name}" exceeds the 5 MB limit.`
+      }
     }
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      setFileError('File is too large. Maximum size is 5 MB.')
-      return
-    }
-
-    // Revoke previous preview
-    if (previewUrl) URL.revokeObjectURL(previewUrl)
-
-    setSelectedFile(file)
-    setPreviewUrl(URL.createObjectURL(file))
+    return null
   }
 
-  // Cleanup object URLs on unmount
-  useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl)
+  const addFiles = (incoming: File[]) => {
+    setFileError(null)
+    const combined = [...files, ...incoming]
+    if (combined.length > MAX_FILES) {
+      setFileError(`You can upload at most ${MAX_FILES} files.`)
+      return
     }
-  }, [previewUrl])
+    const err = validateIncoming(incoming)
+    if (err) { setFileError(err); return }
+    setFiles(combined)
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) validateAndSetFile(file)
-    // Reset input so same file can be re-selected after clearing
+    const picked = Array.from(e.target.files ?? [])
+    if (picked.length) addFiles(picked)
     e.target.value = ''
+  }
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index))
+    setFileError(null)
   }
 
   const handleDragEnter = (e: React.DragEvent) => {
@@ -213,38 +260,34 @@ export default function VerifyIdPage() {
     e.preventDefault()
     dragCounter.current = 0
     setIsDragging(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) validateAndSetFile(file)
+    const dropped = Array.from(e.dataTransfer.files ?? [])
+    if (dropped.length) addFiles(dropped)
   }
 
   const openFilePicker = () => {
     fileInputRef.current?.click()
   }
 
-  const clearSelection = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl)
-    setSelectedFile(null)
-    setPreviewUrl(null)
-    setFileError(null)
-  }
-
   // ── Upload ─────────────────────────────────────────────────────────────────
 
   const handleUpload = async () => {
-    if (!selectedFile) return
+    if (files.length === 0) return
 
     const formData = new FormData()
-    formData.append('file', selectedFile)
-    formData.append('type', 'id_photo')
     formData.append('intended_role', intendedRole || 'student')
+    formData.append('doc_type', docType)
     if (intendedRole === 'student') {
-      formData.append('grade_level', gradeLevel)
-      formData.append('section', section)
+      if (gradeLevelId) formData.append('grade_level_id', gradeLevelId)
+      if (subtypeId)    formData.append('subtype_id', subtypeId)
+      if (sectionId)    formData.append('section_id', sectionId)
+    }
+    for (const file of files) {
+      formData.append('file', file)
     }
 
     setUploading(true)
     try {
-      const res = await fetch('/api/upload', {
+      const res = await fetch('/api/verifications', {
         method: 'POST',
         body: formData,
       })
@@ -255,9 +298,8 @@ export default function VerifyIdPage() {
         return
       }
 
-      addToast('ID submitted successfully. We will review it shortly.', 'success')
-      clearSelection()
-      // Re-fetch user to show updated state
+      addToast('Documents submitted successfully. We will review them shortly.', 'success')
+      setFiles([])
       await fetchUser()
     } catch {
       addToast('Network error during upload.', 'error')
@@ -277,7 +319,7 @@ export default function VerifyIdPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-indigo-50/30 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-gradient-to-br from-[#FEE2E2] via-white to-[#FEE2E2]/30 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 w-full max-w-md">
 
         {/* Header */}
@@ -325,17 +367,17 @@ export default function VerifyIdPage() {
             <div>
               <h1 className="text-xl font-bold text-gray-900">Verification pending</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Your ID is under review. This usually takes 1–2 business days.
+                Your documents are under review. This usually takes 1–2 business days.
               </p>
             </div>
             {user?.id_photo_url && (
               <div className="w-full">
-                <p className="text-xs font-medium text-gray-500 mb-2 text-left">Submitted ID</p>
+                <p className="text-xs font-medium text-gray-500 mb-2 text-left">Submitted document</p>
                 <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={user.id_photo_url}
-                    alt="Submitted ID document"
+                    alt="Submitted document"
                     className="w-full h-40 object-cover"
                   />
                 </div>
@@ -365,7 +407,7 @@ export default function VerifyIdPage() {
             <div>
               <h1 className="text-xl font-bold text-gray-900">Verification rejected</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Your ID submission was not approved. Please re-upload a clearer photo.
+                Your submission was not approved. Please re-upload your school documents.
               </p>
             </div>
 
@@ -376,10 +418,11 @@ export default function VerifyIdPage() {
               </div>
             )}
 
-            {/* Fall through to upload form below by rendering it directly */}
+            {/* Fall through to upload form */}
             <UploadForm
-              selectedFile={selectedFile}
-              previewUrl={previewUrl}
+              files={files}
+              docType={docType}
+              setDocType={setDocType}
               isDragging={isDragging}
               fileError={fileError}
               uploading={uploading}
@@ -390,7 +433,7 @@ export default function VerifyIdPage() {
               onDrop={handleDrop}
               onOpenPicker={openFilePicker}
               onFileChange={handleFileChange}
-              onClear={clearSelection}
+              onRemoveFile={removeFile}
               onUpload={handleUpload}
               formatBytes={formatBytes}
               showSkip={false}
@@ -404,7 +447,7 @@ export default function VerifyIdPage() {
             <div>
               <h1 className="text-xl font-bold text-gray-900">Verify your identity</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Complete the steps below to submit your ID for review.
+                Complete the steps below to submit your documents for review.
               </p>
             </div>
 
@@ -443,7 +486,7 @@ export default function VerifyIdPage() {
                       setStepError(null)
                       setVerifyStep('student_info')
                     }}
-                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all text-center focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                   >
                     <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
@@ -457,7 +500,7 @@ export default function VerifyIdPage() {
                       setStepError(null)
                       setVerifyStep('upload_photo')
                     }}
-                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all text-center focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                   >
                     <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
@@ -468,34 +511,82 @@ export default function VerifyIdPage() {
               </div>
             )}
 
-            {/* Step 2: Student info */}
+            {/* Step 2: Student info — cascading dropdowns + doc type */}
             {verifyStep === 'student_info' && (
               <div className="space-y-4">
-                <p className="text-sm font-medium text-gray-700">Enter your grade level and section.</p>
+                <p className="text-sm font-medium text-gray-700">Tell us about your grade and section.</p>
+
+                {/* Grade Level */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Grade Level <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={gradeLevel}
-                    onChange={(e) => { setGradeLevel(e.target.value); setStepError(null) }}
-                    placeholder="e.g. 10"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                  <select
+                    value={gradeLevelId}
+                    onChange={(e) => { setGradeLevelId(e.target.value); setStepError(null) }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+                  >
+                    <option value="">Select grade level…</option>
+                    {gradeLevels.map(g => (
+                      <option key={g.id} value={String(g.id)}>{g.name}</option>
+                    ))}
+                  </select>
                 </div>
+
+                {/* Subtype — only shown when subtypes exist */}
+                {subtypes.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Track / Strand
+                    </label>
+                    <select
+                      value={subtypeId}
+                      onChange={(e) => { setSubtypeId(e.target.value); setStepError(null) }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+                    >
+                      <option value="">Select track / strand…</option>
+                      {subtypes.map(s => (
+                        <option key={s.id} value={String(s.id)}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Section — only shown when sections exist */}
+                {sections.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Section
+                    </label>
+                    <select
+                      value={sectionId}
+                      onChange={(e) => { setSectionId(e.target.value); setStepError(null) }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+                    >
+                      <option value="">Select section…</option>
+                      {sections.map(s => (
+                        <option key={s.id} value={String(s.id)}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Document Type */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Section <span className="text-red-500">*</span>
+                    Document Type <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={section}
-                    onChange={(e) => { setSection(e.target.value); setStepError(null) }}
-                    placeholder="e.g. Rizal"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                  <select
+                    value={docType}
+                    onChange={(e) => setDocType(e.target.value as DocType)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+                  >
+                    {DOC_TYPE_OPTIONS.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
                 </div>
+
                 {stepError && (
                   <p className="text-sm text-red-600">{stepError}</p>
                 )}
@@ -510,14 +601,14 @@ export default function VerifyIdPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (!gradeLevel.trim() || !section.trim()) {
-                        setStepError('Both Grade Level and Section are required.')
+                      if (!gradeLevelId) {
+                        setStepError('Please select a grade level.')
                         return
                       }
                       setStepError(null)
                       setVerifyStep('upload_photo')
                     }}
-                    className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                   >
                     Continue
                   </button>
@@ -525,7 +616,7 @@ export default function VerifyIdPage() {
               </div>
             )}
 
-            {/* Step 3: Upload photo */}
+            {/* Step 3: Upload documents */}
             {verifyStep === 'upload_photo' && (
               <>
                 <div className="flex items-center gap-2">
@@ -535,7 +626,7 @@ export default function VerifyIdPage() {
                       setStepError(null)
                       setVerifyStep(intendedRole === 'teacher' ? 'type_select' : 'student_info')
                     }}
-                    className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                    className="text-sm text-[#84050C] hover:text-[#6B0409] font-medium flex items-center gap-1"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -543,9 +634,29 @@ export default function VerifyIdPage() {
                     Back
                   </button>
                 </div>
+
+                {/* Doc type selector for teachers (students set it in step 2) */}
+                {intendedRole === 'teacher' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Document Type <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={docType}
+                      onChange={(e) => setDocType(e.target.value as DocType)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+                    >
+                      {DOC_TYPE_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <UploadForm
-                  selectedFile={selectedFile}
-                  previewUrl={previewUrl}
+                  files={files}
+                  docType={docType}
+                  setDocType={setDocType}
                   isDragging={isDragging}
                   fileError={fileError}
                   uploading={uploading}
@@ -556,7 +667,7 @@ export default function VerifyIdPage() {
                   onDrop={handleDrop}
                   onOpenPicker={openFilePicker}
                   onFileChange={handleFileChange}
-                  onClear={clearSelection}
+                  onRemoveFile={removeFile}
                   onUpload={handleUpload}
                   formatBytes={formatBytes}
                   showSkip={true}
@@ -573,8 +684,9 @@ export default function VerifyIdPage() {
 // ─── Upload form sub-component ─────────────────────────────────────────────────
 
 interface UploadFormProps {
-  selectedFile: File | null
-  previewUrl: string | null
+  files: File[]
+  docType: DocType
+  setDocType: (v: DocType) => void
   isDragging: boolean
   fileError: string | null
   uploading: boolean
@@ -585,15 +697,14 @@ interface UploadFormProps {
   onDrop: (e: React.DragEvent) => void
   onOpenPicker: () => void
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
-  onClear: () => void
+  onRemoveFile: (index: number) => void
   onUpload: () => void
   formatBytes: (n: number) => string
   showSkip: boolean
 }
 
 function UploadForm({
-  selectedFile,
-  previewUrl,
+  files,
   isDragging,
   fileError,
   uploading,
@@ -604,7 +715,7 @@ function UploadForm({
   onDrop,
   onOpenPicker,
   onFileChange,
-  onClear,
+  onRemoveFile,
   onUpload,
   formatBytes,
   showSkip,
@@ -615,44 +726,48 @@ function UploadForm({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+        accept="image/*,application/pdf"
+        multiple
         className="sr-only"
         onChange={onFileChange}
-        aria-label="Upload ID photo"
+        aria-label="Upload school documents"
       />
 
       {/* Drop zone */}
-      {!previewUrl && (
-        <button
-          type="button"
-          onClick={onOpenPicker}
-          onDragEnter={onDragEnter}
-          onDragLeave={onDragLeave}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
-          disabled={uploading}
-          className={[
-            'w-full rounded-xl border-2 border-dashed p-8 flex flex-col items-center gap-3',
-            'transition-all duration-200 cursor-pointer outline-none',
-            'focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
-            isDragging
-              ? 'border-indigo-400 bg-indigo-50 scale-[1.01]'
-              : 'border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50/50',
-            uploading ? 'opacity-50 cursor-not-allowed' : '',
-          ].join(' ')}
-          aria-label="Click or drag and drop to upload your ID photo"
-        >
-          <UploadCloudIcon />
-          <div className="text-center">
-            <p className="text-sm font-medium text-gray-700">
-              {isDragging ? 'Drop your file here' : 'Click to upload or drag & drop'}
+      <button
+        type="button"
+        onClick={onOpenPicker}
+        onDragEnter={onDragEnter}
+        onDragLeave={onDragLeave}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        disabled={uploading || files.length >= MAX_FILES}
+        className={[
+          'w-full rounded-xl border-2 border-dashed p-8 flex flex-col items-center gap-3',
+          'transition-all duration-200 cursor-pointer outline-none',
+          'focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
+          isDragging
+            ? 'border-indigo-400 bg-indigo-50 scale-[1.01]'
+            : 'border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50/50',
+          (uploading || files.length >= MAX_FILES) ? 'opacity-50 cursor-not-allowed' : '',
+        ].join(' ')}
+        aria-label="Click or drag and drop to upload school documents"
+      >
+        <UploadCloudIcon />
+        <div className="text-center">
+          <p className="text-sm font-medium text-gray-700">
+            {isDragging ? 'Drop your files here' : 'Click to upload or drag & drop'}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Images or PDF — max 5 MB each, up to {MAX_FILES} files
+          </p>
+          {files.length > 0 && (
+            <p className="text-xs text-indigo-500 mt-1 font-medium">
+              {files.length}/{MAX_FILES} file{files.length !== 1 ? 's' : ''} selected
             </p>
-            <p className="text-xs text-gray-400 mt-1">
-              JPEG, PNG, WebP or HEIC — max 5 MB
-            </p>
-          </div>
-        </button>
-      )}
+          )}
+        </div>
+      </button>
 
       {/* File error */}
       {fileError && (
@@ -664,63 +779,56 @@ function UploadForm({
         </div>
       )}
 
-      {/* Preview */}
-      {previewUrl && selectedFile && (
-        <div className="space-y-3">
-          <div className="relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50 group">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewUrl}
-              alt="Selected ID preview"
-              className="w-full h-48 object-cover"
-            />
-            {/* Overlay clear button */}
-            <button
-              type="button"
-              onClick={onClear}
-              disabled={uploading}
-              className="absolute top-2 right-2 w-7 h-7 bg-gray-900/70 hover:bg-gray-900/90 text-white rounded-full flex items-center justify-center transition-colors"
-              aria-label="Remove selected file"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex items-center justify-between text-xs text-gray-500 px-1">
-            <span className="truncate max-w-[200px] font-medium text-gray-700">{selectedFile.name}</span>
-            <span>{formatBytes(selectedFile.size)}</span>
-          </div>
-        </div>
+      {/* Selected files list */}
+      {files.length > 0 && (
+        <ul className="space-y-2">
+          {files.map((file, idx) => (
+            <li key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm">
+              <div className="flex items-center gap-2 min-w-0">
+                {file.type === 'application/pdf' ? (
+                  <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3h18M3 3v18" />
+                  </svg>
+                )}
+                <span className="truncate max-w-[180px] font-medium text-gray-700">{file.name}</span>
+                <span className="text-gray-400 flex-shrink-0">{formatBytes(file.size)}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRemoveFile(idx)}
+                disabled={uploading}
+                className="ml-2 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+                aria-label={`Remove ${file.name}`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
 
       {/* Upload button */}
-      {previewUrl && (
+      {files.length > 0 && (
         <Button
           variant="primary"
           size="lg"
           loading={uploading}
-          disabled={!selectedFile || !!fileError}
+          disabled={files.length === 0 || !!fileError}
           onClick={onUpload}
           className="w-full"
         >
-          {uploading ? 'Uploading…' : 'Submit ID for review'}
+          {uploading ? 'Uploading…' : 'Submit Documents for Review'}
         </Button>
       )}
 
-      {/* Change file link when preview is shown */}
-      {previewUrl && !uploading && (
-        <button
-          type="button"
-          onClick={onClear}
-          className="w-full text-sm text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          Choose a different file
-        </button>
-      )}
-
       {/* Skip link */}
-      {showSkip && !previewUrl && (
+      {showSkip && files.length === 0 && (
         <div className="text-center pt-2">
           <Link
             href="/dashboard"

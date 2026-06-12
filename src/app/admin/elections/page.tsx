@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Layout from '@/components/Layout'
 import Modal from '@/components/ui/Modal'
 import Badge from '@/components/ui/Badge'
@@ -10,6 +10,103 @@ import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 
 type ElectionStatus = 'draft' | 'active' | 'ended'
+
+interface GradeLevel {
+  id: number
+  name: string
+}
+
+interface EligibilityRule {
+  grade_level_id: number | null
+  subtype_id: number | null
+  section_id: number | null
+  is_all_grade: boolean
+  is_all_subtype: boolean
+  is_all_section: boolean
+  is_exclude: boolean
+}
+
+function GradeTargetingBuilder({
+  value,
+  onChange,
+}: {
+  value: EligibilityRule[]
+  onChange: (rules: EligibilityRule[]) => void
+}) {
+  const [gradeLevels, setGradeLevels] = useState<GradeLevel[]>([])
+  const [loadingGrades, setLoadingGrades] = useState(true)
+  const fetchedRef = useRef(false)
+
+  useEffect(() => {
+    if (fetchedRef.current) return
+    fetchedRef.current = true
+    fetch('/api/academic/grade-levels', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((json) => {
+        const levels: GradeLevel[] = json.data?.gradeLevels ?? json.data?.grade_levels ?? json.data ?? []
+        setGradeLevels(Array.isArray(levels) ? levels : [])
+      })
+      .catch(() => {})
+      .finally(() => setLoadingGrades(false))
+  }, [])
+
+  const isAllGrade = value.length === 1 && value[0].is_all_grade
+  const selectedIds = new Set(value.filter((r) => !r.is_all_grade).map((r) => r.grade_level_id))
+
+  const handleAllGrade = (checked: boolean) => {
+    if (checked) {
+      onChange([{ grade_level_id: null, subtype_id: null, section_id: null, is_all_grade: true, is_all_subtype: true, is_all_section: true, is_exclude: false }])
+    } else {
+      onChange([])
+    }
+  }
+
+  const handleGradeToggle = (id: number, checked: boolean) => {
+    if (checked) {
+      onChange([...value, { grade_level_id: id, subtype_id: null, section_id: null, is_all_grade: false, is_all_subtype: true, is_all_section: true, is_exclude: false }])
+    } else {
+      onChange(value.filter((r) => r.grade_level_id !== id))
+    }
+  }
+
+  if (loadingGrades) {
+    return <p className="text-sm text-gray-400">Loading grade levels...</p>
+  }
+
+  if (gradeLevels.length === 0) {
+    return <p className="text-sm text-gray-400">No grade levels found.</p>
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="flex items-center gap-3">
+        <input
+          type="checkbox"
+          checked={isAllGrade}
+          onChange={(e) => handleAllGrade(e.target.checked)}
+          className="w-4 h-4"
+        />
+        <span className="text-sm text-gray-700 font-medium">All Grade Levels</span>
+      </label>
+
+      {!isAllGrade && (
+        <div className="ml-6 space-y-1.5">
+          {gradeLevels.map((gl) => (
+            <label key={gl.id} className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={selectedIds.has(gl.id)}
+                onChange={(e) => handleGradeToggle(gl.id, e.target.checked)}
+                className="w-4 h-4"
+              />
+              <span className="text-sm text-gray-700">{gl.name}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 interface StudentResult {
   id: number
@@ -43,6 +140,9 @@ interface ElectionForm {
   end_date: string
   status: ElectionStatus
   positions: PositionForm[]
+  is_global: boolean
+  allow_teacher_vote: boolean
+  eligibility: EligibilityRule[]
 }
 
 interface Election {
@@ -88,6 +188,9 @@ const EMPTY_FORM: ElectionForm = {
   end_date: '',
   status: 'draft',
   positions: [],
+  is_global: false,
+  allow_teacher_vote: false,
+  eligibility: [],
 }
 
 export default function ElectionsPage() {
@@ -152,6 +255,17 @@ export default function ElectionsPage() {
           start_date: toDatetimeLocal(full.start_date),
           end_date: toDatetimeLocal(full.end_date),
           status: full.status,
+          is_global: !!full.is_global,
+          allow_teacher_vote: !!full.allow_teacher_vote,
+          eligibility: (full.eligibility || []).map((r: { grade_level_id: number | null; subtype_id: number | null; section_id: number | null; is_all_grade: number | boolean; is_all_subtype: number | boolean; is_all_section: number | boolean; is_exclude: number | boolean }) => ({
+            grade_level_id: r.grade_level_id,
+            subtype_id: r.subtype_id,
+            section_id: r.section_id,
+            is_all_grade: !!r.is_all_grade,
+            is_all_subtype: !!r.is_all_subtype,
+            is_all_section: !!r.is_all_section,
+            is_exclude: !!r.is_exclude,
+          })),
           positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; grade_level?: string; section?: string; student_user_id?: number | null }[] }) => ({
             id: p.id,
             name: p.name,
@@ -211,6 +325,9 @@ export default function ElectionsPage() {
         start_date: new Date(formData.start_date).toISOString(),
         end_date: new Date(formData.end_date).toISOString(),
         status: formData.status,
+        is_global: formData.is_global,
+        allow_teacher_vote: formData.allow_teacher_vote,
+        eligibility: formData.is_global ? [] : formData.eligibility,
         positions: formData.positions.map((p) => ({
           ...p,
           candidates: p.candidates.map((c) => ({
@@ -526,7 +643,7 @@ export default function ElectionsPage() {
                   value={formData.title}
                   onChange={(e) => setFormData((f) => ({ ...f, title: e.target.value }))}
                   placeholder="e.g. Student Council Election 2025"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                 />
               </div>
 
@@ -537,7 +654,7 @@ export default function ElectionsPage() {
                   onChange={(e) => setFormData((f) => ({ ...f, description: e.target.value }))}
                   rows={3}
                   placeholder="Optional description..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] resize-none"
                 />
               </div>
 
@@ -550,7 +667,7 @@ export default function ElectionsPage() {
                     type="datetime-local"
                     value={formData.start_date}
                     onChange={(e) => setFormData((f) => ({ ...f, start_date: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                   />
                 </div>
                 <div>
@@ -561,7 +678,7 @@ export default function ElectionsPage() {
                     type="datetime-local"
                     value={formData.end_date}
                     onChange={(e) => setFormData((f) => ({ ...f, end_date: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                   />
                 </div>
               </div>
@@ -571,7 +688,7 @@ export default function ElectionsPage() {
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData((f) => ({ ...f, status: e.target.value as ElectionStatus }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                 >
                   <option value="draft">Draft</option>
                   <option value="active">Active</option>
@@ -579,6 +696,43 @@ export default function ElectionsPage() {
                 </select>
               </div>
             </div>
+          </div>
+
+          {/* Eligibility Section */}
+          <div className="border-t pt-4 mt-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Eligibility</h3>
+
+            {/* Global toggle */}
+            <label className="flex items-center gap-3 mb-3">
+              <input
+                type="checkbox"
+                checked={formData.is_global}
+                onChange={(e) => setFormData((f) => ({ ...f, is_global: e.target.checked, eligibility: [] }))}
+                className="w-4 h-4"
+              />
+              <span className="text-sm text-gray-700">Global Election (all students can vote)</span>
+            </label>
+
+            {/* Teachers can vote — shown when global=true */}
+            {formData.is_global && (
+              <label className="flex items-center gap-3 mb-3 ml-6">
+                <input
+                  type="checkbox"
+                  checked={formData.allow_teacher_vote}
+                  onChange={(e) => setFormData((f) => ({ ...f, allow_teacher_vote: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-gray-700">Teachers Can Vote</span>
+              </label>
+            )}
+
+            {/* Grade targeting — shown when global=false */}
+            {!formData.is_global && (
+              <GradeTargetingBuilder
+                value={formData.eligibility}
+                onChange={(eligibility) => setFormData((f) => ({ ...f, eligibility }))}
+              />
+            )}
           </div>
 
           {/* Positions */}
@@ -609,7 +763,7 @@ export default function ElectionsPage() {
                           value={pos.name}
                           onChange={(e) => updatePosition(pi, { name: e.target.value })}
                           placeholder="Position name (e.g. President)"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                         />
                       </div>
                       <div className="flex items-center gap-2">
@@ -619,7 +773,7 @@ export default function ElectionsPage() {
                           min={1}
                           value={pos.max_votes}
                           onChange={(e) => updatePosition(pi, { max_votes: Math.max(1, parseInt(e.target.value) || 1) })}
-                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                          className="w-20 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                         />
                       </div>
                     </div>
@@ -640,7 +794,7 @@ export default function ElectionsPage() {
                       <span className="text-xs font-medium text-gray-600">Candidates</span>
                       <button
                         onClick={() => addCandidate(pi)}
-                        className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                        className="text-xs text-[#84050C] hover:text-indigo-700 font-medium flex items-center gap-1"
                       >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -667,8 +821,8 @@ export default function ElectionsPage() {
                               className={[
                                 'px-2.5 py-1 rounded text-xs font-medium border transition-colors',
                                 cand.mode === 'existing'
-                                  ? 'bg-indigo-600 text-white border-indigo-600'
-                                  : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400',
+                                  ? 'bg-[#84050C] text-white border-[#84050C]'
+                                  : 'bg-white text-gray-600 border-gray-300 hover:border-[#84050C]',
                               ].join(' ')}
                             >
                               From Student Account
@@ -679,8 +833,8 @@ export default function ElectionsPage() {
                               className={[
                                 'px-2.5 py-1 rounded text-xs font-medium border transition-colors',
                                 cand.mode === 'manual'
-                                  ? 'bg-indigo-600 text-white border-indigo-600'
-                                  : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400',
+                                  ? 'bg-[#84050C] text-white border-[#84050C]'
+                                  : 'bg-white text-gray-600 border-gray-300 hover:border-[#84050C]',
                               ].join(' ')}
                             >
                               Enter Manually
@@ -701,7 +855,7 @@ export default function ElectionsPage() {
                           {cand.mode === 'existing' && (
                             <div className="space-y-1.5">
                               {cand.student_user_id ? (
-                                <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-md">
+                                <div className="flex items-center gap-2 px-3 py-2 bg-[#FEE2E2] border border-[#FEE2E2] rounded-md">
                                   <div className="flex-1 min-w-0">
                                     <div className="text-sm font-medium text-gray-900 truncate">{cand.name}</div>
                                     {(cand.grade_level || cand.section) && (
@@ -731,7 +885,7 @@ export default function ElectionsPage() {
                                     value={searchQuery}
                                     onChange={(e) => searchStudents(searchKey, e.target.value)}
                                     placeholder="Search student by name or email…"
-                                    className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                                   />
                                   {dropdownResults.length > 0 && (
                                     <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
@@ -749,7 +903,7 @@ export default function ElectionsPage() {
                                             setStudentSearches((s) => ({ ...s, [searchKey]: '' }))
                                             setStudentDropdowns((d) => ({ ...d, [searchKey]: [] }))
                                           }}
-                                          className="w-full text-left px-3 py-2 hover:bg-indigo-50 transition-colors"
+                                          className="w-full text-left px-3 py-2 hover:bg-[#FEE2E2] transition-colors"
                                         >
                                           <div className="text-sm font-medium text-gray-900">{student.name}</div>
                                           <div className="text-xs text-gray-500">
@@ -779,14 +933,14 @@ export default function ElectionsPage() {
                                 value={cand.name}
                                 onChange={(e) => updateCandidate(pi, ci, { name: e.target.value })}
                                 placeholder="Candidate name"
-                                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                               />
                               <textarea
                                 value={cand.bio}
                                 onChange={(e) => updateCandidate(pi, ci, { bio: e.target.value })}
                                 placeholder="Short bio (optional)"
                                 rows={1}
-                                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] resize-none"
                               />
                               <div className="grid grid-cols-2 gap-2">
                                 <input
@@ -794,14 +948,14 @@ export default function ElectionsPage() {
                                   value={cand.grade_level || ''}
                                   onChange={(e) => updateCandidate(pi, ci, { grade_level: e.target.value })}
                                   placeholder="Grade Level (optional)"
-                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                                 />
                                 <input
                                   type="text"
                                   value={cand.section || ''}
                                   onChange={(e) => updateCandidate(pi, ci, { section: e.target.value })}
                                   placeholder="Section (optional)"
-                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                                 />
                               </div>
                             </div>

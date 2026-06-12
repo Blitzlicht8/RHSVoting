@@ -190,7 +190,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-indigo-50/30 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-gradient-to-br from-[#FEE2E2] via-white to-[#FEE2E2]/30 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 w-full max-w-md">
 
         {/* Header */}
@@ -198,7 +198,7 @@ export default function RegisterPage() {
           <LogoIcon />
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900">Create account</h1>
-            <p className="text-sm text-gray-500 mt-1">Join SchoolVoting today</p>
+            <p className="text-sm text-gray-500 mt-1">Join RHS E-Voting today</p>
           </div>
         </div>
 
@@ -294,20 +294,20 @@ export default function RegisterPage() {
               checked={agreedToTerms}
               onChange={(e) => setAgreedToTerms(e.target.checked)}
               disabled={loading}
-              className="w-4 h-4 mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer flex-shrink-0"
+              className="w-4 h-4 mt-0.5 rounded border-gray-300 text-[#84050C] focus:ring-[#84050C] cursor-pointer flex-shrink-0"
             />
             <span className="text-sm text-gray-600 leading-snug">
               I agree to the{' '}
               <Link
                 href="/terms"
-                className="text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
+                className="text-[#84050C] hover:text-[#6B0409] font-medium transition-colors"
               >
                 Terms of Service
               </Link>{' '}
               and{' '}
               <Link
                 href="/privacy"
-                className="text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
+                className="text-[#84050C] hover:text-[#6B0409] font-medium transition-colors"
               >
                 Privacy Policy
               </Link>
@@ -329,7 +329,7 @@ export default function RegisterPage() {
             Already have an account?{' '}
             <Link
               href="/"
-              className="text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
+              className="text-[#84050C] hover:text-[#6B0409] font-medium transition-colors"
             >
               Sign in
             </Link>

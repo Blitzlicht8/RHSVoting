@@ -26,8 +26,8 @@ export async function sendOTPEmail(
 ): Promise<string | null> {
   const subject =
     type === 'email_verify'
-      ? 'Verify your email — SchoolVoting'
-      : 'Login verification code — SchoolVoting'
+      ? 'Verify your email — RHS E-Voting'
+      : 'Login verification code — RHS E-Voting'
 
   const purposeText =
     type === 'email_verify' ? 'verify your email address' : 'complete your login'
@@ -46,8 +46,8 @@ export async function sendOTPEmail(
         <table width="520" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
           <!-- Header -->
           <tr>
-            <td style="background:#4F46E5;padding:32px 40px;text-align:center;">
-              <h1 style="margin:0;color:#ffffff;font-size:1.75rem;font-weight:700;letter-spacing:0.02em;">SchoolVoting</h1>
+            <td style="background:#84050C;padding:32px 40px;text-align:center;">
+              <h1 style="margin:0;color:#ffffff;font-size:1.75rem;font-weight:700;letter-spacing:0.02em;">RHS E-Voting</h1>
             </td>
           </tr>
           <!-- Body -->

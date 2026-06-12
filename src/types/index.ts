@@ -15,6 +15,10 @@ export interface User {
   active: number;
   created_at: string;
   updated_at: string;
+  grade_level_id?: number | null;
+  subtype_id?: number | null;
+  section_id?: number | null;
+  avatar_url?: string | null;
 }
 
 export interface AuthUser {
@@ -34,6 +38,8 @@ export interface Election {
   created_by: number;
   created_at: string;
   updated_at: string;
+  allow_teacher_vote?: 0 | 1;
+  is_global?: 0 | 1;
 }
 
 export interface Position {
@@ -51,6 +57,7 @@ export interface Candidate {
   name: string;
   bio: string | null;
   image: string | null;
+  user_id?: number | null;
 }
 
 export interface Vote {
@@ -72,6 +79,10 @@ export interface VerificationRequest {
   notes: string | null;
   created_at: string;
   user?: User;
+  grade_level_id?: number | null;
+  subtype_id?: number | null;
+  section_id?: number | null;
+  doc_type?: string | null;
 }
 
 export interface ApiResponse<T = unknown> {
@@ -90,4 +101,83 @@ export interface CandidateWithVotes extends Candidate {
 
 export interface PositionWithResults extends Position {
   candidates: CandidateWithVotes[];
+}
+
+export interface GradeLevel {
+  id: number;
+  name: string;
+  order_index: number;
+  active: 0 | 1;
+  created_at: string;
+}
+
+export interface GradeSubtype {
+  id: number;
+  grade_level_id: number;
+  name: string;
+  order_index: number;
+  active: 0 | 1;
+}
+
+export interface Section {
+  id: number;
+  grade_level_id: number;
+  subtype_id: number | null;
+  name: string;
+  order_index: number;
+  active: 0 | 1;
+}
+
+export interface Post {
+  id: number;
+  author_id: number;
+  election_id: number | null;
+  content: string;
+  is_public: 0 | 1;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PostMedia {
+  id: number;
+  post_id: number;
+  type: string;
+  url: string;
+  order_index: number;
+}
+
+export interface PostReaction {
+  id: number;
+  post_id: number;
+  user_id: number;
+  type: string;
+  created_at: string;
+}
+
+export interface PostComment {
+  id: number;
+  post_id: number;
+  author_id: number;
+  content: string;
+  created_at: string;
+}
+
+export interface PostReport {
+  id: number;
+  post_id: number;
+  reporter_id: number;
+  reason: string | null;
+  status: string;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export interface UserAchievement {
+  id: number;
+  user_id: number;
+  title: string;
+  description: string | null;
+  year: number | null;
+  order_index: number;
 }

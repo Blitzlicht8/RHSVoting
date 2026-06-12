@@ -13,6 +13,7 @@ export interface User {
   id_image: string | null
   active: boolean | number
   created_at: string
+  needs_academic_update?: boolean | number
 }
 
 interface AuthContextValue {

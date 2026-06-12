@@ -29,8 +29,8 @@ function ToggleRow({ label, description, isOn, disabled, onToggle }: ToggleRowPr
         disabled={disabled}
         onClick={onToggle}
         className={[
-          'relative inline-flex h-6 w-11 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 mt-0.5',
-          isOn ? 'bg-indigo-600' : 'bg-gray-300',
+          'relative inline-flex h-6 w-11 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 mt-0.5',
+          isOn ? 'bg-[#84050C]' : 'bg-gray-300',
         ].join(' ')}
         aria-label={label}
         role="switch"
