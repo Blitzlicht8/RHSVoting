@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { randomInt } from 'crypto'
 import { db, ensureInit } from '@/lib/db'
-import { signJWT, setAuthCookie } from '@/lib/auth'
+import { signJWT, cookieOptions } from '@/lib/auth'
 import { Role } from '@/types'
 import { sendOTPEmail } from '@/lib/email'
 
@@ -73,9 +73,10 @@ export async function POST(request: NextRequest) {
     name: user.name as string,
     role: user.role as Role,
   }, rememberMe)
-  await setAuthCookie(token, rememberMe)
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     data: { user: { id: user.id, email: user.email, name: user.name, role: user.role } },
   })
+  response.cookies.set('auth-token', token, cookieOptions(rememberMe))
+  return response
 }

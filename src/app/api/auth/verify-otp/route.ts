@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
-import { signJWT, setAuthCookie } from '@/lib/auth'
+import { signJWT, cookieOptions } from '@/lib/auth'
 import { Role } from '@/types'
 
 export async function POST(request: NextRequest) {
@@ -78,12 +78,13 @@ export async function POST(request: NextRequest) {
       name: user.name as string,
       role: user.role as Role,
     }, rememberMe)
-    await setAuthCookie(token, rememberMe)
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       data: { user: { id: user.id, email: user.email, name: user.name, role: user.role } },
       message: 'Login successful',
     })
+    response.cookies.set('auth-token', token, cookieOptions(rememberMe))
+    return response
   }
 
   return NextResponse.json({ error: 'Invalid OTP type' }, { status: 400 })

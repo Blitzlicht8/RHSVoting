@@ -33,14 +33,19 @@ export async function getAuthUser(): Promise<AuthUser | null> {
   }
 }
 
-export async function setAuthCookie(token: string, rememberMe = false): Promise<void> {
-  cookies().set('auth-token', token, {
+export function cookieOptions(rememberMe = false) {
+  return {
+    name: COOKIE_NAME,
     httpOnly: true,
-    sameSite: 'strict',
+    sameSite: 'lax' as const,
     secure: process.env.NODE_ENV === 'production',
     path: '/',
     ...(rememberMe ? { maxAge: 30 * 24 * 60 * 60 } : {}),
-  })
+  }
+}
+
+export async function setAuthCookie(token: string, rememberMe = false): Promise<void> {
+  cookies().set(COOKIE_NAME, token, cookieOptions(rememberMe))
 }
 
 export async function clearAuthCookie(): Promise<void> {
