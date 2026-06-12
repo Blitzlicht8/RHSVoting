@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import ToastProvider from '@/components/providers/ToastProvider'
-import AuthProvider from '@/components/providers/AuthProvider'
+import { ToastProvider } from '@/components/providers/ToastProvider'
+import { AuthProvider } from '@/components/providers/AuthProvider'
 
 export const metadata: Metadata = {
   title: 'SchoolVoting',
