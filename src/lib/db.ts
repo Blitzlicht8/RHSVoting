@@ -145,27 +145,25 @@ async function _init(): Promise<void> {
   )
 
   // Seed default settings
-  await db.batch(
-    [
-      {
-        sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_verify_id', 'false')`,
-        args: [],
-      },
-      {
-        sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('otp_required_login', 'true')`,
-        args: [],
-      },
-      {
-        sql: `UPDATE settings SET value = 'true' WHERE key = 'otp_required_login' AND value NOT IN ('true', 'false')`,
-        args: [],
-      },
-      {
-        sql: `UPDATE settings SET value = 'false' WHERE key = 'auto_verify_id' AND value NOT IN ('true', 'false')`,
-        args: [],
-      },
-    ],
-    'write'
-  )
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_verify_id', 'false')`, args: [] })
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('otp_required_login', 'true')`, args: [] })
+  // Normalize legacy '1'/'0' values to 'true'/'false'
+  await db.execute({ sql: `UPDATE settings SET value = ? WHERE key = ? AND value = ?`, args: ['true', 'otp_required_login', '1'] })
+  await db.execute({ sql: `UPDATE settings SET value = ? WHERE key = ? AND value = ?`, args: ['false', 'auto_verify_id', '0'] })
+
+  // Add new columns (idempotent — silently skip if column already exists)
+  const newColumns: string[] = [
+    `ALTER TABLE users ADD COLUMN grade_level TEXT`,
+    `ALTER TABLE users ADD COLUMN section TEXT`,
+    `ALTER TABLE users ADD COLUMN intended_role TEXT`,
+    `ALTER TABLE verification_requests ADD COLUMN intended_role TEXT`,
+    `ALTER TABLE candidates ADD COLUMN grade_level TEXT`,
+    `ALTER TABLE candidates ADD COLUMN section TEXT`,
+    `ALTER TABLE candidates ADD COLUMN student_user_id INTEGER`,
+  ]
+  for (const sql of newColumns) {
+    await db.execute({ sql, args: [] }).catch(() => {})
+  }
 
   // Seed default admin@school.edu if missing
   const adminCheck = await db.execute({

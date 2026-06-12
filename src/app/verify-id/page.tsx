@@ -19,6 +19,7 @@ interface User {
 }
 
 type UIState = 'loading' | 'verified' | 'pending' | 'rejected' | 'upload'
+type VerifyStep = 'type_select' | 'student_info' | 'upload_photo'
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -97,6 +98,13 @@ export default function VerifyIdPage() {
 
   const [user, setUser]           = useState<User | null>(null)
   const [uiState, setUiState]     = useState<UIState>('loading')
+
+  // Multi-step state (for uiState === 'upload')
+  const [verifyStep, setVerifyStep]     = useState<VerifyStep>('type_select')
+  const [intendedRole, setIntendedRole] = useState<'student' | 'teacher' | ''>('')
+  const [gradeLevel, setGradeLevel]     = useState('')
+  const [section, setSection]           = useState('')
+  const [stepError, setStepError]       = useState<string | null>(null)
 
   // Upload form state
   const [selectedFile, setSelectedFile]   = useState<File | null>(null)
@@ -228,6 +236,11 @@ export default function VerifyIdPage() {
     const formData = new FormData()
     formData.append('file', selectedFile)
     formData.append('type', 'id_photo')
+    formData.append('intended_role', intendedRole || 'student')
+    if (intendedRole === 'student') {
+      formData.append('grade_level', gradeLevel)
+      formData.append('section', section)
+    }
 
     setUploading(true)
     try {
@@ -385,34 +398,171 @@ export default function VerifyIdPage() {
           </div>
         )}
 
-        {/* ── No submission yet ── */}
+        {/* ── No submission yet — multi-step ── */}
         {uiState === 'upload' && (
           <div className="space-y-6">
             <div>
               <h1 className="text-xl font-bold text-gray-900">Verify your identity</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Upload a clear photo of your school ID or any government-issued ID to continue.
+                Complete the steps below to submit your ID for review.
               </p>
             </div>
 
-            <UploadForm
-              selectedFile={selectedFile}
-              previewUrl={previewUrl}
-              isDragging={isDragging}
-              fileError={fileError}
-              uploading={uploading}
-              fileInputRef={fileInputRef}
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              onOpenPicker={openFilePicker}
-              onFileChange={handleFileChange}
-              onClear={clearSelection}
-              onUpload={handleUpload}
-              formatBytes={formatBytes}
-              showSkip={true}
-            />
+            {/* Progress indicator */}
+            {(() => {
+              const stepNum = verifyStep === 'type_select' ? 1 : verifyStep === 'student_info' ? 2 : 3
+              const totalSteps = intendedRole === 'teacher' ? 2 : 3
+              return (
+                <div className="flex items-center gap-2">
+                  {Array.from({ length: totalSteps }, (_, i) => (
+                    <div key={i} className="flex items-center gap-2 flex-1">
+                      <div
+                        className={[
+                          'h-1.5 rounded-full flex-1 transition-colors',
+                          i < stepNum ? 'bg-indigo-500' : 'bg-gray-200',
+                        ].join(' ')}
+                      />
+                    </div>
+                  ))}
+                  <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">
+                    Step {stepNum} of {totalSteps}
+                  </span>
+                </div>
+              )
+            })()}
+
+            {/* Step 1: Type select */}
+            {verifyStep === 'type_select' && (
+              <div className="space-y-4">
+                <p className="text-sm font-medium text-gray-700">Are you a student or a teacher?</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIntendedRole('student')
+                      setStepError(null)
+                      setVerifyStep('student_info')
+                    }}
+                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                    </svg>
+                    <span className="text-sm font-semibold text-gray-900">Student</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIntendedRole('teacher')
+                      setStepError(null)
+                      setVerifyStep('upload_photo')
+                    }}
+                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all text-center focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+                    </svg>
+                    <span className="text-sm font-semibold text-gray-900">Teacher</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Student info */}
+            {verifyStep === 'student_info' && (
+              <div className="space-y-4">
+                <p className="text-sm font-medium text-gray-700">Enter your grade level and section.</p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Grade Level <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={gradeLevel}
+                    onChange={(e) => { setGradeLevel(e.target.value); setStepError(null) }}
+                    placeholder="e.g. 10"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Section <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={section}
+                    onChange={(e) => { setSection(e.target.value); setStepError(null) }}
+                    placeholder="e.g. Rizal"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                {stepError && (
+                  <p className="text-sm text-red-600">{stepError}</p>
+                )}
+                <div className="flex gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setStepError(null); setVerifyStep('type_select') }}
+                    className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!gradeLevel.trim() || !section.trim()) {
+                        setStepError('Both Grade Level and Section are required.')
+                        return
+                      }
+                      setStepError(null)
+                      setVerifyStep('upload_photo')
+                    }}
+                    className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    Continue
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Upload photo */}
+            {verifyStep === 'upload_photo' && (
+              <>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStepError(null)
+                      setVerifyStep(intendedRole === 'teacher' ? 'type_select' : 'student_info')
+                    }}
+                    className="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back
+                  </button>
+                </div>
+                <UploadForm
+                  selectedFile={selectedFile}
+                  previewUrl={previewUrl}
+                  isDragging={isDragging}
+                  fileError={fileError}
+                  uploading={uploading}
+                  fileInputRef={fileInputRef}
+                  onDragEnter={handleDragEnter}
+                  onDragLeave={handleDragLeave}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  onOpenPicker={openFilePicker}
+                  onFileChange={handleFileChange}
+                  onClear={clearSelection}
+                  onUpload={handleUpload}
+                  formatBytes={formatBytes}
+                  showSkip={true}
+                />
+              </>
+            )}
           </div>
         )}
       </div>

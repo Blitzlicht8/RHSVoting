@@ -43,6 +43,22 @@ const ACTION_BADGE: Record<string, { label: string; className: string }> = {
     label: 'OTP Sent',
     className: 'bg-blue-100 text-blue-700 border border-blue-200',
   },
+  user_deleted: {
+    label: 'User Deleted',
+    className: 'bg-red-100 text-red-700 border border-red-200',
+  },
+  user_role_changed: {
+    label: 'Role Changed',
+    className: 'bg-purple-100 text-purple-700 border border-purple-200',
+  },
+  user_activated: {
+    label: 'User Activated',
+    className: 'bg-green-100 text-green-700 border border-green-200',
+  },
+  user_deactivated: {
+    label: 'User Deactivated',
+    className: 'bg-orange-100 text-orange-700 border border-orange-200',
+  },
 }
 
 function ActionBadge({ action }: { action: string }) {

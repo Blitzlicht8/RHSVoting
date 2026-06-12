@@ -11,10 +11,22 @@ import { useToast } from '@/components/providers/ToastProvider'
 
 type ElectionStatus = 'draft' | 'active' | 'ended'
 
+interface StudentResult {
+  id: number
+  name: string
+  email: string
+  grade_level: string | null
+  section: string | null
+}
+
 interface CandidateForm {
   id?: number
   name: string
   bio: string
+  grade_level?: string
+  section?: string
+  student_user_id?: number | null
+  mode: 'manual' | 'existing'
 }
 
 interface PositionForm {
@@ -91,6 +103,8 @@ export default function ElectionsPage() {
   const [confirmStatus, setConfirmStatus] = useState<{ election: Election; nextStatus: ElectionStatus } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Election | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [studentSearches, setStudentSearches] = useState<Record<string, string>>({})
+  const [studentDropdowns, setStudentDropdowns] = useState<Record<string, StudentResult[]>>({})
 
   const isAdmin =
     user?.role === 'master_admin' ||
@@ -138,14 +152,18 @@ export default function ElectionsPage() {
           start_date: toDatetimeLocal(full.start_date),
           end_date: toDatetimeLocal(full.end_date),
           status: full.status,
-          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string }[] }) => ({
+          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; grade_level?: string; section?: string; student_user_id?: number | null }[] }) => ({
             id: p.id,
             name: p.name,
             max_votes: p.max_votes ?? 1,
-            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string }) => ({
+            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; grade_level?: string; section?: string; student_user_id?: number | null }) => ({
               id: c.id,
               name: c.name,
               bio: c.bio || '',
+              grade_level: c.grade_level ?? '',
+              section: c.section ?? '',
+              student_user_id: c.student_user_id ?? null,
+              mode: c.student_user_id ? 'existing' as const : 'manual' as const,
             })),
           })),
         })
@@ -175,6 +193,16 @@ export default function ElectionsPage() {
       addToast('Start and end dates are required', 'error')
       return
     }
+    // Validate existing-mode candidates have a student selected
+    for (const pos of formData.positions) {
+      for (const cand of pos.candidates) {
+        if (cand.mode === 'existing' && !cand.student_user_id) {
+          addToast('Please select a student for all "From Student Account" candidates, or switch to manual entry.', 'error')
+          return
+        }
+      }
+    }
+
     setSaving(true)
     try {
       const payload = {
@@ -183,7 +211,17 @@ export default function ElectionsPage() {
         start_date: new Date(formData.start_date).toISOString(),
         end_date: new Date(formData.end_date).toISOString(),
         status: formData.status,
-        positions: formData.positions,
+        positions: formData.positions.map((p) => ({
+          ...p,
+          candidates: p.candidates.map((c) => ({
+            id: c.id,
+            name: c.name,
+            bio: c.bio,
+            grade_level: c.grade_level || null,
+            section: c.section || null,
+            student_user_id: c.student_user_id ?? null,
+          })),
+        })),
       }
 
       let res: Response
@@ -288,7 +326,7 @@ export default function ElectionsPage() {
     setFormData((f) => ({
       ...f,
       positions: f.positions.map((p, i) =>
-        i === pi ? { ...p, candidates: [...p.candidates, { name: '', bio: '' }] } : p
+        i === pi ? { ...p, candidates: [...p.candidates, { name: '', bio: '', mode: 'manual' as const }] } : p
       ),
     }))
   }
@@ -311,6 +349,23 @@ export default function ElectionsPage() {
         i === pi ? { ...p, candidates: p.candidates.filter((_, j) => j !== ci) } : p
       ),
     }))
+  }
+
+  const searchStudents = async (key: string, q: string) => {
+    setStudentSearches((s) => ({ ...s, [key]: q }))
+    if (!q.trim()) {
+      setStudentDropdowns((d) => ({ ...d, [key]: [] }))
+      return
+    }
+    try {
+      const res = await fetch(`/api/admin/students?q=${encodeURIComponent(q)}`, { credentials: 'include' })
+      const json = await res.json()
+      if (res.ok) {
+        setStudentDropdowns((d) => ({ ...d, [key]: json.data.students || [] }))
+      }
+    } catch {
+      // silent
+    }
   }
 
   if (!isAdmin) {
@@ -598,35 +653,162 @@ export default function ElectionsPage() {
                       <p className="text-xs text-gray-400 pl-1">No candidates yet.</p>
                     )}
 
-                    {pos.candidates.map((cand, ci) => (
-                      <div key={ci} className="flex items-start gap-2 bg-white rounded-lg border border-gray-200 p-3">
-                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            value={cand.name}
-                            onChange={(e) => updateCandidate(pi, ci, { name: e.target.value })}
-                            placeholder="Candidate name"
-                            className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                          <textarea
-                            value={cand.bio}
-                            onChange={(e) => updateCandidate(pi, ci, { bio: e.target.value })}
-                            placeholder="Short bio (optional)"
-                            rows={1}
-                            className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                          />
+                    {pos.candidates.map((cand, ci) => {
+                      const searchKey = `${pi}_${ci}`
+                      const dropdownResults = studentDropdowns[searchKey] || []
+                      const searchQuery = studentSearches[searchKey] ?? ''
+                      return (
+                        <div key={ci} className="bg-white rounded-lg border border-gray-200 p-3 space-y-2">
+                          {/* Mode toggle */}
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => updateCandidate(pi, ci, { mode: 'existing', name: '', student_user_id: null, grade_level: '', section: '' })}
+                              className={[
+                                'px-2.5 py-1 rounded text-xs font-medium border transition-colors',
+                                cand.mode === 'existing'
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400',
+                              ].join(' ')}
+                            >
+                              From Student Account
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateCandidate(pi, ci, { mode: 'manual', student_user_id: null })}
+                              className={[
+                                'px-2.5 py-1 rounded text-xs font-medium border transition-colors',
+                                cand.mode === 'manual'
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400',
+                              ].join(' ')}
+                            >
+                              Enter Manually
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeCandidate(pi, ci)}
+                              className="ml-auto text-red-400 hover:text-red-600 p-1 rounded transition-colors flex-shrink-0"
+                              title="Remove candidate"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+
+                          {/* Existing mode */}
+                          {cand.mode === 'existing' && (
+                            <div className="space-y-1.5">
+                              {cand.student_user_id ? (
+                                <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-md">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-gray-900 truncate">{cand.name}</div>
+                                    {(cand.grade_level || cand.section) && (
+                                      <div className="text-xs text-gray-500">
+                                        {cand.grade_level && `Grade ${cand.grade_level}`}
+                                        {cand.grade_level && cand.section && ' · '}
+                                        {cand.section}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      updateCandidate(pi, ci, { name: '', student_user_id: null, grade_level: '', section: '' })
+                                      setStudentSearches((s) => ({ ...s, [searchKey]: '' }))
+                                      setStudentDropdowns((d) => ({ ...d, [searchKey]: [] }))
+                                    }}
+                                    className="text-xs text-gray-500 hover:text-gray-700 flex-shrink-0"
+                                  >
+                                    ✕ Clear
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="relative">
+                                  <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => searchStudents(searchKey, e.target.value)}
+                                    placeholder="Search student by name or email…"
+                                    className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  />
+                                  {dropdownResults.length > 0 && (
+                                    <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                      {dropdownResults.map((student) => (
+                                        <button
+                                          key={student.id}
+                                          type="button"
+                                          onClick={() => {
+                                            updateCandidate(pi, ci, {
+                                              name: student.name,
+                                              grade_level: student.grade_level || '',
+                                              section: student.section || '',
+                                              student_user_id: student.id,
+                                            })
+                                            setStudentSearches((s) => ({ ...s, [searchKey]: '' }))
+                                            setStudentDropdowns((d) => ({ ...d, [searchKey]: [] }))
+                                          }}
+                                          className="w-full text-left px-3 py-2 hover:bg-indigo-50 transition-colors"
+                                        >
+                                          <div className="text-sm font-medium text-gray-900">{student.name}</div>
+                                          <div className="text-xs text-gray-500">
+                                            {student.email}
+                                            {(student.grade_level || student.section) && (
+                                              <span className="ml-1">
+                                                · {student.grade_level && `Grade ${student.grade_level}`}
+                                                {student.grade_level && student.section && ' '}
+                                                {student.section}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Manual mode */}
+                          {cand.mode === 'manual' && (
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                value={cand.name}
+                                onChange={(e) => updateCandidate(pi, ci, { name: e.target.value })}
+                                placeholder="Candidate name"
+                                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+                              <textarea
+                                value={cand.bio}
+                                onChange={(e) => updateCandidate(pi, ci, { bio: e.target.value })}
+                                placeholder="Short bio (optional)"
+                                rows={1}
+                                className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                              />
+                              <div className="grid grid-cols-2 gap-2">
+                                <input
+                                  type="text"
+                                  value={cand.grade_level || ''}
+                                  onChange={(e) => updateCandidate(pi, ci, { grade_level: e.target.value })}
+                                  placeholder="Grade Level (optional)"
+                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                                <input
+                                  type="text"
+                                  value={cand.section || ''}
+                                  onChange={(e) => updateCandidate(pi, ci, { section: e.target.value })}
+                                  placeholder="Section (optional)"
+                                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <button
-                          onClick={() => removeCandidate(pi, ci)}
-                          className="text-red-400 hover:text-red-600 p-1 rounded transition-colors flex-shrink-0 mt-0.5"
-                          title="Remove candidate"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               ))}

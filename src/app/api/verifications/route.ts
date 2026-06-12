@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
   const total = Number(countResult.rows[0]?.count ?? 0)
 
   const requestsResult = await db.execute({
-    sql: `SELECT vr.*, u.name AS user_name, u.email AS user_email, u.role AS user_role
+    sql: `SELECT vr.*, u.name AS user_name, u.email AS user_email, u.role AS user_role,
+                 u.grade_level, u.section, vr.intended_role
           FROM verification_requests vr
           JOIN users u ON u.id = vr.user_id
           ${where}

@@ -231,7 +231,7 @@ export default function ElectionsPage() {
           </div>
           {isAdmin && (
             <Link
-              href="/admin/elections/new"
+              href="/admin/elections"
               className="inline-flex items-center gap-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

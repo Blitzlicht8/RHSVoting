@@ -28,6 +28,42 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ data: { elections: result.rows } })
 }
 
+interface CandidateInput {
+  name?: string
+  bio?: string
+  grade_level?: string
+  section?: string
+  student_user_id?: number | null
+}
+
+interface PositionInput {
+  name?: string
+  max_votes?: number
+  candidates?: CandidateInput[]
+}
+
+async function syncPositions(electionId: number, positions: PositionInput[]) {
+  await db.execute({ sql: 'DELETE FROM positions WHERE election_id = ?', args: [electionId] })
+  for (let i = 0; i < positions.length; i++) {
+    const pos = positions[i]
+    const posName = (pos.name ?? '').trim()
+    if (!posName) continue
+    const posResult = await db.execute({
+      sql: `INSERT INTO positions (election_id, name, max_votes, order_index) VALUES (?, ?, ?, ?)`,
+      args: [electionId, posName, pos.max_votes ?? 1, i],
+    })
+    const posId = Number(posResult.lastInsertRowid)
+    for (const cand of pos.candidates ?? []) {
+      const candName = (cand.name ?? '').trim()
+      if (!candName) continue
+      await db.execute({
+        sql: `INSERT INTO candidates (election_id, position_id, name, bio, grade_level, section, student_user_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [electionId, posId, candName, cand.bio ?? null, cand.grade_level ?? null, cand.section ?? null, cand.student_user_id ?? null],
+      })
+    }
+  }
+}
+
 export async function POST(request: NextRequest) {
   await ensureInit()
 
@@ -64,9 +100,15 @@ export async function POST(request: NextRequest) {
     args: [title.trim(), description ?? null, start_date, end_date, authUser.id],
   })
 
+  const electionId = Number(insertResult.lastInsertRowid)
+
+  if (Array.isArray(body.positions) && body.positions.length > 0) {
+    await syncPositions(electionId, body.positions)
+  }
+
   const election = await db.execute({
     sql: 'SELECT * FROM elections WHERE id = ?',
-    args: [Number(insertResult.lastInsertRowid)],
+    args: [electionId],
   })
 
   return NextResponse.json({ data: { election: election.rows[0] } }, { status: 201 })

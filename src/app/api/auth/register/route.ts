@@ -47,7 +47,16 @@ export async function POST(request: NextRequest) {
     args: [userId, code, 'email_verify', expiresAt, 0],
   })
 
-  const devOtp = await sendOTPEmail(email, code, 'email_verify')
+  let devOtp: string | null = null
+  try {
+    devOtp = await sendOTPEmail(email, code, 'email_verify')
+  } catch (emailErr) {
+    console.error('Failed to send verification email:', emailErr)
+    return NextResponse.json(
+      { error: 'Account created but we could not send the verification email. Please try logging in and request a new code.' },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json(
     { data: { userId, email, ...(devOtp ? { devOtp } : {}) }, message: 'Account created. Please verify your email.' },

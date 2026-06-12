@@ -48,11 +48,22 @@ const ROLE_BADGE: Record<Role, 'danger' | 'warning' | 'purple' | 'info' | 'defau
 
 const ALL_ROLES: Role[] = ['master_admin', 'teacher_admin', 'student_admin', 'teacher', 'student']
 
+const ROLE_LEVEL: Record<Role, number> = {
+  student: 0, teacher: 1, student_admin: 2, teacher_admin: 3, master_admin: 4,
+}
+
 function getAssignableRoles(currentUserRole: Role): Role[] {
   if (currentUserRole === 'master_admin') return ALL_ROLES
   if (currentUserRole === 'teacher_admin') return ['teacher', 'student']
   if (currentUserRole === 'student_admin') return ['student']
   return []
+}
+
+function canDeleteUser(actorRole: Role, target: UserRow, selfId: number): boolean {
+  if (target.id === selfId) return false
+  if (actorRole === 'master_admin') return true
+  if (actorRole === 'teacher_admin') return ROLE_LEVEL[target.role] < ROLE_LEVEL['teacher_admin']
+  return false
 }
 
 function getInitials(name: string): string {
@@ -81,6 +92,8 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState<Role | ''>('')
   const [idModalUser, setIdModalUser] = useState<UserRow | null>(null)
   const [patchingId, setPatchingId] = useState<number | null>(null)
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<UserRow | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -153,6 +166,30 @@ export default function UsersPage() {
       addToast('Network error', 'error')
     } finally {
       setPatchingId(null)
+    }
+  }, [addToast])
+
+  const deleteUser = useCallback(async (id: number) => {
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/users/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      const json = await res.json()
+      if (res.ok) {
+        addToast('User deleted', 'success')
+        setData((prev) => {
+          if (!prev) return prev
+          return { ...prev, users: prev.users.filter((u) => u.id !== id), total: prev.total - 1 }
+        })
+      } else {
+        addToast(json.error || 'Delete failed', 'error')
+      }
+    } catch {
+      addToast('Network error', 'error')
+    } finally {
+      setDeletingId(null)
     }
   }, [addToast])
 
@@ -328,17 +365,30 @@ export default function UsersPage() {
 
                       {/* Actions */}
                       <td className="px-4 py-4 text-center">
-                        {u.id_image ? (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => setIdModalUser(u)}
-                          >
-                            View ID
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-gray-400">No ID</span>
-                        )}
+                        <div className="flex items-center justify-center gap-2">
+                          {u.id_image ? (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setIdModalUser(u)}
+                            >
+                              View ID
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-gray-400">No ID</span>
+                          )}
+                          {currentUser && canDeleteUser(currentUser.role as Role, u, currentUser.id) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={deletingId === u.id}
+                              onClick={() => setConfirmDeleteUser(u)}
+                              className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                            >
+                              Delete
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -418,6 +468,17 @@ export default function UsersPage() {
                           View ID
                         </Button>
                       )}
+                      {currentUser && canDeleteUser(currentUser.role as Role, u, currentUser.id) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={deletingId === u.id}
+                          onClick={() => setConfirmDeleteUser(u)}
+                          className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -467,6 +528,45 @@ export default function UsersPage() {
               alt="School ID"
               className="w-full rounded-lg object-contain max-h-[60vh] border border-gray-200"
             />
+          </div>
+        )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!confirmDeleteUser}
+        onClose={() => setConfirmDeleteUser(null)}
+        title="Delete User"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmDeleteUser(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              loading={deletingId === confirmDeleteUser?.id}
+              onClick={async () => {
+                if (!confirmDeleteUser) return
+                const id = confirmDeleteUser.id
+                setConfirmDeleteUser(null)
+                await deleteUser(id)
+              }}
+            >
+              Delete
+            </Button>
+          </>
+        }
+      >
+        {confirmDeleteUser && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              Are you sure you want to permanently delete{' '}
+              <strong>{confirmDeleteUser.name}</strong> ({confirmDeleteUser.email})?
+            </p>
+            <p className="text-xs text-red-600 bg-red-50 rounded-lg p-3">
+              This action cannot be undone. The user&apos;s account and all associated data will be removed.
+            </p>
           </div>
         )}
       </Modal>

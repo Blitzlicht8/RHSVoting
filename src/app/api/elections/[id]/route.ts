@@ -4,6 +4,42 @@ import { getAuthUser, isAdmin } from '@/lib/auth'
 import { ElectionStatus, Position, Candidate } from '@/types'
 import { InValue } from '@libsql/client'
 
+interface CandidateInput {
+  name?: string
+  bio?: string
+  grade_level?: string
+  section?: string
+  student_user_id?: number | null
+}
+
+interface PositionInput {
+  name?: string
+  max_votes?: number
+  candidates?: CandidateInput[]
+}
+
+async function syncPositions(electionId: number, positions: PositionInput[]) {
+  await db.execute({ sql: 'DELETE FROM positions WHERE election_id = ?', args: [electionId] })
+  for (let i = 0; i < positions.length; i++) {
+    const pos = positions[i]
+    const posName = (pos.name ?? '').trim()
+    if (!posName) continue
+    const posResult = await db.execute({
+      sql: `INSERT INTO positions (election_id, name, max_votes, order_index) VALUES (?, ?, ?, ?)`,
+      args: [electionId, posName, pos.max_votes ?? 1, i],
+    })
+    const posId = Number(posResult.lastInsertRowid)
+    for (const cand of pos.candidates ?? []) {
+      const candName = (cand.name ?? '').trim()
+      if (!candName) continue
+      await db.execute({
+        sql: `INSERT INTO candidates (election_id, position_id, name, bio, grade_level, section, student_user_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [electionId, posId, candName, cand.bio ?? null, cand.grade_level ?? null, cand.section ?? null, cand.student_user_id ?? null],
+      })
+    }
+  }
+}
+
 const VALID_TRANSITIONS: Record<ElectionStatus, ElectionStatus | null> = {
   draft: 'active',
   active: 'ended',
@@ -137,17 +173,28 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     values.push(body.status)
   }
 
-  if (setClauses.length === 0) {
+  const hasPositions = Array.isArray(body.positions)
+
+  if (setClauses.length === 0 && !hasPositions) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
   }
 
-  setClauses.push("updated_at = datetime('now')")
-  values.push(electionId)
+  if (setClauses.length > 0) {
+    setClauses.push("updated_at = datetime('now')")
+    values.push(electionId)
+    await db.execute({
+      sql: `UPDATE elections SET ${setClauses.join(', ')} WHERE id = ?`,
+      args: values,
+    })
+  }
 
-  await db.execute({
-    sql: `UPDATE elections SET ${setClauses.join(', ')} WHERE id = ?`,
-    args: values,
-  })
+  if (hasPositions) {
+    const currentStatus = existing.status as string
+    if (currentStatus !== 'draft') {
+      return NextResponse.json({ error: 'Positions can only be modified on draft elections' }, { status: 400 })
+    }
+    await syncPositions(electionId, body.positions as PositionInput[])
+  }
 
   const updated = await db.execute({ sql: 'SELECT * FROM elections WHERE id = ?', args: [electionId] })
   return NextResponse.json({ data: { election: updated.rows[0] } })

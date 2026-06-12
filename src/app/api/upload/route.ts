@@ -40,6 +40,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'File size exceeds 5MB limit' }, { status: 400 })
   }
 
+  const intendedRole = (formData.get('intended_role') as string | null) ?? null
+  const gradeLevel = (formData.get('grade_level') as string | null) ?? null
+  const section = (formData.get('section') as string | null) ?? null
+
   const filename = `school-ids/${authUser.id}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}.${ext}`
   const buffer = Buffer.from(await file.arrayBuffer())
 
@@ -47,13 +51,13 @@ export async function POST(request: NextRequest) {
   const imagePath = blob.url
 
   await db.execute({
-    sql: `UPDATE users SET id_image = ?, updated_at = datetime('now') WHERE id = ?`,
-    args: [imagePath, authUser.id],
+    sql: `UPDATE users SET id_image = ?, intended_role = ?, grade_level = ?, section = ?, updated_at = datetime('now') WHERE id = ?`,
+    args: [imagePath, intendedRole, gradeLevel, section, authUser.id],
   })
 
   await db.execute({
-    sql: `INSERT OR REPLACE INTO verification_requests (user_id, image_path, status) VALUES (?, ?, 'pending')`,
-    args: [authUser.id, imagePath],
+    sql: `INSERT OR REPLACE INTO verification_requests (user_id, image_path, status, intended_role) VALUES (?, ?, 'pending', ?)`,
+    args: [authUser.id, imagePath, intendedRole],
   })
 
   const settingResult = await db.execute({

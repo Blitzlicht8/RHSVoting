@@ -23,6 +23,9 @@ interface VerifRequest {
   notes: string | null
   created_at: string
   updated_at: string
+  intended_role: string | null
+  grade_level: string | null
+  section: string | null
 }
 
 const TAB_LABELS: Record<TabKey, string> = {
@@ -327,9 +330,25 @@ export default function VerificationsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-gray-900 text-sm truncate">{req.user_name}</div>
                     <div className="text-xs text-gray-500 truncate">{req.user_email}</div>
-                    <Badge variant="info" size="sm" className="mt-1">
-                      {ROLE_LABELS[req.user_role] || req.user_role}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                      <Badge variant="info" size="sm">
+                        {ROLE_LABELS[req.user_role] || req.user_role}
+                      </Badge>
+                      {req.intended_role === 'student' && (
+                        <>
+                          <Badge variant="default" size="sm">Student</Badge>
+                          {req.grade_level && (
+                            <span className="text-xs text-gray-500">Grade {req.grade_level}</span>
+                          )}
+                          {req.section && (
+                            <span className="text-xs text-gray-500">&middot; {req.section}</span>
+                          )}
+                        </>
+                      )}
+                      {req.intended_role === 'teacher' && (
+                        <Badge variant="default" size="sm">Teacher</Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -412,6 +431,22 @@ export default function VerificationsPage() {
               <div>
                 <div className="font-medium text-gray-900 text-sm">{selectedImageRequest.user_name}</div>
                 <div className="text-xs text-gray-500">{selectedImageRequest.user_email}</div>
+                {selectedImageRequest.intended_role === 'student' && (
+                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                    <Badge variant="default" size="sm">Student</Badge>
+                    {selectedImageRequest.grade_level && (
+                      <span className="text-xs text-gray-500">Grade {selectedImageRequest.grade_level}</span>
+                    )}
+                    {selectedImageRequest.section && (
+                      <span className="text-xs text-gray-500">&middot; {selectedImageRequest.section}</span>
+                    )}
+                  </div>
+                )}
+                {selectedImageRequest.intended_role === 'teacher' && (
+                  <div className="mt-0.5">
+                    <Badge variant="default" size="sm">Teacher</Badge>
+                  </div>
+                )}
               </div>
               <Badge variant={STATUS_BADGE[selectedImageRequest.status]} size="sm" className="ml-auto">
                 {selectedImageRequest.status}
