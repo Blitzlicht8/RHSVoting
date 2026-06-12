@@ -96,7 +96,7 @@ export async function sendOTPEmail(
 
   try {
     await transporter.sendMail({
-      from: process.env.EMAIL_FROM || 'voting@school.edu',
+      from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
       to,
       subject,
       html,
