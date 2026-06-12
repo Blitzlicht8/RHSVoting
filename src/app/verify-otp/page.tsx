@@ -156,12 +156,11 @@ function VerifyOtpInner() {
         return
       }
 
-      // Route based on type
+      // Full page navigation so the browser sends the newly set cookie
       if (type === 'email_verify') {
-        router.push('/verify-id')
+        window.location.href = '/verify-id'
       } else {
-        // login, password_reset, or anything else → dashboard
-        router.push('/dashboard')
+        window.location.href = '/dashboard'
       }
     } catch {
       addToast('Network error. Please check your connection.', 'error')

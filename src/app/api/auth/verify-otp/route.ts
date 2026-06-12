@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
-import { signJWT, cookieOptions } from '@/lib/auth'
+import { signJWT, buildSetCookieHeader } from '@/lib/auth'
 import { Role } from '@/types'
 
 export async function POST(request: NextRequest) {
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
       data: { user: { id: user.id, email: user.email, name: user.name, role: user.role } },
       message: 'Login successful',
     })
-    response.cookies.set('auth-token', token, cookieOptions(rememberMe))
+    response.headers.set('Set-Cookie', buildSetCookieHeader(token, rememberMe))
     return response
   }
 

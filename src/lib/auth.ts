@@ -35,13 +35,19 @@ export async function getAuthUser(): Promise<AuthUser | null> {
 
 export function cookieOptions(rememberMe = false) {
   return {
-    name: COOKIE_NAME,
     httpOnly: true,
     sameSite: 'lax' as const,
     secure: process.env.NODE_ENV === 'production',
     path: '/',
     ...(rememberMe ? { maxAge: 30 * 24 * 60 * 60 } : {}),
   }
+}
+
+export function buildSetCookieHeader(token: string, rememberMe = false): string {
+  const isProduction = process.env.NODE_ENV === 'production'
+  const maxAge = rememberMe ? `; Max-Age=${30 * 24 * 60 * 60}` : ''
+  const secure = isProduction ? '; Secure' : ''
+  return `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax${secure}${maxAge}`
 }
 
 export async function setAuthCookie(token: string, rememberMe = false): Promise<void> {
