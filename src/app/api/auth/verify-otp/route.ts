@@ -79,10 +79,10 @@ export async function POST(request: NextRequest) {
       role: user.role as Role,
     }, rememberMe)
 
-    const response = NextResponse.json({
-      data: { user: { id: user.id, email: user.email, name: user.name, role: user.role } },
-      message: 'Login successful',
-    })
+    // Return a 303 redirect with Set-Cookie. The browser stores the cookie
+    // from this response even when fetch uses redirect:'manual', which lets
+    // the client navigate to /dashboard with the cookie already in place.
+    const response = NextResponse.redirect(new URL('/dashboard', request.url), { status: 303 })
     response.headers.set('Set-Cookie', buildSetCookieHeader(token, rememberMe))
     return response
   }

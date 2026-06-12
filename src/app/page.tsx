@@ -7,7 +7,6 @@ import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import OTPInput from '@/components/ui/OTPInput'
 import { useToast } from '@/components/providers/ToastProvider'
-import { verifyOTPAction } from '@/app/actions/auth'
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -187,14 +186,27 @@ export default function LoginPage() {
 
     setLoading(true)
     try {
-      const result = await verifyOTPAction(email.trim().toLowerCase(), otp, 'login', rememberMe)
-      if (!result.ok) {
-        addToast(result.error, 'error')
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), code: otp, type: 'login', rememberMe }),
+        redirect: 'manual',
+      })
+
+      if (res.type === 'opaqueredirect') {
+        window.location.href = '/dashboard'
         return
       }
-      window.location.href = result.redirect
+
+      const json = await res.json()
+      if (!res.ok) {
+        addToast(json.error ?? 'Invalid code. Please try again.', 'error')
+        return
+      }
+
+      window.location.href = '/dashboard'
     } catch {
-      addToast('Something went wrong. Please try again.', 'error')
+      addToast('Network error. Please check your connection.', 'error')
     } finally {
       setLoading(false)
     }
