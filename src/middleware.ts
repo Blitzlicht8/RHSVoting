@@ -32,7 +32,7 @@ async function verifyToken(token: string): Promise<JWTPayload | null> {
 
     const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`)
     const sig = base64urlDecode(sigB64)
-    const valid = await crypto.subtle.verify('HMAC', key, sig, data)
+    const valid = await crypto.subtle.verify('HMAC', key, sig.buffer as ArrayBuffer, data.buffer as ArrayBuffer)
     if (!valid) return null
 
     const payload: JWTPayload = JSON.parse(
