@@ -110,6 +110,18 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     values.push(body.role)
   }
 
+  const canVerify = ['master_admin', 'teacher_admin'].includes(authUser.role as string)
+
+  if (body.email_verified !== undefined && canVerify) {
+    setClauses.push('email_verified = ?')
+    values.push(body.email_verified ? 1 : 0)
+  }
+
+  if (body.id_verified !== undefined && canVerify) {
+    setClauses.push('id_verified = ?')
+    values.push(body.id_verified ? 1 : 0)
+  }
+
   if (setClauses.length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
   }
@@ -132,6 +144,21 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (body.active !== undefined && adminUser) {
     await logActivity(authUser.id, body.active ? 'user_activated' : 'user_deactivated',
       `${body.active ? 'Activated' : 'Deactivated'} user ${targetEmail}`, ip)
+  }
+  if (body.email_verified !== undefined && canVerify) {
+    await logActivity(authUser.id, 'email_verified_admin',
+      `${body.email_verified ? 'Approved' : 'Revoked'} email verification for ${targetEmail}`, ip)
+  }
+  if (body.id_verified !== undefined && canVerify) {
+    if (body.id_verified) {
+      // Approve any pending verification request for this user
+      await db.execute({
+        sql: `UPDATE verification_requests SET status = 'approved', reviewed_by = ?, reviewed_at = datetime('now') WHERE user_id = ? AND status = 'pending'`,
+        args: [authUser.id, targetId],
+      })
+    }
+    await logActivity(authUser.id, 'id_verified_admin',
+      `${body.id_verified ? 'Approved' : 'Revoked'} ID verification for ${targetEmail}`, ip)
   }
 
   const updated = await db.execute({

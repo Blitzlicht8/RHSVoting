@@ -138,7 +138,7 @@ export default function UsersPage() {
     fetchUsers(page, debouncedSearch, roleFilter)
   }, [page, debouncedSearch, roleFilter, fetchUsers])
 
-  const patchUser = useCallback(async (id: number, patch: Partial<{ role: Role; active: 0 | 1 }>) => {
+  const patchUser = useCallback(async (id: number, patch: Partial<{ role: Role; active: 0 | 1; email_verified: 0 | 1; id_verified: 0 | 1 }>) => {
     setPatchingId(id)
     try {
       const res = await fetch(`/api/users/${id}`, {
@@ -208,6 +208,7 @@ export default function UsersPage() {
   }
 
   const assignableRoles = currentUser ? getAssignableRoles(currentUser.role) : []
+  const canVerify = currentUser?.role === 'master_admin' || currentUser?.role === 'teacher_admin'
   const totalPages = data ? Math.ceil(data.total / 20) : 1
 
   return (
@@ -319,28 +320,54 @@ export default function UsersPage() {
 
                       {/* Email verified */}
                       <td className="px-4 py-4 text-center">
-                        {u.email_verified ? (
-                          <svg className="w-5 h-5 text-green-500 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                        ) : (
-                          <svg className="w-5 h-5 text-red-400 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                          </svg>
-                        )}
+                        <div className="flex flex-col items-center gap-1">
+                          {u.email_verified ? (
+                            <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <>
+                              <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                              </svg>
+                              {canVerify && (
+                                <button
+                                  disabled={patchingId === u.id}
+                                  onClick={() => patchUser(u.id, { email_verified: 1 })}
+                                  className="text-xs text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50"
+                                >
+                                  Approve
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </td>
 
                       {/* ID verified */}
                       <td className="px-4 py-4 text-center">
-                        {u.id_verified ? (
-                          <svg className="w-5 h-5 text-green-500 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                        ) : (
-                          <svg className="w-5 h-5 text-red-400 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                          </svg>
-                        )}
+                        <div className="flex flex-col items-center gap-1">
+                          {u.id_verified ? (
+                            <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <>
+                              <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                              </svg>
+                              {canVerify && (
+                                <button
+                                  disabled={patchingId === u.id}
+                                  onClick={() => patchUser(u.id, { id_verified: 1 })}
+                                  className="text-xs text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50"
+                                >
+                                  Approve
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </td>
 
                       {/* Active toggle */}
@@ -417,21 +444,43 @@ export default function UsersPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-3">
-                    <div className="flex items-center gap-1">
-                      {u.email_verified ? (
-                        <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                      ) : (
-                        <svg className="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1">
+                        {u.email_verified ? (
+                          <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                        ) : (
+                          <svg className="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                        )}
+                        Email verified
+                      </div>
+                      {!u.email_verified && canVerify && (
+                        <button
+                          disabled={patchingId === u.id}
+                          onClick={() => patchUser(u.id, { email_verified: 1 })}
+                          className="text-xs text-indigo-600 hover:text-indigo-800 font-medium text-left disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
                       )}
-                      Email verified
                     </div>
-                    <div className="flex items-center gap-1">
-                      {u.id_verified ? (
-                        <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                      ) : (
-                        <svg className="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1">
+                        {u.id_verified ? (
+                          <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+                        ) : (
+                          <svg className="w-4 h-4 text-red-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                        )}
+                        ID verified
+                      </div>
+                      {!u.id_verified && canVerify && (
+                        <button
+                          disabled={patchingId === u.id}
+                          onClick={() => patchUser(u.id, { id_verified: 1 })}
+                          className="text-xs text-indigo-600 hover:text-indigo-800 font-medium text-left disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
                       )}
-                      ID verified
                     </div>
                   </div>
 

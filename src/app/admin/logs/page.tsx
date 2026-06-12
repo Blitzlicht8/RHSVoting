@@ -59,6 +59,14 @@ const ACTION_BADGE: Record<string, { label: string; className: string }> = {
     label: 'User Deactivated',
     className: 'bg-orange-100 text-orange-700 border border-orange-200',
   },
+  email_verified_admin: {
+    label: 'Email Approved',
+    className: 'bg-teal-100 text-teal-700 border border-teal-200',
+  },
+  id_verified_admin: {
+    label: 'ID Approved',
+    className: 'bg-cyan-100 text-cyan-700 border border-cyan-200',
+  },
 }
 
 function ActionBadge({ action }: { action: string }) {
