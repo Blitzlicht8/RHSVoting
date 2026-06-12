@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { signJWT, buildSetCookieHeader } from '@/lib/auth'
 import { Role } from '@/types'
+import { logActivity } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   await ensureInit()
@@ -17,6 +18,8 @@ export async function POST(request: NextRequest) {
   if (!email || !code || !type) {
     return NextResponse.json({ error: 'Email, code, and type are required' }, { status: 400 })
   }
+
+  const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
 
   const userResult = await db.execute({
     sql: 'SELECT id, email, name, role FROM users WHERE email = ?',
@@ -37,6 +40,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No active OTP found. Please request a new one.' }, { status: 400 })
   }
   if (otp.code !== code.toString()) {
+    await logActivity(Number(user.id), 'otp_failed', 'Wrong OTP code', ip)
     return NextResponse.json({ error: 'Invalid verification code' }, { status: 400 })
   }
 
@@ -72,6 +76,8 @@ export async function POST(request: NextRequest) {
   }
 
   if (type === 'login') {
+    await logActivity(Number(user.id), 'login_success', 'OTP verified', ip)
+
     const token = await signJWT({
       id: Number(user.id),
       email: user.email as string,

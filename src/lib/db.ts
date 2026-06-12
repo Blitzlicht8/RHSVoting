@@ -128,6 +128,18 @@ async function _init(): Promise<void> {
         )`,
         args: [],
       },
+      {
+        sql: `CREATE TABLE IF NOT EXISTS user_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER,
+          action TEXT NOT NULL,
+          details TEXT,
+          ip TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (user_id) REFERENCES users(id)
+        )`,
+        args: [],
+      },
     ],
     'write'
   )
@@ -141,6 +153,14 @@ async function _init(): Promise<void> {
       },
       {
         sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('otp_required_login', 'true')`,
+        args: [],
+      },
+      {
+        sql: `UPDATE settings SET value = 'true' WHERE key = 'otp_required_login' AND value NOT IN ('true', 'false')`,
+        args: [],
+      },
+      {
+        sql: `UPDATE settings SET value = 'false' WHERE key = 'auto_verify_id' AND value NOT IN ('true', 'false')`,
         args: [],
       },
     ],

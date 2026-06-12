@@ -5,6 +5,7 @@ import { db, ensureInit } from '@/lib/db'
 import { signJWT, buildSetCookieHeader } from '@/lib/auth'
 import { Role } from '@/types'
 import { sendOTPEmail } from '@/lib/email'
+import { logActivity } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   await ensureInit()
@@ -21,6 +22,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
   }
 
+  const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
+
   const userResult = await db.execute({
     sql: 'SELECT id, email, name, role, password_hash, email_verified, id_verified, active FROM users WHERE email = ?',
     args: [email],
@@ -28,6 +31,7 @@ export async function POST(request: NextRequest) {
   const user = userResult.rows[0]
 
   if (!user) {
+    await logActivity(null, 'login_failed', `Email not found: ${email}`, ip)
     return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
   }
   if (!user.active) {
@@ -36,6 +40,7 @@ export async function POST(request: NextRequest) {
 
   const passwordMatch = await bcrypt.compare(password, user.password_hash as string)
   if (!passwordMatch) {
+    await logActivity(Number(user.id), 'login_failed', 'Wrong password', ip)
     return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
   }
 
@@ -63,6 +68,7 @@ export async function POST(request: NextRequest) {
       args: [Number(user.id), code, 'login', expiresAt, 0],
     })
     const devOtp = await sendOTPEmail(email, code, 'login')
+    await logActivity(Number(user.id), 'login_otp_sent', `OTP sent to ${email}`, ip)
 
     return NextResponse.json({ data: { requiresOTP: true, email, ...(devOtp ? { devOtp } : {}) }, message: 'OTP sent to your email' })
   }
@@ -73,6 +79,8 @@ export async function POST(request: NextRequest) {
     name: user.name as string,
     role: user.role as Role,
   }, rememberMe)
+
+  await logActivity(Number(user.id), 'login_success', 'Logged in directly (OTP disabled)', ip)
 
   const response = NextResponse.json({
     data: { user: { id: user.id, email: user.email, name: user.name, role: user.role } },

@@ -8,6 +8,7 @@ import Modal from '@/components/ui/Modal'
 import Spinner from '@/components/ui/Spinner'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
+import { APP_VERSION } from '@/lib/version'
 
 interface ToggleRowProps {
   label: string
@@ -118,7 +119,7 @@ export default function SettingsPage() {
 
   const toggleSetting = async (key: string) => {
     const current = settings[key]
-    const next = current === '1' ? '0' : '1'
+    const next = current === 'true' ? 'false' : 'true'
     setTogglingKey(key)
     try {
       const res = await fetch('/api/settings', {
@@ -171,8 +172,8 @@ export default function SettingsPage() {
     )
   }
 
-  const autoVerifyOn = settings['auto_verify_id'] === '1'
-  const otpRequiredOn = settings['otp_required_login'] === '1'
+  const autoVerifyOn = settings['auto_verify_id'] === 'true'
+  const otpRequiredOn = settings['otp_required_login'] === 'true'
 
   return (
     <Layout>
@@ -205,7 +206,7 @@ export default function SettingsPage() {
 
           {/* Card 3: System Information */}
           <SectionCard title="System Information">
-            <InfoRow label="App Version" value="v1.0.0" />
+            <InfoRow label="App Version" value={`v${APP_VERSION}`} />
             <InfoRow label="Default Admin" value="admin@school.edu" />
             <InfoRow
               label="Environment"
