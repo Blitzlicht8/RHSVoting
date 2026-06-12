@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
              (SELECT 1 FROM post_reactions pr2 WHERE pr2.post_id = p.id AND pr2.user_id = ?) as user_reacted
              FROM posts p JOIN users u ON u.id = p.author_id
              WHERE 1=1`
-  const args: unknown[] = [authUser.id]
+  const args: (string | number | null)[] = [authUser.id]
 
   if (electionId) { sql += ` AND p.election_id = ?`; args.push(parseInt(electionId)) }
   if (userId) { sql += ` AND p.author_id = ?`; args.push(parseInt(userId)) }
