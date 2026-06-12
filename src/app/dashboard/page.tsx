@@ -257,7 +257,7 @@ export default function DashboardPage() {
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            Welcome back, {user?.first_name}
+            Welcome back, {user?.name?.split(' ')[0]}
           </h1>
           <p className="text-gray-500 mt-1 text-sm">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
