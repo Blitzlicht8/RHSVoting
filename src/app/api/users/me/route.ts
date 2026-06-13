@@ -45,7 +45,16 @@ export async function PATCH(request: NextRequest) {
 
   if (body.name !== undefined) {
     if (!body.name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 })
-    sets.push('name = ?'); vals.push(body.name.trim())
+    const currentRow = await db.execute({ sql: `SELECT name FROM users WHERE id = ?`, args: [authUser.id] })
+    const oldName = String(currentRow.rows[0]?.name ?? '')
+    const newName = body.name.trim()
+    if (oldName && oldName !== newName) {
+      await db.execute({
+        sql: `INSERT INTO name_history (user_id, old_name, new_name) VALUES (?,?,?)`,
+        args: [authUser.id, oldName, newName],
+      })
+    }
+    sets.push('name = ?'); vals.push(newName)
   }
   if (body.avatar_url !== undefined) { sets.push('avatar_url = ?'); vals.push(body.avatar_url) }
   if (body.grade_level_id !== undefined) {

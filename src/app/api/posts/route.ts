@@ -41,6 +41,11 @@ export async function POST(request: NextRequest) {
   const authUser = await getAuthUser()
   if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const vRow = await db.execute({ sql: `SELECT id_verified FROM users WHERE id = ?`, args: [authUser.id] })
+  if (!Number(vRow.rows[0]?.id_verified)) {
+    return NextResponse.json({ error: 'Account not yet verified. Verify your identity to post.' }, { status: 403 })
+  }
+
   const body = await request.json()
   if (!body.content?.trim()) return NextResponse.json({ error: 'Content required' }, { status: 400 })
 

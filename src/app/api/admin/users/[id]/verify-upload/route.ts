@@ -22,24 +22,31 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (!allowed.includes(file.type)) return NextResponse.json({ error: `${file.name} unsupported type` }, { status: 400 })
   }
 
-  // Create approved verification request
   const now = new Date().toISOString()
-  const vrRes = await db.execute({
-    sql: `INSERT INTO verification_requests (user_id, status, reviewed_by, reviewed_at, created_at) VALUES (?,?,?,?,?)`,
-    args: [targetId, 'approved', authUser.id, now, now]
-  })
-  const vrId = vrRes.lastInsertRowid
 
-  // Upload files and insert documents
+  // Upload all files first
+  const uploadedUrls: string[] = []
   for (const file of files) {
     const ext = file.name.split('.').pop() ?? 'bin'
     const blob = await put(`verifications/${targetId}/${Date.now()}.${ext}`, await file.arrayBuffer(), {
       access: 'public',
       contentType: file.type,
     })
+    uploadedUrls.push(blob.url)
+  }
+
+  // Create approved verification request (use first URL as legacy image_path)
+  const vrRes = await db.execute({
+    sql: `INSERT INTO verification_requests (user_id, image_path, status, reviewed_by, reviewed_at, created_at) VALUES (?,?,?,?,?,?)`,
+    args: [targetId, uploadedUrls[0], 'approved', authUser.id, now, now]
+  })
+  const vrId = Number(vrRes.lastInsertRowid)
+
+  // Insert verification documents
+  for (const url of uploadedUrls) {
     await db.execute({
       sql: `INSERT INTO verification_documents (verification_request_id, file_path, doc_type, created_at) VALUES (?,?,?,?)`,
-      args: [Number(vrId), blob.url, 'school_id', now]
+      args: [vrId, url, 'document', now]
     })
   }
 

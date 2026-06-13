@@ -268,6 +268,30 @@ async function _init(): Promise<void> {
         args: [],
       },
       {
+        sql: `CREATE TABLE IF NOT EXISTS name_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          old_name TEXT NOT NULL,
+          new_name TEXT NOT NULL,
+          changed_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )`,
+        args: [],
+      },
+      {
+        sql: `CREATE TABLE IF NOT EXISTS verification_requirements (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          description TEXT,
+          required INTEGER NOT NULL DEFAULT 1,
+          order_index INTEGER NOT NULL DEFAULT 0,
+          created_by INTEGER,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (created_by) REFERENCES users(id)
+        )`,
+        args: [],
+      },
+      {
         sql: `CREATE TABLE IF NOT EXISTS comment_reports (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           comment_id INTEGER NOT NULL,
