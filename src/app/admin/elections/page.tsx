@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import AdminLayout from '@/components/AdminLayout'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
@@ -50,6 +50,9 @@ export default function ElectionsPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingElection, setEditingElection] = useState<Election | null>(null)
   const [formData, setFormData] = useState<ElectionForm>(EMPTY_FORM)
+  const [newDraft, setNewDraft] = useState<ElectionForm>(EMPTY_FORM)
+  const editingElectionRef = useRef<Election | null>(null)
+  const showModalRef = useRef(false)
   const [saving, setSaving] = useState(false)
   const [confirmStatus, setConfirmStatus] = useState<{ election: Election; nextStatus: ElectionStatus } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Election | null>(null)
@@ -83,9 +86,20 @@ export default function ElectionsPage() {
     fetchElections()
   }, [fetchElections])
 
+  // Keep refs in sync so the auto-save effect can read them without stale closures
+  useEffect(() => { editingElectionRef.current = editingElection }, [editingElection])
+  useEffect(() => { showModalRef.current = showModal }, [showModal])
+
+  // Auto-save formData to newDraft while creating a new election
+  useEffect(() => {
+    if (showModalRef.current && !editingElectionRef.current) {
+      setNewDraft(formData)
+    }
+  }, [formData])
+
   const openNew = () => {
     setEditingElection(null)
-    setFormData(EMPTY_FORM)
+    setFormData(newDraft)
     setShowModal(true)
   }
 
@@ -113,17 +127,18 @@ export default function ElectionsPage() {
             is_all_section: !!r.is_all_section,
             is_exclude: !!r.is_exclude,
           })),
-          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; grade_level?: string; section?: string; student_user_id?: number | null }[] }) => ({
+          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; grade_level?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
             id: p.id,
             name: p.name,
             max_votes: p.max_votes ?? 1,
-            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; grade_level?: string; section?: string; student_user_id?: number | null }) => ({
+            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; grade_level?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }) => ({
               id: c.id,
               name: c.name,
               bio: c.bio || '',
               grade_level: c.grade_level ?? '',
               section: c.section ?? '',
               student_user_id: c.student_user_id ?? null,
+              photo_url: c.photo_url ?? null,
               mode: c.student_user_id ? 'existing' as const : 'manual' as const,
             })),
           })),
@@ -139,10 +154,32 @@ export default function ElectionsPage() {
     setShowModal(true)
   }
 
+  // After successful save — clears everything including draft
   const closeModal = () => {
     setShowModal(false)
     setEditingElection(null)
     setFormData(EMPTY_FORM)
+    setNewDraft(EMPTY_FORM)
+  }
+
+  // Backdrop/X on new election — just hide, preserve draft in state
+  const closeSoftNew = () => {
+    setShowModal(false)
+  }
+
+  // Backdrop/X or Cancel on edit — close without touching new draft
+  const closeEdit = () => {
+    setShowModal(false)
+    setEditingElection(null)
+    setFormData(EMPTY_FORM)
+  }
+
+  // Explicit Discard Draft button — clears everything
+  const discardNew = () => {
+    setShowModal(false)
+    setEditingElection(null)
+    setFormData(EMPTY_FORM)
+    setNewDraft(EMPTY_FORM)
   }
 
   const handleSave = async () => {
@@ -157,7 +194,11 @@ export default function ElectionsPage() {
     for (const pos of formData.positions) {
       for (const cand of pos.candidates) {
         if (cand.mode === 'existing' && !cand.student_user_id) {
-          addToast('Please select a student for all "From Student Account" candidates, or switch to manual entry.', 'error')
+          addToast('Please select a member for all "From Member Account" candidates, or switch to manual entry.', 'error')
+          return
+        }
+        if (cand.mode === 'manual' && !cand.grade_level_id) {
+          addToast('All manual candidates require a group level.', 'error')
           return
         }
       }
@@ -183,6 +224,7 @@ export default function ElectionsPage() {
             grade_level: c.grade_level || null,
             section: c.section || null,
             student_user_id: c.student_user_id ?? null,
+            photo_url: c.photo_url ?? null,
           })),
         })),
       }
@@ -325,10 +367,14 @@ export default function ElectionsPage() {
       return
     }
     try {
-      const res = await fetch(`/api/admin/students?q=${encodeURIComponent(q)}`, { credentials: 'include' })
+      const params = new URLSearchParams({ q, is_global: String(formData.is_global) })
+      if (!formData.is_global && formData.eligibility.length > 0) {
+        params.set('filter', JSON.stringify(formData.eligibility))
+      }
+      const res = await fetch(`/api/admin/members/search?${params}`, { credentials: 'include' })
       const json = await res.json()
       if (res.ok) {
-        setStudentDropdowns((d) => ({ ...d, [key]: json.data.students || [] }))
+        setStudentDropdowns((d) => ({ ...d, [key]: json.data.members || [] }))
       }
     } catch {
       // silent
@@ -396,7 +442,8 @@ export default function ElectionsPage() {
         saving={saving}
         studentSearches={studentSearches}
         studentDropdowns={studentDropdowns}
-        onClose={closeModal}
+        onClose={editingElection ? closeEdit : closeSoftNew}
+        onDiscard={discardNew}
         onSave={handleSave}
         onFormChange={(updates) => setFormData((f) => ({ ...f, ...updates }))}
         onAddPosition={addPosition}

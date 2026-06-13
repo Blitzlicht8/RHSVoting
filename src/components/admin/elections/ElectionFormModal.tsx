@@ -426,6 +426,7 @@ interface ElectionFormModalProps {
   studentSearches: Record<string, string>
   studentDropdowns: Record<string, StudentResult[]>
   onClose: () => void
+  onDiscard?: () => void
   onSave: () => void
   onFormChange: (updates: Partial<ElectionForm>) => void
   onAddPosition: () => void
@@ -446,6 +447,7 @@ export default function ElectionFormModal({
   studentSearches,
   studentDropdowns,
   onClose,
+  onDiscard,
   onSave,
   onFormChange,
   onAddPosition,
@@ -457,56 +459,48 @@ export default function ElectionFormModal({
   onSearchStudents,
   onClearStudentSearch,
 }: ElectionFormModalProps) {
-  const [confirmClose, setConfirmClose] = useState(false)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
 
-  const handleCloseRequest = () => {
-    if (formData.title.trim().length > 0) {
-      setConfirmClose(true)
-    } else {
-      onClose()
-    }
-  }
-
-  const handleSaveDraft = () => {
-    setConfirmClose(false)
-    onSave()
-  }
-
-  const handleDiscard = () => {
-    setConfirmClose(false)
-    onClose()
-  }
+  useEffect(() => {
+    if (!open) setConfirmDiscard(false)
+  }, [open])
 
   return (
     <Modal
       isOpen={open}
-      onClose={handleCloseRequest}
+      onClose={onClose}
       title={election ? 'Edit Election' : 'New Election'}
       size="lg"
       footer={
         <>
-          <Button variant="secondary" onClick={handleCloseRequest} disabled={saving}>Cancel</Button>
+          {!election ? (
+            <Button variant="secondary" onClick={() => setConfirmDiscard(true)} disabled={saving}>
+              Discard Draft
+            </Button>
+          ) : (
+            <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+          )}
           <Button onClick={onSave} loading={saving}>
             {election ? 'Save Changes' : 'Create Election'}
           </Button>
         </>
       }
     >
-      {confirmClose && (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-          <span className="text-sm text-amber-800">Unsaved changes — Save as draft or Discard?</span>
+      {confirmDiscard && !election && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+          <span className="text-sm text-red-800">Discard all draft progress? This cannot be undone.</span>
           <div className="flex gap-2 flex-shrink-0">
             <button
               type="button"
-              onClick={handleSaveDraft}
-              className="px-3 py-1 rounded bg-[#84050C] text-white text-xs font-medium hover:bg-[#6B0409] transition-colors"
+              onClick={() => setConfirmDiscard(false)}
+              className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors"
             >
-              Save as draft
+              Keep editing
             </button>
             <button
               type="button"
-              onClick={handleDiscard}
-              className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors"
+              onClick={() => { setConfirmDiscard(false); onDiscard?.() }}
+              className="px-3 py-1 rounded bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors"
             >
               Discard
             </button>
@@ -599,22 +593,6 @@ export default function ElectionFormModal({
             />
             <span className="text-sm text-gray-700">Global Election (all verified members can vote)</span>
           </label>
-
-          {/* Include all roles — shown when global=true */}
-          {formData.is_global && (
-            <label className="flex items-start gap-3 mb-3 ml-6 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.allow_teacher_vote}
-                onChange={(e) => onFormChange({ allow_teacher_vote: e.target.checked })}
-                className="w-4 h-4 mt-0.5"
-              />
-              <div>
-                <span className="text-sm text-gray-700">Include all member roles</span>
-                <p className="text-xs text-gray-400 mt-0.5">When unchecked, only base members can vote</p>
-              </div>
-            </label>
-          )}
 
           {/* Grade targeting — shown when global=false */}
           {!formData.is_global && (

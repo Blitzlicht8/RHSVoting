@@ -8,6 +8,9 @@ export interface StudentResult {
   email: string
   grade_level: string | null
   section: string | null
+  avatar_url: string | null
+  grade_name: string | null
+  section_name: string | null
 }
 
 export interface CandidateForm {
@@ -20,6 +23,7 @@ export interface CandidateForm {
   subtype_id?: number | null
   section_id?: number | null
   student_user_id?: number | null
+  photo_url?: string | null
   mode: 'manual' | 'existing'
 }
 
@@ -46,6 +50,21 @@ interface CandidateManagerProps {
 
 const emptyAcademic: AcademicOptions = { gradeLevels: [], subtypes: [], sections: [], gradeLevelId: null, subtypeId: null }
 
+function Avatar({ url, name, size = 8 }: { url?: string | null; name: string; size?: number }) {
+  const cls = `w-${size} h-${size} rounded-full overflow-hidden bg-[#FEE2E2] flex items-center justify-center flex-shrink-0`
+  return (
+    <div className={cls}>
+      {url ? (
+        <img src={url} alt={name} className="w-full h-full object-cover" />
+      ) : (
+        <span className={`font-bold text-[#6B0409] ${size <= 7 ? 'text-xs' : 'text-sm'}`}>
+          {(name || '?').charAt(0).toUpperCase()}
+        </span>
+      )}
+    </div>
+  )
+}
+
 export default function CandidateManager({
   positionIndex: pi,
   candidates,
@@ -58,20 +77,27 @@ export default function CandidateManager({
   onClearStudentSearch,
 }: CandidateManagerProps) {
   const [academicOptions, setAcademicOptions] = useState<Record<string, AcademicOptions>>({})
-  const gradeLevelsFetchedRef = useRef(false)
+  const fetchedRef = useRef(false)
   const [globalGradeLevels, setGlobalGradeLevels] = useState<AcademicOption[]>([])
+  const [labels, setLabels] = useState({ l1: 'Group', l2: 'Subgroup', l3: 'Unit' })
+  const [uploadingPhoto, setUploadingPhoto] = useState<Record<string, boolean>>({})
 
-  // Fetch grade levels once
   useEffect(() => {
-    if (gradeLevelsFetchedRef.current) return
-    gradeLevelsFetchedRef.current = true
-    fetch('/api/academic/grade-levels', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((json) => {
-        const levels: AcademicOption[] = json.data?.gradeLevels ?? json.data?.grade_levels ?? json.data ?? []
-        setGlobalGradeLevels(Array.isArray(levels) ? levels : [])
+    if (fetchedRef.current) return
+    fetchedRef.current = true
+    Promise.all([
+      fetch('/api/academic/grade-levels', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
+      fetch('/api/settings', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
+    ]).then(([gradesJson, settingsJson]) => {
+      const levels: AcademicOption[] = gradesJson.data?.gradeLevels ?? gradesJson.data?.grade_levels ?? gradesJson.data ?? []
+      setGlobalGradeLevels(Array.isArray(levels) ? levels : [])
+      const s: Record<string, string> = settingsJson.data ?? {}
+      setLabels({
+        l1: s.group_label_l1 ?? 'Group',
+        l2: s.group_label_l2 ?? 'Subgroup',
+        l3: s.group_label_l3 ?? 'Unit',
       })
-      .catch(() => {})
+    })
   }, [])
 
   const getKey = (ci: number) => `${pi}_${ci}`
@@ -93,7 +119,6 @@ export default function CandidateManager({
       const json = await r.json()
       const subtypes: AcademicOption[] = json.data?.subtypes ?? json.data ?? []
       if (subtypes.length === 0) {
-        // no subtypes — fetch sections directly
         const rs = await fetch(`/api/academic/sections?gradeLevelId=${glId}`, { credentials: 'include' })
         const jsons = await rs.json()
         const sections: AcademicOption[] = jsons.data?.sections ?? jsons.data ?? []
@@ -117,6 +142,25 @@ export default function CandidateManager({
 
   const handleSectionChange = (ci: number, secId: number, secName: string) => {
     onUpdateCandidate(pi, ci, { section: secName, section_id: secId })
+  }
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, ci: number) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const key = getKey(ci)
+    setUploadingPhoto((prev) => ({ ...prev, [key]: true }))
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('purpose', 'candidate')
+      const res = await fetch('/api/upload', { method: 'POST', credentials: 'include', body: fd })
+      const json = await res.json()
+      if (res.ok && json.data?.url) {
+        onUpdateCandidate(pi, ci, { photo_url: json.data.url })
+      }
+    } catch {}
+    setUploadingPhoto((prev) => ({ ...prev, [key]: false }))
+    e.target.value = ''
   }
 
   return (
@@ -148,7 +192,7 @@ export default function CandidateManager({
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => onUpdateCandidate(pi, ci, { mode: 'existing', name: '', student_user_id: null, grade_level: '', section: '' })}
+                onClick={() => onUpdateCandidate(pi, ci, { mode: 'existing', name: '', student_user_id: null, photo_url: null, grade_level: '', section: '' })}
                 className={[
                   'px-2.5 py-1 rounded text-xs font-medium border transition-colors',
                   cand.mode === 'existing'
@@ -156,7 +200,7 @@ export default function CandidateManager({
                     : 'bg-white text-gray-600 border-gray-300 hover:border-[#84050C]',
                 ].join(' ')}
               >
-                From Student Account
+                From Member Account
               </button>
               <button
                 type="button"
@@ -187,13 +231,14 @@ export default function CandidateManager({
               <div className="space-y-1.5">
                 {cand.student_user_id ? (
                   <div className="flex items-center gap-2 px-3 py-2 bg-[#FEE2E2] border border-[#FEE2E2] rounded-md">
+                    <Avatar url={cand.photo_url} name={cand.name || '?'} size={8} />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-gray-900 truncate">{cand.name}</div>
                     </div>
                     <button
                       type="button"
                       onClick={() => {
-                        onUpdateCandidate(pi, ci, { name: '', student_user_id: null, grade_level: '', section: '' })
+                        onUpdateCandidate(pi, ci, { name: '', student_user_id: null, photo_url: null, grade_level: '', section: '' })
                         onClearStudentSearch(searchKey)
                       }}
                       className="text-xs text-gray-500 hover:text-gray-700 flex-shrink-0"
@@ -207,26 +252,30 @@ export default function CandidateManager({
                       type="text"
                       value={searchQuery}
                       onChange={(e) => onSearchStudents(searchKey, e.target.value)}
-                      placeholder="Search student by name or email…"
+                      placeholder="Search member by name or email…"
                       className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                     />
                     {dropdownResults.length > 0 && (
                       <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                        {dropdownResults.map((student) => (
+                        {dropdownResults.map((member) => (
                           <button
-                            key={student.id}
+                            key={member.id}
                             type="button"
                             onClick={() => {
                               onUpdateCandidate(pi, ci, {
-                                name: student.name,
-                                student_user_id: student.id,
+                                name: member.name,
+                                student_user_id: member.id,
+                                photo_url: member.avatar_url ?? null,
                               })
                               onClearStudentSearch(searchKey)
                             }}
-                            className="w-full text-left px-3 py-2 hover:bg-[#FEE2E2] transition-colors"
+                            className="w-full text-left px-3 py-2 hover:bg-[#FEE2E2] transition-colors flex items-center gap-2"
                           >
-                            <div className="text-sm font-medium text-gray-900">{student.name}</div>
-                            <div className="text-xs text-gray-500">{student.email}</div>
+                            <Avatar url={member.avatar_url} name={member.name || '?'} size={7} />
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-gray-900">{member.name}</div>
+                              <div className="text-xs text-gray-500">{member.email}</div>
+                            </div>
                           </button>
                         ))}
                       </div>
@@ -239,6 +288,21 @@ export default function CandidateManager({
             {/* Manual mode */}
             {cand.mode === 'manual' && (
               <div className="space-y-2">
+                {/* Photo upload */}
+                <div className="flex items-center gap-3">
+                  <Avatar url={cand.photo_url} name={cand.name || '?'} size={10} />
+                  <label className="cursor-pointer text-xs text-[#84050C] hover:underline">
+                    {uploadingPhoto[getKey(ci)] ? 'Uploading…' : cand.photo_url ? 'Change Photo' : 'Upload Photo'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingPhoto[getKey(ci)]}
+                      onChange={(e) => handlePhotoUpload(e, ci)}
+                    />
+                  </label>
+                </div>
+
                 <input
                   type="text"
                   value={cand.name}
@@ -253,30 +317,29 @@ export default function CandidateManager({
                   rows={1}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] resize-none"
                 />
-                {/* Academic cascading dropdowns */}
+
                 {(() => {
                   const acad = getAcademic(ci)
                   const selectClass = 'w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white'
                   return (
                     <div className="space-y-2">
-                      {/* Grade Level */}
                       <select
                         value={acad.gradeLevelId ?? ''}
                         onChange={(e) => {
                           const id = Number(e.target.value)
-                          const name = acad.gradeLevels.find((g) => g.id === id)?.name ?? ''
+                          const list = acad.gradeLevels.length ? acad.gradeLevels : globalGradeLevels
+                          const name = list.find((g) => g.id === id)?.name ?? ''
                           if (id) handleGradeLevelChange(ci, id, name)
                           else onUpdateCandidate(pi, ci, { grade_level: '', grade_level_id: null, subtype_id: null, section_id: null, section: '' })
                         }}
                         className={selectClass}
                       >
-                        <option value="">Grade Level (optional)</option>
+                        <option value="">{labels.l1} *</option>
                         {(acad.gradeLevels.length ? acad.gradeLevels : globalGradeLevels).map((gl) => (
                           <option key={gl.id} value={gl.id}>{gl.name}</option>
                         ))}
                       </select>
 
-                      {/* Subtype (shown only if subtypes exist) */}
                       {acad.subtypes.length > 0 && (
                         <select
                           value={acad.subtypeId ?? ''}
@@ -287,14 +350,13 @@ export default function CandidateManager({
                           }}
                           className={selectClass}
                         >
-                          <option value="">Subtype (required)</option>
+                          <option value="">{labels.l2} *</option>
                           {acad.subtypes.map((st) => (
                             <option key={st.id} value={st.id}>{st.name}</option>
                           ))}
                         </select>
                       )}
 
-                      {/* Section */}
                       {acad.sections.length > 0 && (
                         <select
                           value={cand.section_id ?? ''}
@@ -306,7 +368,7 @@ export default function CandidateManager({
                           }}
                           className={selectClass}
                         >
-                          <option value="">Section (required)</option>
+                          <option value="">{labels.l3} *</option>
                           {acad.sections.map((sec) => (
                             <option key={sec.id} value={sec.id}>{sec.name}</option>
                           ))}

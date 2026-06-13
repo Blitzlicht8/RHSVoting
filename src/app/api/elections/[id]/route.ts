@@ -11,6 +11,7 @@ interface CandidateInput {
   grade_level?: string
   section?: string
   student_user_id?: number | null
+  photo_url?: string | null
 }
 
 interface PositionInput {
@@ -34,8 +35,8 @@ async function syncPositions(electionId: number, positions: PositionInput[]) {
       const candName = (cand.name ?? '').trim()
       if (!candName) continue
       await db.execute({
-        sql: `INSERT INTO candidates (election_id, position_id, name, bio, grade_level, section, student_user_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        args: [electionId, posId, candName, cand.bio ?? null, cand.grade_level ?? null, cand.section ?? null, cand.student_user_id ?? null],
+        sql: `INSERT INTO candidates (election_id, position_id, name, bio, grade_level, section, student_user_id, photo_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [electionId, posId, candName, cand.bio ?? null, cand.grade_level ?? null, cand.section ?? null, cand.student_user_id ?? null, cand.photo_url ?? null],
       })
     }
   }

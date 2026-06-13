@@ -91,6 +91,7 @@ interface CandidateInput {
   grade_level?: string
   section?: string
   student_user_id?: number | null
+  photo_url?: string | null
 }
 
 interface PositionInput {
@@ -114,8 +115,8 @@ async function syncPositions(electionId: number, positions: PositionInput[]) {
       const candName = (cand.name ?? '').trim()
       if (!candName) continue
       await db.execute({
-        sql: `INSERT INTO candidates (election_id, position_id, name, bio, grade_level, section, student_user_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        args: [electionId, posId, candName, cand.bio ?? null, cand.grade_level ?? null, cand.section ?? null, cand.student_user_id ?? null],
+        sql: `INSERT INTO candidates (election_id, position_id, name, bio, grade_level, section, student_user_id, photo_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [electionId, posId, candName, cand.bio ?? null, cand.grade_level ?? null, cand.section ?? null, cand.student_user_id ?? null, cand.photo_url ?? null],
       })
     }
   }
@@ -151,10 +152,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'end_date must be after start_date' }, { status: 400 })
   }
 
+  const validStatuses = ['draft', 'active', 'ended']
+  const status = validStatuses.includes(body.status) ? body.status : 'draft'
+
   const insertResult = await db.execute({
     sql: `INSERT INTO elections (title, description, start_date, end_date, status, created_by)
-          VALUES (?, ?, ?, ?, 'draft', ?)`,
-    args: [title.trim(), description ?? null, start_date, end_date, authUser.id],
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [title.trim(), description ?? null, start_date, end_date, status, authUser.id],
   })
 
   const electionId = Number(insertResult.lastInsertRowid)

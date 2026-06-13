@@ -95,6 +95,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'File size exceeds 5 MB limit' }, { status: 400 })
   }
 
+  if (purpose === 'candidate') {
+    const ext = IMAGE_TYPES[file.type]
+    if (!ext) {
+      return NextResponse.json({ error: 'Invalid file type. Allowed: jpeg, png, webp, gif' }, { status: 400 })
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File size exceeds 5 MB' }, { status: 400 })
+    }
+    const timestamp = Date.now()
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const candidateBlob = await put(
+      `candidate-photos/${authUser.id}/${timestamp}-${safeName}`,
+      Buffer.from(await file.arrayBuffer()),
+      { access: 'public', contentType: file.type },
+    )
+    return NextResponse.json({ data: { url: candidateBlob.url } })
+  }
+
   const intendedRole = (formData.get('intended_role') as string | null) ?? null
   const gradeLevel = (formData.get('grade_level') as string | null) ?? null
   const section = (formData.get('section') as string | null) ?? null
