@@ -82,10 +82,16 @@ export default function MembersPage() {
                 href={`/users/${m.id}`}
                 className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 hover:shadow-md hover:border-gray-300 transition-all flex items-start gap-3 group"
               >
-                <div className="w-11 h-11 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
-                  {m.avatar_url
-                    ? <img src={m.avatar_url} alt={m.name} className="w-full h-full object-cover" />
-                    : getInitials(m.name)}
+                <div className="relative w-11 h-11 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
+                  <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{getInitials(m.name)}</span>
+                  {m.avatar_url && (
+                    <img
+                      src={m.avatar_url}
+                      alt={m.name}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                    />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 text-sm truncate group-hover:text-[#84050C] transition-colors">{m.name}</p>

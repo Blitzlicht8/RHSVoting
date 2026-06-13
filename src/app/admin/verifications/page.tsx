@@ -24,6 +24,7 @@ interface VerifRequest {
   user_name: string
   user_email: string
   user_role: string
+  user_avatar_url: string | null
   id_image: string
   status: VerifStatus
   notes: string | null
@@ -340,8 +341,16 @@ export default function VerificationsPage() {
               <div key={req.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 {/* User info */}
                 <div className="p-4 flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${avatarColor(req.user_id)}`}>
-                    {getInitials(req.user_name)}
+                  <div className={`relative w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden ${avatarColor(req.user_id)}`}>
+                    <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{getInitials(req.user_name)}</span>
+                    {req.user_avatar_url && (
+                      <img
+                        src={req.user_avatar_url}
+                        alt={req.user_name}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                      />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-gray-900 text-sm truncate">{req.user_name}</div>
@@ -461,8 +470,16 @@ export default function VerificationsPage() {
         {selectedImageRequest && (
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${avatarColor(selectedImageRequest.user_id)}`}>
-                {getInitials(selectedImageRequest.user_name)}
+              <div className={`relative w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden ${avatarColor(selectedImageRequest.user_id)}`}>
+                <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">{getInitials(selectedImageRequest.user_name)}</span>
+                {selectedImageRequest.user_avatar_url && (
+                  <img
+                    src={selectedImageRequest.user_avatar_url}
+                    alt={selectedImageRequest.user_name}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                  />
+                )}
               </div>
               <div>
                 <div className="font-medium text-gray-900 text-sm">{selectedImageRequest.user_name}</div>

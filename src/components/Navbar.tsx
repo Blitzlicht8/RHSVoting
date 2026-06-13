@@ -74,6 +74,16 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
       </h1>
 
       <div className="ml-auto flex items-center gap-3">
+        {/* Admin pill — desktop only */}
+        {user && ['master_admin', 'admin', 'moderator'].includes(user.role) && (
+          <Link
+            href="/admin/users"
+            className="hidden md:flex items-center px-3 py-1.5 bg-[#84050C] text-white text-xs font-semibold rounded-full hover:bg-[#6B0409] transition-colors"
+          >
+            Admin
+          </Link>
+        )}
+
         {/* User avatar dropdown */}
         <div className="relative" ref={dropdownRef}>
           <button
@@ -110,7 +120,7 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
                 <Link
                   href="/admin/users"
                   onClick={() => setShowDropdown(false)}
-                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="md:hidden block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Admin Panel
                 </Link>

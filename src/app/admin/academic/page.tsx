@@ -46,7 +46,14 @@ export default function AcademicStructurePage() {
 
   const [saving, setSaving] = useState(false)
 
-  // Safe delete modal
+  // Simple first-pass confirmation before any API call
+  const [pendingSimpleDelete, setPendingSimpleDelete] = useState<{
+    name: string
+    label: string
+    onConfirm: () => void
+  } | null>(null)
+
+  // Safe delete modal (shown on 409 conflict)
   const [deleteModal, setDeleteModal] = useState<DeleteConfirmModal | null>(null)
   const [deleteConfirm2, setDeleteConfirm2] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -350,7 +357,7 @@ export default function AcademicStructurePage() {
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l-4 1 1-4 9.293-9.293a1 1 0 011.414 0l2.586 2.586a1 1 0 010 1.414L9 13z" /></svg>
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); deleteGrade(gl) }}
+                          onClick={(e) => { e.stopPropagation(); setPendingSimpleDelete({ name: gl.name, label: `${l1} level`, onConfirm: () => deleteGrade(gl) }) }}
                           className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 transition-opacity p-1"
                           title="Delete"
                         >
@@ -445,7 +452,7 @@ export default function AcademicStructurePage() {
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l-4 1 1-4 9.293-9.293a1 1 0 011.414 0l2.586 2.586a1 1 0 010 1.414L9 13z" /></svg>
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); deleteSubtype(st) }}
+                              onClick={(e) => { e.stopPropagation(); setPendingSimpleDelete({ name: st.name, label: l2, onConfirm: () => deleteSubtype(st) }) }}
                               className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-400 transition-opacity p-1"
                             >
                               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -523,7 +530,7 @@ export default function AcademicStructurePage() {
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l-4 1 1-4 9.293-9.293a1 1 0 011.414 0l2.586 2.586a1 1 0 010 1.414L9 13z" /></svg>
                               </button>
                               <button
-                                onClick={() => deleteSection(sec)}
+                                onClick={() => setPendingSimpleDelete({ name: sec.name, label: l3, onConfirm: () => deleteSection(sec) })}
                                 className="opacity-0 group-hover:opacity-100 ml-0.5 text-gray-500 hover:text-red-400 transition-opacity"
                                 title="Delete"
                               >
@@ -558,6 +565,32 @@ export default function AcademicStructurePage() {
         </div>
 
       </div>
+
+      {/* First-pass simple delete confirmation */}
+      {pendingSimpleDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-base font-semibold text-white">Delete &ldquo;{pendingSimpleDelete.name}&rdquo;?</h3>
+            <p className="text-sm text-gray-300">
+              This {pendingSimpleDelete.label} will be permanently deleted. This cannot be undone.
+            </p>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => { const fn = pendingSimpleDelete.onConfirm; setPendingSimpleDelete(null); fn() }}
+                className="flex-1 px-4 py-2 bg-red-700 hover:bg-red-600 text-white text-sm rounded-lg font-medium transition-colors"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setPendingSimpleDelete(null)}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Safe delete confirmation modal */}
       {deleteModal && (

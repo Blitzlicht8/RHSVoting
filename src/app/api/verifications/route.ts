@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
   const requestsResult = await db.execute({
     sql: `SELECT vr.*, u.name AS user_name, u.email AS user_email, u.role AS user_role,
-                 u.grade_level, u.section, vr.intended_role,
+                 u.avatar_url AS user_avatar_url, u.grade_level, u.section, vr.intended_role,
                  vr.grade_level_id, vr.subtype_id, vr.section_id, vr.doc_type,
                  gl.name AS grade_level_name, gs.name AS subtype_name, s.name AS section_name
           FROM verification_requests vr

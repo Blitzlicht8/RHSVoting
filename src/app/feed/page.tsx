@@ -62,10 +62,16 @@ function ComposerCard({
         onClick={() => setOpen(true)}
       >
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
-            {user?.avatar_url
-              ? <img src={user.avatar_url} className="w-full h-full object-cover" alt="" />
-              : initials}
+          <div className="relative w-9 h-9 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
+            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{initials}</span>
+            {user?.avatar_url && (
+              <img
+                src={user.avatar_url}
+                className="absolute inset-0 w-full h-full object-cover"
+                alt=""
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+              />
+            )}
           </div>
           <div className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm text-gray-400 hover:bg-gray-200 transition-colors">
             What&apos;s on your mind, {user?.name.split(' ')[0] ?? 'there'}?

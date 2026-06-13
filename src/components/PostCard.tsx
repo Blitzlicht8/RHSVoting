@@ -173,10 +173,16 @@ export default function PostCard({ post, currentUserId, currentUserRole, current
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
-            {post.author_avatar
-              ? <img src={post.author_avatar} className="w-full h-full object-cover" alt="" />
-              : initials(post.author_name)}
+          <div className="relative w-10 h-10 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
+            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{initials(post.author_name)}</span>
+            {post.author_avatar && (
+              <img
+                src={post.author_avatar}
+                className="absolute inset-0 w-full h-full object-cover"
+                alt=""
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+              />
+            )}
           </div>
           <div>
             <a href={`/users/${post.author_id}`} className="font-semibold text-gray-900 hover:text-[#84050C] transition-colors text-sm leading-tight">{post.author_name}</a>
@@ -237,10 +243,16 @@ export default function PostCard({ post, currentUserId, currentUserRole, current
             const canReport = c.author_id !== currentUserId
             return (
               <div key={c.id} className="flex gap-2.5 group/comment">
-                <div className="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold flex-shrink-0 overflow-hidden text-white">
-                  {c.author_avatar
-                    ? <img src={c.author_avatar} className="w-full h-full object-cover" alt="" />
-                    : initials(c.author_name)}
+                <div className="relative w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold flex-shrink-0 overflow-hidden text-white">
+                  <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold">{initials(c.author_name)}</span>
+                  {c.author_avatar && (
+                    <img
+                      src={c.author_avatar}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      alt=""
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                    />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="bg-gray-50 rounded-xl px-3 py-2">
