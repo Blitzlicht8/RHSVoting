@@ -12,15 +12,14 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = isAdmin(authUser.role)
-  const role = authUser.role as string
-  const isStudentRole = role === 'member' || role === 'moderator'
+  const isEligibilityScoped = !admin
 
   let whereClause = admin ? '' : `WHERE e.status IN ('active', 'ended')`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const queryArgs: any[] = []
   let voterIdArg: number | null = null
 
-  if (isStudentRole) {
+  if (isEligibilityScoped) {
     const userResult = await db.execute({
       sql: `SELECT email_verified, id_verified, grade_level_id, subtype_id, section_id FROM users WHERE id = ?`,
       args: [authUser.id],

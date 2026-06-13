@@ -247,8 +247,12 @@ export default function ElectionsPage() {
     const el = confirmDelete
     setConfirmDelete(null)
     setDeletingId(el.id)
+    const needsConfirm = el.status === 'active' || el.status === 'ended'
+    const url = needsConfirm
+      ? `/api/elections/${el.id}?confirm=true`
+      : `/api/elections/${el.id}`
     try {
-      const res = await fetch(`/api/elections/${el.id}`, {
+      const res = await fetch(url, {
         method: 'DELETE',
         credentials: 'include',
       })
@@ -375,6 +379,7 @@ export default function ElectionsPage() {
             <ElectionList
               elections={elections}
               deletingId={deletingId}
+              userRole={user?.role ?? ''}
               onEdit={openEdit}
               onConfirmStatus={(el, nextStatus) => setConfirmStatus({ election: el, nextStatus })}
               onConfirmDelete={setConfirmDelete}
@@ -440,14 +445,32 @@ export default function ElectionsPage() {
         footer={
           <>
             <Button variant="secondary" onClick={() => setConfirmDelete(null)}>Cancel</Button>
-            <Button variant="danger" onClick={handleDelete}>Delete</Button>
+            <Button variant="danger" onClick={handleDelete}>Delete Permanently</Button>
           </>
         }
       >
-        {confirmDelete && (
+        {confirmDelete && confirmDelete.status === 'draft' && (
           <p className="text-sm text-gray-600">
             Are you sure you want to permanently delete <strong>"{confirmDelete.title}"</strong>? This cannot be undone.
           </p>
+        )}
+        {confirmDelete && (confirmDelete.status === 'active' || confirmDelete.status === 'ended') && (
+          <div className="space-y-3">
+            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <svg className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <p className="text-sm text-red-700 font-medium">This cannot be undone.</p>
+            </div>
+            <p className="text-sm text-gray-600">
+              You are about to permanently delete the <strong>{confirmDelete.status}</strong> election{' '}
+              <strong>"{confirmDelete.title}"</strong>
+              {confirmDelete.vote_count > 0 && (
+                <span> with <strong className="text-red-600">{confirmDelete.vote_count} vote{confirmDelete.vote_count !== 1 ? 's' : ''} cast</strong></span>
+              )}
+              . All votes, candidates, and positions will be permanently lost.
+            </p>
+          </div>
         )}
       </Modal>
     </AdminLayout>

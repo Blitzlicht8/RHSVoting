@@ -33,6 +33,7 @@ const STATUS_LABELS: Record<ElectionStatus, string> = {
 interface ElectionListProps {
   elections: Election[]
   deletingId: number | null
+  userRole: string
   onEdit: (e: Election) => void
   onConfirmStatus: (e: Election, nextStatus: ElectionStatus) => void
   onConfirmDelete: (e: Election) => void
@@ -41,10 +42,17 @@ interface ElectionListProps {
 export default function ElectionList({
   elections,
   deletingId,
+  userRole,
   onEdit,
   onConfirmStatus,
   onConfirmDelete,
 }: ElectionListProps) {
+  const canDelete = (el: Election): boolean => {
+    if (el.status === 'draft') return ['master_admin', 'admin', 'moderator'].includes(userRole)
+    if (el.status === 'active') return ['master_admin', 'admin'].includes(userRole)
+    if (el.status === 'ended') return userRole === 'master_admin'
+    return false
+  }
   if (elections.length === 0) {
     return (
       <div className="text-center py-16 text-gray-400">
@@ -117,7 +125,7 @@ export default function ElectionList({
                     </Button>
                   )}
 
-                  {el.status === 'draft' && (
+                  {canDelete(el) && (
                     <Button
                       variant="ghost"
                       size="sm"

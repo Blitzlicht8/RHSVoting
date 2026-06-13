@@ -28,7 +28,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
   const admin = isAdmin(authUser.role)
   const role = authUser.role as string
-  const isStudentRole = role === 'member'
+  const isStudentRole = !admin
 
   if (!admin && election.status !== 'ended') {
     return NextResponse.json(

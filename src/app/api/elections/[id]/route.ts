@@ -241,14 +241,18 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   return NextResponse.json({ data: { election: updated.rows[0] } })
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+const ROLE_LEVEL: Record<string, number> = {
+  master_admin: 4, admin: 3, moderator: 2, staff: 1, member: 0,
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   await ensureInit()
 
   const authUser = await getAuthUser()
   if (!authUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  if (authUser.role !== 'master_admin') {
+  if (!isAdmin(authUser.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -265,10 +269,41 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
   if (!existing) {
     return NextResponse.json({ error: 'Election not found' }, { status: 404 })
   }
-  if (existing.status !== 'draft') {
-    return NextResponse.json({ error: 'Only draft elections can be deleted' }, { status: 400 })
+
+  const status = existing.status as string
+  const userLevel = ROLE_LEVEL[authUser.role as string] ?? 0
+  const confirmed = request.nextUrl.searchParams.get('confirm') === 'true'
+
+  if (status === 'draft') {
+    await db.execute({ sql: 'DELETE FROM elections WHERE id = ?', args: [electionId] })
+    return NextResponse.json({ message: 'Election deleted successfully' })
   }
 
-  await db.execute({ sql: 'DELETE FROM elections WHERE id = ?', args: [electionId] })
-  return NextResponse.json({ message: 'Election deleted successfully' })
+  if (status === 'active') {
+    if (userLevel < 3) {
+      return NextResponse.json({ error: 'Only admin or master_admin can delete active elections' }, { status: 403 })
+    }
+    if (!confirmed) {
+      const voteResult = await db.execute({ sql: 'SELECT COUNT(*) as cnt FROM votes WHERE election_id = ?', args: [electionId] })
+      const voteCount = Number(voteResult.rows[0]?.cnt ?? 0)
+      return NextResponse.json({ requiresConfirm: true, voteCount }, { status: 409 })
+    }
+    await db.execute({ sql: 'DELETE FROM elections WHERE id = ?', args: [electionId] })
+    return NextResponse.json({ message: 'Election deleted successfully' })
+  }
+
+  if (status === 'ended') {
+    if (authUser.role !== 'master_admin') {
+      return NextResponse.json({ error: 'Only master_admin can delete ended elections' }, { status: 403 })
+    }
+    if (!confirmed) {
+      const voteResult = await db.execute({ sql: 'SELECT COUNT(*) as cnt FROM votes WHERE election_id = ?', args: [electionId] })
+      const voteCount = Number(voteResult.rows[0]?.cnt ?? 0)
+      return NextResponse.json({ requiresConfirm: true, voteCount }, { status: 409 })
+    }
+    await db.execute({ sql: 'DELETE FROM elections WHERE id = ?', args: [electionId] })
+    return NextResponse.json({ message: 'Election deleted successfully' })
+  }
+
+  return NextResponse.json({ error: 'Unknown election status' }, { status: 400 })
 }

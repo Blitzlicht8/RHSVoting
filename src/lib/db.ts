@@ -436,21 +436,24 @@ async function _init(): Promise<void> {
     `ALTER TABLE verification_documents ADD COLUMN doc_type TEXT`,
     `ALTER TABLE users ADD COLUMN role_id INTEGER`,
     `ALTER TABLE users ADD COLUMN bio TEXT`,
+    `ALTER TABLE candidates ADD COLUMN photo_url TEXT`,
+    `ALTER TABLE elections ADD COLUMN thumbnail_url TEXT`,
+    `ALTER TABLE elections ADD COLUMN share_token TEXT`,
   ]
   for (const sql of newColumns) {
     await db.execute({ sql, args: [] }).catch(() => {})
   }
 
-  // Seed default admin@school.edu if missing
+  // Seed default admin@localhost.local if missing
   const adminCheck = await db.execute({
-    sql: `SELECT id FROM users WHERE email = 'admin@school.edu'`,
+    sql: `SELECT id FROM users WHERE email = 'admin@localhost.local'`,
     args: [],
   })
   if (adminCheck.rows.length === 0) {
     const hash = await bcrypt.hash('Admin@123', 12)
     await db.execute({
       sql: `INSERT INTO users (email, password_hash, name, role, email_verified, id_verified)
-            VALUES ('admin@school.edu', ?, 'Master Admin', 'master_admin', 1, 1)`,
+            VALUES ('admin@localhost.local', ?, 'Master Admin', 'master_admin', 1, 1)`,
       args: [hash],
     })
   }

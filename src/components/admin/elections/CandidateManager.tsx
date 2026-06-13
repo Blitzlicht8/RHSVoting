@@ -189,13 +189,6 @@ export default function CandidateManager({
                   <div className="flex items-center gap-2 px-3 py-2 bg-[#FEE2E2] border border-[#FEE2E2] rounded-md">
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-gray-900 truncate">{cand.name}</div>
-                      {(cand.grade_level || cand.section) && (
-                        <div className="text-xs text-gray-500">
-                          {cand.grade_level && `Grade ${cand.grade_level}`}
-                          {cand.grade_level && cand.section && ' · '}
-                          {cand.section}
-                        </div>
-                      )}
                     </div>
                     <button
                       type="button"
@@ -226,8 +219,6 @@ export default function CandidateManager({
                             onClick={() => {
                               onUpdateCandidate(pi, ci, {
                                 name: student.name,
-                                grade_level: student.grade_level || '',
-                                section: student.section || '',
                                 student_user_id: student.id,
                               })
                               onClearStudentSearch(searchKey)
@@ -235,16 +226,7 @@ export default function CandidateManager({
                             className="w-full text-left px-3 py-2 hover:bg-[#FEE2E2] transition-colors"
                           >
                             <div className="text-sm font-medium text-gray-900">{student.name}</div>
-                            <div className="text-xs text-gray-500">
-                              {student.email}
-                              {(student.grade_level || student.section) && (
-                                <span className="ml-1">
-                                  · {student.grade_level && `Grade ${student.grade_level}`}
-                                  {student.grade_level && student.section && ' '}
-                                  {student.section}
-                                </span>
-                              )}
-                            </div>
+                            <div className="text-xs text-gray-500">{student.email}</div>
                           </button>
                         ))}
                       </div>

@@ -138,18 +138,26 @@ function GradeTargetingBuilder({
   const [checkedGradeIds, setCheckedGradeIds] = useState<Set<number>>(new Set())
   const [gradeStates, setGradeStates] = useState<Record<number, GradeState>>({})
   const [gradeSelections, setGradeSelections] = useState<Record<number, GradeSelection>>({})
+  const [labels, setLabels] = useState({ l1: 'Group', l2: 'Subgroup', l3: 'Unit' })
   const fetchedRef = useRef(false)
 
   useEffect(() => {
     if (fetchedRef.current) return
     fetchedRef.current = true
-    fetch('/api/academic/grade-levels', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((json) => {
-        const levels: GradeLevel[] = json.data?.gradeLevels ?? json.data?.grade_levels ?? json.data ?? []
+    Promise.all([
+      fetch('/api/academic/grade-levels', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
+      fetch('/api/settings', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
+    ])
+      .then(([gradesJson, settingsJson]) => {
+        const levels: GradeLevel[] = gradesJson.data?.gradeLevels ?? gradesJson.data?.grade_levels ?? gradesJson.data ?? []
         setGradeLevels(Array.isArray(levels) ? levels : [])
+        const s: Record<string, string> = settingsJson.data ?? {}
+        setLabels({
+          l1: s.group_label_l1 ?? 'Group',
+          l2: s.group_label_l2 ?? 'Subgroup',
+          l3: s.group_label_l3 ?? 'Unit',
+        })
       })
-      .catch(() => {})
       .finally(() => setLoadingGrades(false))
   }, [])
 
@@ -247,15 +255,16 @@ function GradeTargetingBuilder({
     setGradeSelections((prev) => ({ ...prev, [gradeId]: { ...(prev[gradeId] ?? { allGrade: false, subtypes: {}, directSections: {}, directAllSection: false }), ...patch } }))
   }
 
-  if (loadingGrades) return <p className="text-sm text-gray-400">Loading grade levels...</p>
-  if (gradeLevels.length === 0) return <p className="text-sm text-gray-400">No grade levels found.</p>
+  if (loadingGrades) return <p className="text-sm text-gray-400">Loading {labels.l1.toLowerCase()} levels...</p>
+  if (gradeLevels.length === 0) return <p className="text-sm text-gray-400">No {labels.l1.toLowerCase()} levels found.</p>
 
   return (
     <div className="space-y-2">
-      {/* All grade levels */}
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{labels.l1} Levels</p>
+      {/* All levels */}
       <label className="flex items-center gap-3">
         <input type="checkbox" checked={isAllGrades} onChange={(e) => handleAllGradesToggle(e.target.checked)} className="w-4 h-4" />
-        <span className="text-sm text-gray-700 font-medium">All Grade Levels</span>
+        <span className="text-sm text-gray-700 font-medium">All {labels.l1} Levels</span>
       </label>
 
       {!isAllGrades && (
@@ -332,7 +341,7 @@ function GradeTargetingBuilder({
                                       })}
                                       className="w-3 h-3"
                                     />
-                                    <span className="text-xs text-gray-500">All {st.name} sections</span>
+                                    <span className="text-xs text-gray-500">All {st.name} {labels.l3}s</span>
                                   </label>
 
                                   {!stSel.allSubtype && (
@@ -372,7 +381,7 @@ function GradeTargetingBuilder({
                                 onChange={(e) => updateGradeSel(gl.id, { directAllSection: e.target.checked })}
                                 className="w-3 h-3"
                               />
-                              <span className="text-xs text-gray-500">All sections</span>
+                              <span className="text-xs text-gray-500">All {labels.l3}s</span>
                             </label>
                             {!sel.directAllSection && (
                               <>
@@ -585,22 +594,25 @@ export default function ElectionFormModal({
             <input
               type="checkbox"
               checked={formData.is_global}
-              onChange={(e) => onFormChange({ is_global: e.target.checked, eligibility: [] })}
+              onChange={(e) => onFormChange({ is_global: e.target.checked, eligibility: [], ...(e.target.checked && { allow_teacher_vote: true }) })}
               className="w-4 h-4"
             />
-            <span className="text-sm text-gray-700">Global Election (all students can vote)</span>
+            <span className="text-sm text-gray-700">Global Election (all verified members can vote)</span>
           </label>
 
-          {/* Teachers can vote — shown when global=true */}
+          {/* Include all roles — shown when global=true */}
           {formData.is_global && (
-            <label className="flex items-center gap-3 mb-3 ml-6">
+            <label className="flex items-start gap-3 mb-3 ml-6 cursor-pointer">
               <input
                 type="checkbox"
                 checked={formData.allow_teacher_vote}
                 onChange={(e) => onFormChange({ allow_teacher_vote: e.target.checked })}
-                className="w-4 h-4"
+                className="w-4 h-4 mt-0.5"
               />
-              <span className="text-sm text-gray-700">Teachers Can Vote</span>
+              <div>
+                <span className="text-sm text-gray-700">Include all member roles</span>
+                <p className="text-xs text-gray-400 mt-0.5">When unchecked, only base members can vote</p>
+              </div>
             </label>
           )}
 
