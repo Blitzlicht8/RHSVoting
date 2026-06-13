@@ -280,8 +280,14 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   const userLevel = ROLE_LEVEL[authUser.role as string] ?? 0
   const confirmed = request.nextUrl.searchParams.get('confirm') === 'true'
 
-  if (status === 'draft') {
+  const deleteElection = async () => {
+    // votes FK has no CASCADE — must delete manually before the election row
+    await db.execute({ sql: 'DELETE FROM votes WHERE election_id = ?', args: [electionId] })
     await db.execute({ sql: 'DELETE FROM elections WHERE id = ?', args: [electionId] })
+  }
+
+  if (status === 'draft') {
+    await deleteElection()
     return NextResponse.json({ message: 'Election deleted successfully' })
   }
 
@@ -294,7 +300,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       const voteCount = Number(voteResult.rows[0]?.cnt ?? 0)
       return NextResponse.json({ requiresConfirm: true, voteCount }, { status: 409 })
     }
-    await db.execute({ sql: 'DELETE FROM elections WHERE id = ?', args: [electionId] })
+    await deleteElection()
     return NextResponse.json({ message: 'Election deleted successfully' })
   }
 
@@ -307,7 +313,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       const voteCount = Number(voteResult.rows[0]?.cnt ?? 0)
       return NextResponse.json({ requiresConfirm: true, voteCount }, { status: 409 })
     }
-    await db.execute({ sql: 'DELETE FROM elections WHERE id = ?', args: [electionId] })
+    await deleteElection()
     return NextResponse.json({ message: 'Election deleted successfully' })
   }
 
