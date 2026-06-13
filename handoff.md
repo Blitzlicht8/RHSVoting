@@ -8,38 +8,36 @@
 2026-06-14
 
 ## Version After This Session
-`0.2.0` — MINOR: admin navbar pill + delete confirmation + avatar propagation
+`0.3.0` — MINOR: verifier assignment feature (DB + API + UI)
 
 ---
 
 ## What Was Done
 
-Three UI/UX fixes.
+Restored verifier assignment feature on the Group Structure admin page.
 
-### Fix 1 — Admin Panel button visibility (Navbar.tsx)
-- Added a `bg-[#84050C]` pill button "Admin" (`hidden md:flex`) in the navbar header right side, before the avatar, for roles `master_admin`, `admin`, `moderator`
-- Desktop shows the pill; mobile hides it (`hidden md:flex`)
-- Dropdown "Admin Panel" item is now `md:hidden` — visible only on mobile to avoid duplication
+### DB Migration — `group_verifiers` table (lib/db.ts)
+- Added `CREATE TABLE IF NOT EXISTS group_verifiers` to `ensureInit()` batch
+- Columns: `id`, `user_id` (FK → users), `grade_level_id` (FK → grade_levels), `subtype_id` (FK → grade_subtypes), `section_id` (FK → sections), `created_at`
+- Idempotent — safe on re-deploy
 
-### Fix 2 — Delete confirmation for Group Structure (admin/academic/page.tsx)
-- Added `pendingSimpleDelete` state: `{ name, label, onConfirm }`
-- All three delete buttons (grade level, subgroup, unit) now set `pendingSimpleDelete` instead of calling the API directly
-- New first-pass modal: "Delete [name]? This [label] will be permanently deleted. This cannot be undone." with Delete / Cancel
-- On confirm: calls `onConfirm()` which runs the existing `deleteGrade/deleteSubtype/deleteSection` logic
-- On 409: existing force-delete modal still opens as before (no change to that flow)
-- Dynamic labels use `l1/l2/l3` from settings
+### API — `src/app/api/admin/academic/verifiers/route.ts`
+- `GET ?gradeLevelId=X&subtypeId=Y&sectionId=Z` — list verifiers for that group combo (JOINs users for name/role/avatar)
+- `GET ?search=X` — search eligible users (role IN moderator/admin/master_admin) by name, returns up to 20
+- `POST { user_id, grade_level_id, subtype_id?, section_id? }` — add verifier, with mod+ role check and manual NULL-safe duplicate check
 
-### Fix 3 — Avatar propagation
-- **`/api/verifications`**: added `u.avatar_url AS user_avatar_url` to SELECT JOIN
-- **`admin/verifications/page.tsx`**: added `user_avatar_url: string | null` to `VerifRequest` interface; both card avatar and image-modal avatar now use absolute-overlay pattern
-- **`users/page.tsx`**: already had avatar_url usage; added `onError` fallback (absolute overlay)
-- **`users/[id]/page.tsx`**: updated to absolute overlay pattern with onError
-- **`PostCard.tsx`**: both post author avatar and comment author avatar updated with absolute overlay + onError
-- **`feed/page.tsx`**: ComposerCard avatar updated with absolute overlay + onError
-- Pattern used everywhere: initials span `absolute inset-0`, image `absolute inset-0 w-full h-full object-cover`, `onError` hides image revealing initials
+### API — `src/app/api/admin/academic/verifiers/[id]/route.ts`
+- `DELETE /[id]` — remove a verifier row by PK
 
-### Version bump
-- `0.1.1` → `0.2.0` (MINOR)
+### UI — `src/app/admin/academic/page.tsx`
+- Added `selectedSection` state — section pills now clickable to scope verifiers to a specific unit (click again to deselect)
+- Section pills show red highlight ring when selected, with hint text in panel header
+- Added Verifier Panel below the 3-panel grid (full-width, `bg-gray-900 border-gray-800`)
+  - Left column: lists assigned verifiers with avatar + name + role + remove button
+  - Right column: debounced search input (300ms) → dropdown of eligible users → click to add
+  - Context breadcrumb shows active selection (grade / subtype / section)
+  - Remove triggers existing `pendingSimpleDelete` modal
+- `selectGrade`, `selectSubtype`, `clearSubtype` now also reset `selectedSection`, verifier search, and results
 
 ---
 
@@ -47,7 +45,7 @@ Three UI/UX fixes.
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.2.0`
+- Version: `0.3.0`
 
 ---
 
@@ -64,13 +62,9 @@ Three UI/UX fixes.
 ## Key Files Changed This Session
 
 ```
-src/components/Navbar.tsx                    admin pill (desktop) + dropdown mobile-only
-src/app/admin/academic/page.tsx              pendingSimpleDelete state + first-pass modal
-src/app/api/verifications/route.ts           added u.avatar_url to SELECT
-src/app/admin/verifications/page.tsx         VerifRequest.user_avatar_url + avatar render
-src/app/users/page.tsx                       avatar onError fallback
-src/app/users/[id]/page.tsx                  avatar onError fallback
-src/components/PostCard.tsx                  post + comment avatar onError fallbacks
-src/app/feed/page.tsx                        ComposerCard avatar onError fallback
-package.json                                 0.1.1 → 0.2.0
+src/lib/db.ts                                        group_verifiers table added to ensureInit batch
+src/app/api/admin/academic/verifiers/route.ts        NEW — GET (list + search) + POST
+src/app/api/admin/academic/verifiers/[id]/route.ts   NEW — DELETE
+src/app/admin/academic/page.tsx                      selectedSection state + verifier panel
+package.json                                         0.2.0 → 0.3.0
 ```

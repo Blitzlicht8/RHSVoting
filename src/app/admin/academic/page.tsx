@@ -4,10 +4,37 @@ import { useEffect, useState, useCallback } from 'react'
 import AdminLayout from '@/components/AdminLayout'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useRouter } from 'next/navigation'
+function getRoleLabel(role: string): string {
+  const labels: Record<string, string> = {
+    master_admin: 'Master Admin',
+    admin: 'Admin',
+    moderator: 'Moderator',
+    staff: 'Staff',
+    member: 'Member',
+  }
+  return labels[role] ?? role
+}
 
 interface GradeLevel { id: number; name: string; order_index: number; active: number }
 interface Subtype { id: number; grade_level_id: number; name: string; order_index: number; active: number }
 interface Section { id: number; grade_level_id: number; subtype_id: number | null; name: string; active: number }
+
+interface Verifier {
+  id: number
+  user_id: number
+  user_name: string
+  user_role: string
+  user_avatar_url: string | null
+  created_at: string
+}
+
+interface EligibleUser {
+  id: number
+  name: string
+  role: string
+  avatar_url: string | null
+}
+
 function requireAdmin(role?: string) {
   return role === 'master_admin' || role === 'admin'
 }
@@ -31,6 +58,7 @@ export default function AcademicStructurePage() {
 
   const [selectedGrade, setSelectedGrade] = useState<GradeLevel | null>(null)
   const [selectedSubtype, setSelectedSubtype] = useState<Subtype | null>(null)
+  const [selectedSection, setSelectedSection] = useState<Section | null>(null)
 
   const [loadingGrades, setLoadingGrades] = useState(true)
   const [loadingSubtypes, setLoadingSubtypes] = useState(false)
@@ -63,6 +91,14 @@ export default function AcademicStructurePage() {
   const [l2, setL2] = useState('Subgroup')
   const [l3, setL3] = useState('Unit')
 
+  // Verifier panel state
+  const [verifiers, setVerifiers] = useState<Verifier[]>([])
+  const [loadingVerifiers, setLoadingVerifiers] = useState(false)
+  const [verifierSearch, setVerifierSearch] = useState('')
+  const [verifierSearchResults, setVerifierSearchResults] = useState<EligibleUser[]>([])
+  const [searchingVerifiers, setSearchingVerifiers] = useState(false)
+  const [addingVerifier, setAddingVerifier] = useState(false)
+
   useEffect(() => {
     if (user && !requireAdmin(user.role)) router.replace('/dashboard')
   }, [user, router])
@@ -75,14 +111,12 @@ export default function AcademicStructurePage() {
     ])
     const gradeJson = await gradeRes.json()
     setGradeLevels(gradeJson.data ?? [])
-    // user-counts endpoint may not exist; fall back to inline count from grades
     if (countRes?.ok) {
       const cj = await countRes.json()
       const map: Record<number, number> = {}
       for (const row of cj.data ?? []) map[row.grade_level_id] = Number(row.cnt)
       setUserCounts(map)
     } else {
-      // Fetch counts via a separate query inline
       try {
         const cr = await fetch('/api/admin/academic/grade-levels?includeCounts=1', { credentials: 'include' })
         const cj = await cr.json()
@@ -90,14 +124,6 @@ export default function AcademicStructurePage() {
       } catch { /* silent */ }
     }
     setLoadingGrades(false)
-  }, [])
-
-  const fetchUserCounts = useCallback(async () => {
-    try {
-      const res = await fetch('/api/admin/students?countByGrade=1', { credentials: 'include' })
-      const json = await res.json()
-      if (json.counts) setUserCounts(json.counts)
-    } catch { /* silent */ }
   }, [])
 
   const fetchSubtypes = useCallback(async (gradeLevelId: number) => {
@@ -119,7 +145,22 @@ export default function AcademicStructurePage() {
     setLoadingSections(false)
   }, [])
 
+  const fetchVerifiers = useCallback(async () => {
+    if (!selectedGrade) { setVerifiers([]); return }
+    setLoadingVerifiers(true)
+    const params = new URLSearchParams({ gradeLevelId: String(selectedGrade.id) })
+    if (selectedSubtype) params.set('subtypeId', String(selectedSubtype.id))
+    if (selectedSection) params.set('sectionId', String(selectedSection.id))
+    try {
+      const res = await fetch(`/api/admin/academic/verifiers?${params}`, { credentials: 'include' })
+      const json = await res.json()
+      setVerifiers(json.data ?? [])
+    } catch { /* silent */ }
+    setLoadingVerifiers(false)
+  }, [selectedGrade, selectedSubtype, selectedSection])
+
   useEffect(() => { fetchGrades() }, [fetchGrades])
+  useEffect(() => { fetchVerifiers() }, [fetchVerifiers])
 
   useEffect(() => {
     fetch('/api/settings', { credentials: 'include' })
@@ -133,26 +174,63 @@ export default function AcademicStructurePage() {
       .catch(() => {})
   }, [])
 
+  // Debounced verifier user search
+  useEffect(() => {
+    if (!selectedGrade || verifierSearch === '') {
+      setVerifierSearchResults([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setSearchingVerifiers(true)
+      try {
+        const res = await fetch(
+          `/api/admin/academic/verifiers?search=${encodeURIComponent(verifierSearch)}`,
+          { credentials: 'include' }
+        )
+        const json = await res.json()
+        setVerifierSearchResults(json.data ?? [])
+      } finally {
+        setSearchingVerifiers(false)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [verifierSearch, selectedGrade])
+
   const selectGrade = (gl: GradeLevel) => {
     setSelectedGrade(gl)
     setSelectedSubtype(null)
+    setSelectedSection(null)
     setSections([])
     setEditingSubtype(null)
     setEditingSection(null)
+    setVerifierSearch('')
+    setVerifierSearchResults([])
     fetchSubtypes(gl.id)
     fetchSections(gl.id, null)
   }
 
   const selectSubtype = (st: Subtype) => {
     setSelectedSubtype(st)
+    setSelectedSection(null)
     setEditingSection(null)
+    setVerifierSearch('')
+    setVerifierSearchResults([])
     if (selectedGrade) fetchSections(selectedGrade.id, st.id)
   }
 
   const clearSubtype = () => {
     setSelectedSubtype(null)
+    setSelectedSection(null)
     setEditingSection(null)
+    setVerifierSearch('')
+    setVerifierSearchResults([])
     if (selectedGrade) fetchSections(selectedGrade.id, null)
+  }
+
+  const toggleSection = (sec: Section) => {
+    setSelectedSection(prev => prev?.id === sec.id ? null : sec)
+    setVerifierSearch('')
+    setVerifierSearchResults([])
   }
 
   // --- Grade Level CRUD ---
@@ -192,7 +270,9 @@ export default function AcademicStructurePage() {
       setDeleteConfirm2(false)
       return
     }
-    if (selectedGrade?.id === gl.id) { setSelectedGrade(null); setSubtypes([]); setSections([]) }
+    if (selectedGrade?.id === gl.id) {
+      setSelectedGrade(null); setSubtypes([]); setSections([]); setSelectedSection(null)
+    }
     await fetchGrades()
   }
 
@@ -203,7 +283,7 @@ export default function AcademicStructurePage() {
     setDeleteModal(null)
     setDeleteConfirm2(false)
     if (deleteModal.type === 'grade' && selectedGrade?.id === deleteModal.id) {
-      setSelectedGrade(null); setSubtypes([]); setSections([])
+      setSelectedGrade(null); setSubtypes([]); setSections([]); setSelectedSection(null)
     }
     if (deleteModal.type === 'subtype' && selectedSubtype?.id === deleteModal.id) clearSubtype()
     await fetchGrades()
@@ -294,13 +374,47 @@ export default function AcademicStructurePage() {
       setDeleteConfirm2(false)
       return
     }
+    if (selectedSection?.id === sec.id) setSelectedSection(null)
     if (selectedGrade) await fetchSections(selectedGrade.id, selectedSubtype?.id ?? null)
+  }
+
+  // --- Verifier CRUD ---
+  const addVerifier = async (eligible: EligibleUser) => {
+    if (!selectedGrade || addingVerifier) return
+    setAddingVerifier(true)
+    try {
+      await fetch('/api/admin/academic/verifiers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          user_id: eligible.id,
+          grade_level_id: selectedGrade.id,
+          subtype_id: selectedSubtype?.id ?? null,
+          section_id: selectedSection?.id ?? null,
+        }),
+      })
+      await fetchVerifiers()
+      setVerifierSearch('')
+      setVerifierSearchResults([])
+    } finally {
+      setAddingVerifier(false)
+    }
+  }
+
+  const removeVerifier = async (id: number) => {
+    await fetch(`/api/admin/academic/verifiers/${id}`, { method: 'DELETE', credentials: 'include' })
+    await fetchVerifiers()
   }
 
   if (!user || !requireAdmin(user.role)) return null
 
   const typeLabel = (m: DeleteConfirmModal) =>
     m.type === 'grade' ? `${l1.toLowerCase()} level` : m.type === 'subtype' ? l2.toLowerCase() : l3.toLowerCase()
+
+  const verifierContextLabel = selectedGrade
+    ? [selectedGrade.name, selectedSubtype?.name, selectedSection?.name].filter(Boolean).join(' / ')
+    : null
 
   return (
     <AdminLayout>
@@ -491,6 +605,9 @@ export default function AcademicStructurePage() {
                 {selectedSubtype && <span className="ml-1 text-gray-400 font-normal">— {selectedSubtype.name}</span>}
                 {!selectedSubtype && selectedGrade && <span className="ml-1 text-gray-500 font-normal">(no subtype)</span>}
               </h2>
+              {selectedGrade && (
+                <p className="text-xs text-gray-500 mt-0.5">Click a {l3.toLowerCase()} to scope verifiers to it</p>
+              )}
             </div>
             {!selectedGrade ? (
               <div className="flex-1 flex items-center justify-center p-6 text-center text-gray-500 text-sm">
@@ -520,17 +637,24 @@ export default function AcademicStructurePage() {
                               <button onClick={() => setEditingSection(null)} className="text-xs text-gray-400 hover:text-white">✕</button>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1 bg-gray-800 border border-gray-700 rounded-full px-3 py-1 text-sm text-gray-300 hover:border-gray-500 transition-colors">
+                            <div
+                              className={`flex items-center gap-1 border rounded-full px-3 py-1 text-sm cursor-pointer transition-colors ${
+                                selectedSection?.id === sec.id
+                                  ? 'bg-[#FEE2E2]/20 border-[#84050C] text-[#F87171]'
+                                  : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500'
+                              }`}
+                              onClick={() => toggleSection(sec)}
+                            >
                               <span>{sec.name}</span>
                               <button
-                                onClick={() => setEditingSection({ id: sec.id, name: sec.name })}
+                                onClick={(e) => { e.stopPropagation(); setEditingSection({ id: sec.id, name: sec.name }) }}
                                 className="opacity-0 group-hover:opacity-100 ml-1 text-gray-500 hover:text-white transition-opacity"
                                 title="Edit"
                               >
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l-4 1 1-4 9.293-9.293a1 1 0 011.414 0l2.586 2.586a1 1 0 010 1.414L9 13z" /></svg>
                               </button>
                               <button
-                                onClick={() => setPendingSimpleDelete({ name: sec.name, label: l3, onConfirm: () => deleteSection(sec) })}
+                                onClick={(e) => { e.stopPropagation(); setPendingSimpleDelete({ name: sec.name, label: l3, onConfirm: () => deleteSection(sec) }) }}
                                 className="opacity-0 group-hover:opacity-100 ml-0.5 text-gray-500 hover:text-red-400 transition-opacity"
                                 title="Delete"
                               >
@@ -562,6 +686,140 @@ export default function AcademicStructurePage() {
               </>
             )}
           </div>
+        </div>
+
+        {/* Verifier Panel */}
+        <div className="mt-4 bg-gray-900 rounded-xl border border-gray-800">
+          <div className="px-4 py-3 border-b border-gray-800 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-200">Verifiers</h2>
+              {verifierContextLabel ? (
+                <p className="text-xs text-gray-400 mt-0.5">{verifierContextLabel}</p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {`Select a ${l1.toLowerCase()} level to manage verifiers`}
+                </p>
+              )}
+            </div>
+            {selectedGrade && (
+              <span className="text-xs text-gray-500 pt-0.5 shrink-0">
+                {verifiers.length} assigned
+              </span>
+            )}
+          </div>
+
+          {!selectedGrade ? (
+            <div className="p-8 text-center text-gray-500 text-sm">
+              {`Select a ${l1.toLowerCase()} level to manage verifiers.`}
+            </div>
+          ) : (
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left: current verifiers */}
+              <div>
+                <p className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">Assigned</p>
+                {loadingVerifiers ? (
+                  <div className="text-center text-gray-500 text-sm py-4">Loading…</div>
+                ) : verifiers.length === 0 ? (
+                  <div className="text-center text-gray-500 text-sm py-4 bg-gray-800/50 rounded-lg border border-dashed border-gray-700">
+                    No verifiers assigned to this group.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {verifiers.map((v) => (
+                      <div key={v.id} className="flex items-center gap-3 px-3 py-2.5 bg-gray-800 rounded-lg border border-gray-700">
+                        <div className="w-8 h-8 rounded-full bg-[#84050C] flex items-center justify-center relative overflow-hidden shrink-0">
+                          <span className="text-white text-xs font-medium absolute inset-0 flex items-center justify-center select-none">
+                            {v.user_name.charAt(0).toUpperCase()}
+                          </span>
+                          {v.user_avatar_url && (
+                            <img
+                              src={v.user_avatar_url}
+                              alt=""
+                              className="absolute inset-0 w-full h-full object-cover"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                            />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-200 font-medium truncate">{v.user_name}</p>
+                          <p className="text-xs text-gray-500">{getRoleLabel(v.user_role)}</p>
+                        </div>
+                        <button
+                          onClick={() => setPendingSimpleDelete({
+                            name: v.user_name,
+                            label: 'verifier',
+                            onConfirm: () => removeVerifier(v.id),
+                          })}
+                          className="text-gray-500 hover:text-red-400 transition-colors p-1 shrink-0"
+                          title="Remove verifier"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Right: add verifier search */}
+              <div>
+                <p className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">Add Verifier</p>
+                <input
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#84050C] transition-colors"
+                  placeholder="Search moderators &amp; above by name…"
+                  value={verifierSearch}
+                  onChange={(e) => setVerifierSearch(e.target.value)}
+                />
+                {verifierSearch.length > 0 && (
+                  <div className="mt-2 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+                    {searchingVerifiers ? (
+                      <div className="p-3 text-center text-gray-500 text-sm">Searching…</div>
+                    ) : verifierSearchResults.filter(u => !verifiers.some(v => v.user_id === u.id)).length === 0 ? (
+                      <div className="p-3 text-center text-gray-500 text-sm">
+                        {verifierSearchResults.length > 0
+                          ? 'All matching users already assigned.'
+                          : 'No eligible users found.'}
+                      </div>
+                    ) : (
+                      verifierSearchResults
+                        .filter(u => !verifiers.some(v => v.user_id === u.id))
+                        .map((u) => (
+                          <button
+                            key={u.id}
+                            onClick={() => addVerifier(u)}
+                            disabled={addingVerifier}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-700 text-left transition-colors disabled:opacity-50 border-b border-gray-700/50 last:border-0"
+                          >
+                            <div className="w-7 h-7 rounded-full bg-[#84050C] flex items-center justify-center relative overflow-hidden shrink-0">
+                              <span className="text-white text-xs absolute inset-0 flex items-center justify-center select-none">
+                                {u.name.charAt(0).toUpperCase()}
+                              </span>
+                              {u.avatar_url && (
+                                <img
+                                  src={u.avatar_url}
+                                  alt=""
+                                  className="absolute inset-0 w-full h-full object-cover"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                                />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-gray-200 truncate">{u.name}</p>
+                              <p className="text-xs text-gray-500">{getRoleLabel(u.role)}</p>
+                            </div>
+                            <span className="text-xs text-[#F87171] font-medium shrink-0">
+                              {addingVerifier ? '…' : 'Add'}
+                            </span>
+                          </button>
+                        ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
       </div>

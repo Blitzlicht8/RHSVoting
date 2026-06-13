@@ -349,6 +349,17 @@ async function _init(): Promise<void> {
         args: [],
       },
       {
+        sql: `CREATE TABLE IF NOT EXISTS group_verifiers (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          grade_level_id INTEGER REFERENCES grade_levels(id) ON DELETE CASCADE,
+          subtype_id INTEGER REFERENCES grade_subtypes(id) ON DELETE CASCADE,
+          section_id INTEGER REFERENCES sections(id) ON DELETE CASCADE,
+          created_at TEXT DEFAULT (datetime('now'))
+        )`,
+        args: [],
+      },
+      {
         sql: `CREATE TABLE IF NOT EXISTS roles (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE,
