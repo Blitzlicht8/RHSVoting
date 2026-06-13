@@ -18,6 +18,7 @@ interface Post {
 
 interface Comment {
   id: number
+  author_id: number
   author_name: string
   author_avatar: string | null
   content: string
@@ -90,9 +91,10 @@ function ShareIcon() {
   )
 }
 
-export default function PostCard({ post, currentUserId, onDelete }: {
+export default function PostCard({ post, currentUserId, currentUserRole, onDelete }: {
   post: Post
   currentUserId: number
+  currentUserRole?: string
   onDelete?: (id: number) => void
 }) {
   const [reacted, setReacted] = useState(!!post.user_reacted)
@@ -104,6 +106,8 @@ export default function PostCard({ post, currentUserId, onDelete }: {
   const [showReport, setShowReport] = useState(false)
   const [reportReason, setReportReason] = useState('')
   const [copied, setCopied] = useState(false)
+  const [reportingCommentId, setReportingCommentId] = useState<number | null>(null)
+  const [commentReportReason, setCommentReportReason] = useState('')
 
   const toggleReact = async () => {
     const method = reacted ? 'DELETE' : 'POST'
@@ -140,6 +144,25 @@ export default function PostCard({ post, currentUserId, onDelete }: {
     })
     setShowReport(false)
   }
+
+  const deleteComment = async (commentId: number) => {
+    if (!confirm('Delete this comment?')) return
+    const res = await fetch(`/api/posts/${post.id}/comments?commentId=${commentId}`, { method: 'DELETE', credentials: 'include' })
+    if (res.ok) setComments(cs => cs.filter(c => c.id !== commentId))
+  }
+
+  const submitCommentReport = async () => {
+    if (!reportingCommentId) return
+    await fetch(`/api/posts/${post.id}/comments/${reportingCommentId}/report`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: commentReportReason }),
+    })
+    setReportingCommentId(null)
+    setCommentReportReason('')
+  }
+
+  const isAdmin = ['master_admin', 'teacher_admin', 'student_admin'].includes(currentUserRole ?? '')
 
   const handleDelete = async () => {
     if (!confirm('Delete this post?')) return
@@ -221,19 +244,33 @@ export default function PostCard({ post, currentUserId, onDelete }: {
       {/* Comments */}
       {showComments && (
         <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
-          {comments.map(c => (
-            <div key={c.id} className="flex gap-2.5">
-              <div className="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold flex-shrink-0 overflow-hidden text-white">
-                {c.author_avatar
-                  ? <img src={c.author_avatar} className="w-full h-full object-cover" alt="" />
-                  : initials(c.author_name)}
+          {comments.map(c => {
+            const canDelete = isAdmin || c.author_id === currentUserId || post.author_id === currentUserId
+            const canReport = c.author_id !== currentUserId
+            return (
+              <div key={c.id} className="flex gap-2.5 group/comment">
+                <div className="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold flex-shrink-0 overflow-hidden text-white">
+                  {c.author_avatar
+                    ? <img src={c.author_avatar} className="w-full h-full object-cover" alt="" />
+                    : initials(c.author_name)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="bg-gray-50 rounded-xl px-3 py-2">
+                    <div className="text-xs font-semibold text-gray-700 mb-0.5">{c.author_name}</div>
+                    <div className="text-sm text-gray-600 break-words">{c.content}</div>
+                  </div>
+                  <div className="flex gap-2 mt-0.5 ml-1 opacity-0 group-hover/comment:opacity-100 transition-opacity">
+                    {canDelete && (
+                      <button onClick={() => deleteComment(c.id)} className="text-xs text-red-500 hover:text-red-700">Delete</button>
+                    )}
+                    {canReport && (
+                      <button onClick={() => { setReportingCommentId(c.id); setCommentReportReason('') }} className="text-xs text-gray-400 hover:text-gray-600">Report</button>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="bg-gray-50 rounded-xl px-3 py-2 flex-1 min-w-0">
-                <div className="text-xs font-semibold text-gray-700 mb-0.5">{c.author_name}</div>
-                <div className="text-sm text-gray-600 break-words">{c.content}</div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
           <div className="flex gap-2 mt-2">
             <input value={commentText} onChange={e => setCommentText(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment() } }}
@@ -244,7 +281,7 @@ export default function PostCard({ post, currentUserId, onDelete }: {
         </div>
       )}
 
-      {/* Report modal */}
+      {/* Report post modal */}
       {showReport && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
@@ -254,6 +291,21 @@ export default function PostCard({ post, currentUserId, onDelete }: {
             <div className="flex gap-2 justify-end">
               <button onClick={() => setShowReport(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
               <button onClick={submitReport} className="px-4 py-2 text-sm bg-[#84050C] text-white rounded-lg hover:bg-[#6B0409]">Submit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report comment modal */}
+      {reportingCommentId !== null && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
+            <h3 className="font-semibold text-gray-900 mb-3">Report Comment</h3>
+            <textarea value={commentReportReason} onChange={e => setCommentReportReason(e.target.value)} rows={3}
+              placeholder="Reason (optional)" className="w-full border border-gray-300 rounded-lg p-2 text-sm mb-3 focus:outline-none focus:ring-1 focus:ring-[#84050C]" />
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setReportingCommentId(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={submitCommentReport} className="px-4 py-2 text-sm bg-[#84050C] text-white rounded-lg hover:bg-[#6B0409]">Submit</button>
             </div>
           </div>
         </div>

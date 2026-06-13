@@ -268,6 +268,23 @@ async function _init(): Promise<void> {
         args: [],
       },
       {
+        sql: `CREATE TABLE IF NOT EXISTS comment_reports (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          comment_id INTEGER NOT NULL,
+          reporter_id INTEGER NOT NULL,
+          reason TEXT,
+          status TEXT NOT NULL DEFAULT 'pending',
+          reviewed_by INTEGER,
+          reviewed_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(comment_id, reporter_id),
+          FOREIGN KEY (comment_id) REFERENCES post_comments(id) ON DELETE CASCADE,
+          FOREIGN KEY (reporter_id) REFERENCES users(id),
+          FOREIGN KEY (reviewed_by) REFERENCES users(id)
+        )`,
+        args: [],
+      },
+      {
         sql: `CREATE TABLE IF NOT EXISTS user_achievements (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           user_id INTEGER NOT NULL,
@@ -335,6 +352,7 @@ async function _init(): Promise<void> {
     `ALTER TABLE elections ADD COLUMN is_global INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE candidates ADD COLUMN user_id INTEGER`,
     `ALTER TABLE users ADD COLUMN needs_academic_update INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN verification_status TEXT`,
   ]
   for (const sql of newColumns) {
     await db.execute({ sql, args: [] }).catch(() => {})

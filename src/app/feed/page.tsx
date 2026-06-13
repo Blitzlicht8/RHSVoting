@@ -224,6 +224,7 @@ export default function FeedPage() {
                   key={p.id}
                   post={p}
                   currentUserId={user?.id ?? 0}
+                  currentUserRole={user?.role}
                   onDelete={id => setPosts(ps => ps.filter(x => x.id !== id))}
                 />
               ))
