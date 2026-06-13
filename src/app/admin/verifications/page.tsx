@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import Layout from '@/components/Layout'
+import AdminLayout from '@/components/AdminLayout'
 import Modal from '@/components/ui/Modal'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
@@ -235,7 +235,7 @@ export default function VerificationsPage() {
 
   if (!isAdmin) {
     return (
-      <Layout>
+      <AdminLayout>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="text-4xl mb-3">🔒</div>
@@ -243,12 +243,12 @@ export default function VerificationsPage() {
             <p className="text-gray-500 mt-1">You do not have permission to view this page.</p>
           </div>
         </div>
-      </Layout>
+      </AdminLayout>
     )
   }
 
   return (
-    <Layout>
+    <AdminLayout>
       <div className="p-6">
         {/* Header */}
         <h1 className="text-2xl font-bold text-gray-900 mb-4">ID Verifications</h1>
@@ -568,6 +568,6 @@ export default function VerificationsPage() {
           </div>
         </div>
       </Modal>
-    </Layout>
+    </AdminLayout>
   )
 }

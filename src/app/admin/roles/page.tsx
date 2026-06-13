@@ -1,7 +1,7 @@
 ﻿'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Layout from '@/components/Layout'
+import AdminLayout from '@/components/AdminLayout'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
@@ -75,10 +75,10 @@ export default function RolesPage() {
     else { const j = await res.json(); addToast(j.error || 'Failed', 'error') }
   }
 
-  if (loading) return <Layout><div className="flex items-center justify-center h-64 text-gray-400">Loading...</div></Layout>
+  if (loading) return <AdminLayout><div className="flex items-center justify-center h-64 text-gray-400">Loading...</div></AdminLayout>
 
   return (
-    <Layout>
+    <AdminLayout>
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Shield size={22} className="text-[#84050C]" /> Roles &amp; Permissions</h1>
@@ -178,6 +178,6 @@ export default function RolesPage() {
           onCancel={() => { setConfirmOpen(false); setDeletingId(null) }}
         />
       </div>
-    </Layout>
+    </AdminLayout>
   )
 }

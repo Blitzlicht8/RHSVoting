@@ -10,7 +10,19 @@ function makeClient(): Client {
   })
 }
 
-export const db = makeClient()
+let _db: Client | null = null
+function getClient(): Client {
+  if (!_db) _db = makeClient()
+  return _db
+}
+
+export const db: Client = new Proxy({} as Client, {
+  get(_t, prop) {
+    const client = getClient()
+    const val = (client as any)[prop]
+    return typeof val === 'function' ? val.bind(client) : val
+  },
+})
 
 let initPromise: Promise<void> | null = null
 

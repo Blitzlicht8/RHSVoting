@@ -63,23 +63,31 @@ export function generateOTP(): string {
 }
 
 export function isAdmin(role: Role): boolean {
-  return ['master_admin', 'teacher_admin', 'student_admin'].includes(role)
+  return ['master_admin', 'admin', 'moderator', 'teacher_admin', 'student_admin'].includes(role)
 }
 
 export function canManageVerifications(role: Role): boolean {
   return ['master_admin', 'teacher_admin', 'student_admin'].includes(role)
 }
 
-export function getRoleBadgeVariant(role: Role): 'default' | 'danger' | 'purple' | 'info' {
+export function getRoleBadgeVariant(role: Role): 'default' | 'danger' | 'purple' | 'info' | 'warning' {
   if (role === 'master_admin') return 'danger'
+  if (role === 'admin') return 'warning'
+  if (role === 'moderator') return 'purple'
+  if (role === 'staff') return 'info'
+  if (role === 'member') return 'default'
   if (role.includes('admin')) return 'purple'
   if (role === 'teacher') return 'info'
   return 'default'
 }
 
 export function getRoleLabel(role: Role): string {
-  const labels: Record<Role, string> = {
+  const labels: Record<string, string> = {
     master_admin: 'Master Admin',
+    admin: 'Admin',
+    moderator: 'Moderator',
+    staff: 'Staff',
+    member: 'Member',
     teacher_admin: 'Teacher Admin',
     student_admin: 'Student Admin',
     teacher: 'Teacher',

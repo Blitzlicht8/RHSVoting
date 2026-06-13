@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Layout from '@/components/Layout'
+import AdminLayout from '@/components/AdminLayout'
 import Spinner from '@/components/ui/Spinner'
 import Button from '@/components/ui/Button'
 import { useAuth } from '@/components/providers/AuthProvider'
@@ -168,17 +168,17 @@ export default function LogsPage() {
 
   if (authLoading) {
     return (
-      <Layout>
+      <AdminLayout>
         <div className="flex items-center justify-center h-64">
           <Spinner />
         </div>
-      </Layout>
+      </AdminLayout>
     )
   }
 
   if (!user || !allowed.includes(user.role)) {
     return (
-      <Layout>
+      <AdminLayout>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="text-4xl mb-3">🔒</div>
@@ -186,14 +186,14 @@ export default function LogsPage() {
             <p className="text-gray-500 mt-1">You do not have permission to view this page.</p>
           </div>
         </div>
-      </Layout>
+      </AdminLayout>
     )
   }
 
   const totalPages = data?.totalPages ?? 1
 
   return (
-    <Layout>
+    <AdminLayout>
       <div className="p-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
@@ -322,6 +322,6 @@ export default function LogsPage() {
           )}
         </div>
       </div>
-    </Layout>
+    </AdminLayout>
   )
 }

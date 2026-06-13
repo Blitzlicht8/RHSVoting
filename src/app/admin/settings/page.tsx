@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Layout from '@/components/Layout'
+import AdminLayout from '@/components/AdminLayout'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
 import Spinner from '@/components/ui/Spinner'
@@ -95,6 +95,14 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [togglingKey, setTogglingKey] = useState<string | null>(null)
 
+  const [appName, setAppName] = useState('Community Hub')
+  const [orgType, setOrgType] = useState('community')
+  const [l1, setL1] = useState('Group')
+  const [l2, setL2] = useState('Subgroup')
+  const [l3, setL3] = useState('Unit')
+  const [docTypes, setDocTypes] = useState<string[]>([])
+  const [newDoc, setNewDoc] = useState('')
+
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetConfirmText, setResetConfirmText] = useState('')
 
@@ -109,7 +117,7 @@ export default function SettingsPage() {
   const [showAddReq, setShowAddReq] = useState(false)
   const addReqRef = useRef<HTMLInputElement>(null)
 
-  const canEditSettings = user?.role === 'master_admin' || user?.role === 'teacher_admin'
+  const canEditSettings = ['master_admin', 'admin', 'teacher_admin'].includes(user?.role ?? '')
 
   useEffect(() => {
     if (!authLoading && user && !canEditSettings) {
@@ -165,6 +173,13 @@ export default function SettingsPage() {
       const json = await res.json()
       if (res.ok) {
         setSettings(json.data ?? {})
+        const s = json.data ?? {}
+        setAppName(s.app_name ?? 'Community Hub')
+        setOrgType(s.org_type ?? 'community')
+        setL1(s.group_label_l1 ?? 'Group')
+        setL2(s.group_label_l2 ?? 'Subgroup')
+        setL3(s.group_label_l3 ?? 'Unit')
+        try { setDocTypes(JSON.parse(s.doc_type_labels ?? '[]')) } catch { setDocTypes([]) }
       } else {
         addToast(json.error || 'Failed to load settings', 'error')
       }
@@ -204,6 +219,26 @@ export default function SettingsPage() {
     }
   }
 
+  const save = async (key: string, value: string) => {
+    setTogglingKey(key)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value }),
+      })
+      const json = await res.json()
+      if (res.ok) addToast('Saved', 'success')
+      else addToast(json.error ?? 'Failed to save', 'error')
+    } catch { addToast('Network error', 'error') }
+    finally { setTogglingKey(null) }
+  }
+
+  const saveDocTypes = (types: string[]) => {
+    setDocTypes(types)
+    save('doc_type_labels', JSON.stringify(types))
+  }
+
   const handleResetConfirm = () => {
     setShowResetModal(false)
     setResetConfirmText('')
@@ -212,17 +247,17 @@ export default function SettingsPage() {
 
   if (authLoading || loading) {
     return (
-      <Layout>
+      <AdminLayout>
         <div className="flex items-center justify-center h-64">
           <Spinner />
         </div>
-      </Layout>
+      </AdminLayout>
     )
   }
 
   if (!user || !canEditSettings) {
     return (
-      <Layout>
+      <AdminLayout>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="text-4xl mb-3">🔒</div>
@@ -230,21 +265,126 @@ export default function SettingsPage() {
             <p className="text-gray-500 mt-1">Teacher Admin or above required.</p>
           </div>
         </div>
-      </Layout>
+      </AdminLayout>
     )
   }
 
   const isMaster = user.role === 'master_admin'
+  const canToggle = ['master_admin', 'admin', 'teacher_admin'].includes(user.role)
   const autoVerifyOn = settings['auto_verify_id'] === 'true'
   const otpRequiredOn = settings['otp_required_login'] === 'true'
 
   return (
-    <Layout>
+    <AdminLayout>
       <div className="p-6 max-w-2xl mx-auto">
         {/* Header */}
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
 
         <div className="space-y-4">
+          {/* App Identity section */}
+          {canEditSettings && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100">
+                <h2 className="text-base font-semibold text-gray-900">App Identity</h2>
+              </div>
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-1">App Name</label>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      value={appName}
+                      onChange={e => setAppName(e.target.value)}
+                      className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C] outline-none flex-1"
+                      onBlur={e => save('app_name', e.target.value)}
+                    />
+                    {togglingKey === 'app_name' && <span className="text-xs text-gray-400">Saving…</span>}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-2">Organization Type</label>
+                  <div className="flex gap-4 flex-wrap">
+                    {['community', 'school', 'corporate', 'nonprofit'].map(type => (
+                      <label key={type} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="radio" name="org_type" value={type} checked={orgType === type}
+                          onChange={() => { setOrgType(type); save('org_type', type) }}
+                          className="text-[#84050C]" />
+                        <span className="capitalize">{type}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Group Labels section */}
+          {canEditSettings && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100">
+                <h2 className="text-base font-semibold text-gray-900">Group Labels</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Labels used throughout the app for group hierarchy. Blur to save.</p>
+              </div>
+              <div className="px-6 py-4 space-y-3">
+                {([
+                  ['group_label_l1', 'Level 1 (e.g. Group, Grade, Department)', l1, setL1],
+                  ['group_label_l2', 'Level 2 (e.g. Subgroup, Track, Strand)', l2, setL2],
+                  ['group_label_l3', 'Level 3 (e.g. Unit, Section, Team)', l3, setL3],
+                ] as [string, string, string, (v: string) => void][]).map(([key, placeholder, val, setter]) => (
+                  <div key={key} className="flex gap-2 items-center">
+                    <label className="text-xs text-gray-500 w-8 shrink-0 font-mono">
+                      {key === 'group_label_l1' ? 'L1' : key === 'group_label_l2' ? 'L2' : 'L3'}
+                    </label>
+                    <input
+                      value={val}
+                      onChange={e => setter(e.target.value)}
+                      placeholder={placeholder}
+                      className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C] outline-none flex-1"
+                      onBlur={e => save(key, e.target.value)}
+                    />
+                    {togglingKey === key && <span className="text-xs text-gray-400 shrink-0">Saving…</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Verification Document Types section */}
+          {canEditSettings && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-100">
+                <h2 className="text-base font-semibold text-gray-900">Verification Document Types</h2>
+              </div>
+              <div className="px-6 py-4">
+                <div className="flex flex-wrap gap-2 mb-3 min-h-[2rem]">
+                  {docTypes.length === 0
+                    ? <p className="text-xs text-gray-400">No document types yet.</p>
+                    : docTypes.map((t, i) => (
+                      <span key={i} className="flex items-center gap-1 bg-[#FEE2E2] text-[#84050C] rounded-full px-3 py-1 text-xs font-medium">
+                        {t}
+                        <button onClick={() => saveDocTypes(docTypes.filter((_, j) => j !== i))} className="hover:opacity-70 ml-0.5 text-[#84050C]">×</button>
+                      </span>
+                    ))
+                  }
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={newDoc}
+                    onChange={e => setNewDoc(e.target.value)}
+                    placeholder="Add document type…"
+                    className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C] outline-none flex-1"
+                    onKeyDown={e => { if (e.key === 'Enter' && newDoc.trim()) { saveDocTypes([...docTypes, newDoc.trim()]); setNewDoc('') } }}
+                  />
+                  <button
+                    onClick={() => { if (newDoc.trim()) { saveDocTypes([...docTypes, newDoc.trim()]); setNewDoc('') } }}
+                    className="bg-[#84050C] text-white rounded-xl px-4 py-2 text-sm font-medium hover:bg-[#6b0409] transition-colors shrink-0"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Verification Requirements — visible to teacher_admin+ */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -310,8 +450,8 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Master-admin only below */}
-          {isMaster && (
+          {/* canToggle-only below */}
+          {canToggle && (
             <>
               <SectionCard title="Verification Settings">
                 <ToggleRow
@@ -335,7 +475,7 @@ export default function SettingsPage() {
 
               <SectionCard title="System Information">
                 <InfoRow label="App Version" value={`v${APP_VERSION}`} />
-                <InfoRow label="Default Admin" value="admin@school.edu" />
+                <InfoRow label="Default Admin" value="(configured in .env)" />
                 <InfoRow label="Environment" value={process.env.NODE_ENV || 'unknown'} />
                 <div className="pt-3">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
@@ -410,6 +550,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </Modal>
-    </Layout>
+    </AdminLayout>
   )
 }

@@ -1,17 +1,28 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/components/providers/AuthProvider'
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/elections': 'Elections',
-  '/verify-id': 'Verify ID',
+  '/feed': 'Feed',
+  '/profile': 'Profile',
+  '/users': 'Members',
+  '/verify-id': 'Verify Identity',
+  '/verify-otp': 'Verify Email',
+  '/admin': 'Admin',
   '/admin/verifications': 'Verifications',
-  '/admin/users': 'Users',
+  '/admin/users': 'Members',
+  '/admin/academic': 'Group Structure',
   '/admin/elections': 'Manage Elections',
+  '/admin/reports': 'Reports',
+  '/admin/logs': 'Activity Logs',
   '/admin/settings': 'Settings',
+  '/admin/app-config': 'App Config',
+  '/admin/roles': 'Roles & Permissions',
 }
 
 function getPageTitle(pathname: string): string {
@@ -88,6 +99,23 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
                 <p className="text-sm font-medium text-gray-900">{user?.name}</p>
                 <p className="text-xs text-gray-500">{user?.email}</p>
               </div>
+              <Link
+                href="/profile"
+                onClick={() => setShowDropdown(false)}
+                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                My Profile
+              </Link>
+              {user && ['master_admin', 'admin', 'moderator', 'teacher_admin', 'student_admin'].includes(user.role) && (
+                <Link
+                  href="/admin/users"
+                  onClick={() => setShowDropdown(false)}
+                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Admin Panel
+                </Link>
+              )}
+              <div className="border-t border-gray-100 mt-1" />
               <button
                 onClick={() => {
                   setShowDropdown(false)

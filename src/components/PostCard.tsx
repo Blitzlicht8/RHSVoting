@@ -70,10 +70,11 @@ function renderContent(raw: string) {
 }
 
 
-export default function PostCard({ post, currentUserId, currentUserRole, onDelete }: {
+export default function PostCard({ post, currentUserId, currentUserRole, currentUserIdVerified, onDelete }: {
   post: Post
   currentUserId: number
   currentUserRole?: string
+  currentUserIdVerified?: boolean
   onDelete?: (id: number) => void
 }) {
   const [reacted, setReacted] = useState(!!post.user_reacted)
@@ -92,6 +93,7 @@ export default function PostCard({ post, currentUserId, currentUserRole, onDelet
   const [confirmMsg, setConfirmMsg] = useState('This action cannot be undone.')
 
   const toggleReact = async () => {
+    if (!currentUserIdVerified) return
     const method = reacted ? 'DELETE' : 'POST'
     setReacted(!reacted)
     setReactionCount(c => reacted ? c - 1 : c + 1)
@@ -108,6 +110,7 @@ export default function PostCard({ post, currentUserId, currentUserRole, onDelet
   }
 
   const submitComment = async () => {
+    if (!currentUserIdVerified) return
     if (!commentText.trim()) return
     const res = await fetch(`/api/posts/${post.id}/comments`, {
       method: 'POST', credentials: 'include',

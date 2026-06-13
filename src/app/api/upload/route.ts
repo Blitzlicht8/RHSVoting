@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { db, ensureInit } from '@/lib/db'
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
 
   const purpose = (formData.get('purpose') as string | null) ?? 'id'
 
-  // ── Avatar upload ──────────────────────────────────────────────────────────
+  // â”€â”€ Avatar upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (purpose === 'avatar') {
     const ext = IMAGE_TYPES[file.type]
     if (!ext) {
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: { url: avatarBlob.url } })
   }
 
-  // ── Post media upload ──────────────────────────────────────────────────────
+  // â”€â”€ Post media upload â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (purpose === 'post') {
     const isImage = !!IMAGE_TYPES[file.type]
     const isVideo = !!VIDEO_TYPES[file.type]
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: { url: postBlob.url } })
   }
 
-  // ── School ID upload (default / purpose='id') ──────────────────────────────
+  // â”€â”€ School ID upload (default / purpose='id') â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const ext = ID_TYPES[file.type]
   if (!ext) {
     return NextResponse.json({ error: 'Invalid file type. Allowed: jpeg, png, webp' }, { status: 400 })

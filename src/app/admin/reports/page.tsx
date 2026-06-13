@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import Layout from '@/components/Layout'
+import AdminLayout from '@/components/AdminLayout'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 
@@ -50,11 +50,11 @@ export default function ReportsPage() {
   }
 
   if (!user || !allowed.includes(user.role)) {
-    return <Layout><div className="flex items-center justify-center h-64 text-gray-500">Access Denied</div></Layout>
+    return <AdminLayout><div className="flex items-center justify-center h-64 text-gray-500">Access Denied</div></AdminLayout>
   }
 
   return (
-    <Layout>
+    <AdminLayout>
       <div className="p-6">
         <div className="flex items-center gap-3 mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
@@ -96,6 +96,6 @@ export default function ReportsPage() {
           </div>
         )}
       </div>
-    </Layout>
+    </AdminLayout>
   )
 }

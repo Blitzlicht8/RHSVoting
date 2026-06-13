@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
@@ -5,9 +6,13 @@ import { logActivity } from '@/lib/logger'
 import { Role } from '@/types'
 import { InValue } from '@libsql/client'
 
-const ALL_ROLES: Role[] = ['master_admin', 'teacher_admin', 'student_admin', 'teacher', 'student']
+const ALL_ROLES: Role[] = ['master_admin', 'admin', 'moderator', 'staff', 'member', 'teacher_admin', 'student_admin', 'teacher', 'student']
 
 const ROLE_LEVEL: Record<string, number> = {
+  member: 0,
+  staff: 1,
+  moderator: 2,
+  admin: 3,
   student: 0,
   teacher: 1,
   student_admin: 2,
@@ -17,6 +22,7 @@ const ROLE_LEVEL: Record<string, number> = {
 
 function canDelete(actorRole: string, targetRole: string): boolean {
   if (actorRole === 'master_admin') return true
+  if (actorRole === 'admin') return (ROLE_LEVEL[targetRole] ?? -1) < ROLE_LEVEL['admin']
   if (actorRole === 'teacher_admin') return (ROLE_LEVEL[targetRole] ?? -1) < ROLE_LEVEL['teacher_admin']
   return false
 }
@@ -81,7 +87,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const existing = await db.execute({
-    sql: `SELECT id, email, role FROM users WHERE id = ?`,
+    sql: `SELECT id, email, role, name FROM users WHERE id = ?`,
     args: [targetId],
   })
   if (existing.rows.length === 0) {
@@ -172,6 +178,17 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     args: values,
   })
 
+  if (body.name !== undefined && (isSelf || adminUser)) {
+    const oldName = existingUser.name as string
+    const newName = body.name.trim()
+    if (oldName !== newName) {
+      await db.execute({
+        sql: `INSERT INTO name_history (user_id, old_name, new_name) VALUES (?, ?, ?)`,
+        args: [targetId, oldName, newName],
+      })
+    }
+  }
+
   const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
   const targetEmail = existingUser.email as string
 
@@ -219,7 +236,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   }
 
   const actorRole = authUser.role as string
-  if (!['master_admin', 'teacher_admin'].includes(actorRole)) {
+  if (!['master_admin', 'admin', 'teacher_admin'].includes(actorRole)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -253,6 +270,14 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   await db.execute({ sql: `DELETE FROM verification_requests WHERE user_id = ?`, args: [targetId] })
   // Nullify user_id in logs to preserve audit history without the FK reference
   await db.execute({ sql: `UPDATE user_logs SET user_id = NULL WHERE user_id = ?`, args: [targetId] })
+  await db.execute({ sql: `DELETE FROM post_reactions WHERE user_id = ?`, args: [targetId] })
+  await db.execute({ sql: `DELETE FROM post_comments WHERE author_id = ?`, args: [targetId] })
+  await db.execute({ sql: `UPDATE post_reports SET reporter_id = NULL WHERE reporter_id = ?`, args: [targetId] })
+  await db.execute({ sql: `UPDATE comment_reports SET reporter_id = NULL WHERE reporter_id = ?`, args: [targetId] })
+  await db.execute({ sql: `DELETE FROM votes WHERE voter_id = ?`, args: [targetId] })
+  await db.execute({ sql: `DELETE FROM posts WHERE author_id = ?`, args: [targetId] })
+  await db.execute({ sql: `UPDATE elections SET created_by = NULL WHERE created_by = ?`, args: [targetId] })
+  await db.execute({ sql: `UPDATE verification_requests SET reviewed_by = NULL WHERE reviewed_by = ?`, args: [targetId] })
   await db.execute({ sql: `DELETE FROM users WHERE id = ?`, args: [targetId] })
 
   await logActivity(authUser.id, 'user_deleted',

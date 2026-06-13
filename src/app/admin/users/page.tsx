@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import Layout from '@/components/Layout'
+import AdminLayout from '@/components/AdminLayout'
 import Modal from '@/components/ui/Modal'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
@@ -169,6 +169,9 @@ export default function UsersPage() {
   const [docsLoading, setDocsLoading] = useState(false)
   const [deletingDocId, setDeletingDocId] = useState<number | null>(null)
   const [nameHistory, setNameHistory] = useState<{old_name:string;new_name:string;changed_at:string}[]>([])
+  const [l1, setL1] = useState('Group')
+  const [l2, setL2] = useState('Subgroup')
+  const [l3, setL3] = useState('Unit')
 
   // Upload & verify
   const [uploadFiles, setUploadFiles] = useState<File[]>([])
@@ -235,40 +238,53 @@ export default function UsersPage() {
   // Load grade levels when create modal opens
   useEffect(() => {
     if (!showCreateModal) return
-    fetch('/api/academic/grade-levels').then(r => r.json()).then(j => setGradeLevels(j.data ?? []))
+    fetch('/api/academic/grade-levels', { credentials: 'include' }).then(r => r.json()).then(j => setGradeLevels(j.data ?? []))
   }, [showCreateModal])
 
   // Load subtypes when grade level changes
   useEffect(() => {
     if (!createForm.grade_level_id) { setSubtypes([]); setSections([]); return }
-    fetch(`/api/academic/subtypes?gradeLevelId=${createForm.grade_level_id}`).then(r=>r.json()).then(j=>setSubtypes(j.data??[]))
+    fetch(`/api/academic/subtypes?gradeLevelId=${createForm.grade_level_id}`, { credentials: 'include' }).then(r=>r.json()).then(j=>setSubtypes(j.data??[]))
   }, [createForm.grade_level_id])
 
   // Load sections when grade level or subtype changes
   useEffect(() => {
     if (!createForm.grade_level_id) { setSections([]); return }
     const url = `/api/academic/sections?gradeLevelId=${createForm.grade_level_id}${createForm.subtype_id?`&subtypeId=${createForm.subtype_id}`:''}`
-    fetch(url).then(r=>r.json()).then(j=>setSections(j.data??[]))
+    fetch(url, { credentials: 'include' }).then(r=>r.json()).then(j=>setSections(j.data??[]))
   }, [createForm.grade_level_id, createForm.subtype_id])
 
   // Edit modal — load grade levels
   useEffect(() => {
     if (!editUser) return
-    fetch('/api/academic/grade-levels').then(r => r.json()).then(j => setEditGradeLevels(j.data ?? []))
+    fetch('/api/academic/grade-levels', { credentials: 'include' }).then(r => r.json()).then(j => setEditGradeLevels(j.data ?? []))
   }, [editUser])
 
   // Edit modal — load subtypes on grade change
   useEffect(() => {
     if (!editForm.grade_level_id) { setEditSubtypes([]); setEditSections([]); return }
-    fetch(`/api/academic/subtypes?gradeLevelId=${editForm.grade_level_id}`).then(r=>r.json()).then(j=>setEditSubtypes(j.data??[]))
+    fetch(`/api/academic/subtypes?gradeLevelId=${editForm.grade_level_id}`, { credentials: 'include' }).then(r=>r.json()).then(j=>setEditSubtypes(j.data??[]))
   }, [editForm.grade_level_id])
 
   // Edit modal — load sections on grade/subtype change
   useEffect(() => {
     if (!editForm.grade_level_id) { setEditSections([]); return }
     const url = `/api/academic/sections?gradeLevelId=${editForm.grade_level_id}${editForm.subtype_id?`&subtypeId=${editForm.subtype_id}`:''}`
-    fetch(url).then(r=>r.json()).then(j=>setEditSections(j.data??[]))
+    fetch(url, { credentials: 'include' }).then(r=>r.json()).then(j=>setEditSections(j.data??[]))
   }, [editForm.grade_level_id, editForm.subtype_id])
+
+  // Fetch dynamic group labels from settings
+  useEffect(() => {
+    fetch('/api/settings', { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => {
+        const d = j.data ?? {}
+        if (d.group_label_l1) setL1(d.group_label_l1)
+        if (d.group_label_l2) setL2(d.group_label_l2)
+        if (d.group_label_l3) setL3(d.group_label_l3)
+      })
+      .catch(() => {})
+  }, [])
 
   // Edit modal — load user documents + name history
   useEffect(() => {
@@ -482,7 +498,7 @@ export default function UsersPage() {
 
   if (!isAdmin) {
     return (
-      <Layout>
+      <AdminLayout>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="text-4xl mb-3">🔒</div>
@@ -490,7 +506,7 @@ export default function UsersPage() {
             <p className="text-gray-500 mt-1">You do not have permission to view this page.</p>
           </div>
         </div>
-      </Layout>
+      </AdminLayout>
     )
   }
 
@@ -501,7 +517,7 @@ export default function UsersPage() {
   const isEditStudentRole = editForm.role === 'student' || editForm.role === 'student_admin'
 
   return (
-    <Layout>
+    <AdminLayout>
       <div className="p-6">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
@@ -974,12 +990,12 @@ export default function UsersPage() {
             {isEditStudentRole && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{l1}</label>
                   <select value={editForm.grade_level_id}
                     onChange={(e) => setEditForm(f => ({ ...f, grade_level_id: e.target.value, subtype_id: '', section_id: '' }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                   >
-                    <option value="">— Select grade level —</option>
+                    <option value="">— Select {l1.toLowerCase()} —</option>
                     {editGradeLevels.map((gl) => (
                       <option key={gl.id} value={String(gl.id)}>{gl.name}</option>
                     ))}
@@ -987,12 +1003,12 @@ export default function UsersPage() {
                 </div>
                 {editSubtypes.length > 0 && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Track / Strand</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{l2}</label>
                     <select value={editForm.subtype_id}
                       onChange={(e) => setEditForm(f => ({ ...f, subtype_id: e.target.value, section_id: '' }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                     >
-                      <option value="">— Select track/strand —</option>
+                      <option value="">— Select {l2.toLowerCase()} —</option>
                       {editSubtypes.map((st) => (
                         <option key={st.id} value={String(st.id)}>{st.name}</option>
                       ))}
@@ -1001,12 +1017,12 @@ export default function UsersPage() {
                 )}
                 {editSections.length > 0 && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{l3}</label>
                     <select value={editForm.section_id}
                       onChange={(e) => setEditForm(f => ({ ...f, section_id: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                     >
-                      <option value="">— Select section —</option>
+                      <option value="">— Select {l3.toLowerCase()} —</option>
                       {editSections.map((sec) => (
                         <option key={sec.id} value={String(sec.id)}>{sec.name}</option>
                       ))}
@@ -1298,6 +1314,6 @@ export default function UsersPage() {
           </div>
         </div>
       </Modal>
-    </Layout>
+    </AdminLayout>
   )
 }

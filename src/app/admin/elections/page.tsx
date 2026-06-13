@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import Layout from '@/components/Layout'
+import AdminLayout from '@/components/AdminLayout'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
 import Spinner from '@/components/ui/Spinner'
@@ -338,7 +338,7 @@ export default function ElectionsPage() {
 
   if (!isAdmin) {
     return (
-      <Layout>
+      <AdminLayout>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="text-4xl mb-3">🔒</div>
@@ -346,12 +346,12 @@ export default function ElectionsPage() {
             <p className="text-gray-500 mt-1">You do not have permission to view this page.</p>
           </div>
         </div>
-      </Layout>
+      </AdminLayout>
     )
   }
 
   return (
-    <Layout>
+    <AdminLayout>
       <div className="p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -450,6 +450,6 @@ export default function ElectionsPage() {
           </p>
         )}
       </Modal>
-    </Layout>
+    </AdminLayout>
   )
 }

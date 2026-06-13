@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
@@ -33,26 +34,25 @@ export async function GET(_request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   await ensureInit()
-
   const authUser = await getAuthUser()
-  if (!authUser) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  if (authUser.role !== 'master_admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const canEdit = ['master_admin', 'admin', 'teacher_admin'].includes(authUser.role as string)
+  if (!canEdit) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await request.json()
   const { key, value } = body
 
   if (!key || !ALLOWED_KEYS.includes(key as SettingKey)) {
-    return NextResponse.json(
-      { error: `Invalid key. Allowed keys: ${ALLOWED_KEYS.join(', ')}` },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: `Invalid key. Allowed keys: ${ALLOWED_KEYS.join(', ')}` }, { status: 400 })
   }
   if (value === undefined || value === null) {
     return NextResponse.json({ error: 'value is required' }, { status: 400 })
+  }
+
+  const MASTER_ONLY_KEYS: SettingKey[] = ['app_name', 'org_type', 'group_label_l1', 'group_label_l2', 'group_label_l3', 'doc_type_labels']
+  if (MASTER_ONLY_KEYS.includes(key as SettingKey) && authUser.role !== 'master_admin') {
+    return NextResponse.json({ error: 'Only master_admin can change structural settings' }, { status: 403 })
   }
 
   await db.execute({

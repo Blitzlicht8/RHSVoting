@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -10,17 +9,9 @@ import {
   Vote,
   ShieldCheck,
   Users,
-  BookOpen,
-  ListChecks,
-  Flag,
-  FileText,
-  Settings,
-  Settings2,
-  Shield,
   LogOut,
 } from 'lucide-react'
 import { useAuth } from '@/components/providers/AuthProvider'
-import Badge from '@/components/ui/Badge'
 
 interface NavItem {
   href: string
@@ -56,69 +47,12 @@ const NAV_ITEMS: NavItem[] = [
     icon: <Vote className="w-5 h-5" />,
   },
   {
-    href: '/admin/verifications',
-    label: 'Verifications',
-    adminOnly: true,
-    icon: <ShieldCheck className="w-5 h-5" />,
-  },
-  {
-    href: '/admin/users',
+    href: '/users',
     label: 'Members',
-    adminOnly: true,
+    adminOnly: false,
     icon: <Users className="w-5 h-5" />,
   },
-  {
-    href: '/admin/academic',
-    label: 'Academic Structure',
-    adminOnly: true,
-    icon: <BookOpen className="w-5 h-5" />,
-  },
-  {
-    href: '/admin/elections',
-    label: 'Manage Elections',
-    adminOnly: true,
-    icon: <ListChecks className="w-5 h-5" />,
-  },
-  {
-    href: '/admin/reports',
-    label: 'Reports',
-    adminOnly: true,
-    adminRoles: ['master_admin', 'teacher_admin'],
-    icon: <Flag className="w-5 h-5" />,
-  },
-  {
-    href: '/admin/logs',
-    label: 'Activity Logs',
-    adminOnly: true,
-    adminRoles: ['master_admin', 'teacher_admin'],
-    icon: <FileText className="w-5 h-5" />,
-  },
-  {
-    href: '/admin/settings',
-    label: 'Settings',
-    adminOnly: true,
-    adminRoles: ['master_admin', 'teacher_admin'],
-    icon: <Settings className="w-5 h-5" />,
-  },
-  {
-    href: '/admin/app-config',
-    label: 'App Config',
-    adminOnly: true,
-    adminRoles: ['master_admin'],
-    icon: <Settings2 className="w-5 h-5" />,
-  },
-  {
-    href: '/admin/roles',
-    label: 'Roles & Permissions',
-    adminOnly: true,
-    adminRoles: ['master_admin'],
-    icon: <Shield className="w-5 h-5" />,
-  },
 ]
-
-function isAdmin(role: string) {
-  return ['master_admin', 'teacher_admin', 'student_admin'].includes(role)
-}
 
 interface SidebarProps {
   isOpen?: boolean
@@ -128,18 +62,6 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user, logout } = useAuth()
   const pathname = usePathname()
-  const [pendingCount, setPendingCount] = useState(0)
-
-  useEffect(() => {
-    if (!user || !isAdmin(user.role)) return
-    fetch('/api/verifications?status=pending')
-      .then((r) => r.json())
-      .then((res) => {
-        const count = Array.isArray(res.data) ? res.data.length : (res.data?.total ?? 0)
-        setPendingCount(count)
-      })
-      .catch(() => {})
-  }, [user])
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
@@ -147,10 +69,6 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   }
 
   const generalItems = NAV_ITEMS.filter((item) => !item.adminOnly)
-  const adminItems = NAV_ITEMS.filter((item) => item.adminOnly).filter((item) => {
-    if (item.adminRoles) return item.adminRoles.includes(user?.role ?? '')
-    return true
-  })
 
   return (
     <aside
@@ -190,35 +108,20 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </Link>
         ))}
 
-        {user && isAdmin(user.role) && (
-          <>
-            <div className="pt-4 pb-1">
-              <span className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Administration
-              </span>
-            </div>
-            {adminItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onClose}
-                className={
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ' +
-                  (isActive(item.href)
-                    ? 'bg-[#84050C]/20 text-[#F87171] font-medium'
-                    : 'text-gray-400 hover:bg-gray-800 hover:text-white')
-                }
-              >
-                {item.icon}
-                <span className="flex-1">{item.label}</span>
-                {item.href === '/admin/verifications' && pendingCount > 0 && (
-                  <Badge variant="warning" size="sm">
-                    {pendingCount}
-                  </Badge>
-                )}
-              </Link>
-            ))}
-          </>
+        {user && !user.id_verified && user.email_verified && (
+          <Link
+            href="/verify-id"
+            onClick={onClose}
+            className={
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ' +
+              (isActive('/verify-id')
+                ? 'bg-[#84050C]/20 text-[#F87171] font-medium'
+                : 'text-amber-400 hover:bg-gray-800 hover:text-amber-300')
+            }
+          >
+            <ShieldCheck className="w-5 h-5" />
+            Verify Identity
+          </Link>
         )}
       </nav>
 

@@ -1,11 +1,11 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Newspaper, Vote, UserCircle, Menu } from 'lucide-react'
+import { LayoutDashboard, Newspaper, Vote, UserCircle, Shield } from 'lucide-react'
 import { useAuth } from '@/components/providers/AuthProvider'
 
 function isAdmin(role: string) {
-  return ['master_admin', 'teacher_admin', 'student_admin'].includes(role)
+  return ['master_admin', 'admin', 'moderator', 'teacher_admin', 'student_admin'].includes(role)
 }
 
 export default function BottomNav({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
@@ -35,13 +35,15 @@ export default function BottomNav({ onOpenSidebar }: { onOpenSidebar?: () => voi
         </Link>
       ))}
       {user && isAdmin(user.role) ? (
-        <button
-          onClick={onOpenSidebar}
-          className="flex-1 flex flex-col items-center justify-center gap-0.5 h-full text-[10px] font-medium text-gray-400"
+        <Link
+          href="/admin/users"
+          className={`flex-1 flex flex-col items-center justify-center gap-0.5 h-full text-[10px] font-medium transition-colors ${
+            pathname.startsWith('/admin') ? 'text-[#84050C]' : 'text-gray-400'
+          }`}
         >
-          <Menu className="w-5 h-5" />
-          More
-        </button>
+          <Shield className="w-5 h-5" />
+          Admin
+        </Link>
       ) : (
         <Link
           href="/profile"

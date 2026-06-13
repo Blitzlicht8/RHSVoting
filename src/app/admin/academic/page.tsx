@@ -1,16 +1,13 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import Layout from '@/components/Layout'
+import AdminLayout from '@/components/AdminLayout'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useRouter } from 'next/navigation'
 
 interface GradeLevel { id: number; name: string; order_index: number; active: number }
 interface Subtype { id: number; grade_level_id: number; name: string; order_index: number; active: number }
 interface Section { id: number; grade_level_id: number; subtype_id: number | null; name: string; active: number }
-interface Teacher { id: number; name: string; email: string }
-interface Assignment { id: number; teacher_id: number; grade_level_id: number | null; subtype_id: number | null; section_id: number | null; gl_name: string | null; sub_name: string | null; sec_name: string | null }
-
 function requireAdmin(role?: string) {
   return role === 'master_admin' || role === 'teacher_admin'
 }
@@ -54,18 +51,10 @@ export default function AcademicStructurePage() {
   const [deleteConfirm2, setDeleteConfirm2] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  // Teacher Assignments panel
-  const [assignmentsOpen, setAssignmentsOpen] = useState(false)
-  const [teachers, setTeachers] = useState<Teacher[]>([])
-  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null)
-  const [assignments, setAssignments] = useState<Assignment[]>([])
-  const [loadingAssignments, setLoadingAssignments] = useState(false)
-  const [addGl, setAddGl] = useState<number | ''>('')
-  const [addSub, setAddSub] = useState<number | ''>('')
-  const [addSec, setAddSec] = useState<number | ''>('')
-  const [addingAssignment, setAddingAssignment] = useState(false)
-  const [assignSubtypes, setAssignSubtypes] = useState<Subtype[]>([])
-  const [assignSections, setAssignSections] = useState<Section[]>([])
+  // Group label settings
+  const [l1, setL1] = useState('Group')
+  const [l2, setL2] = useState('Subgroup')
+  const [l3, setL3] = useState('Unit')
 
   useEffect(() => {
     if (user && !requireAdmin(user.role)) router.replace('/dashboard')
@@ -74,8 +63,8 @@ export default function AcademicStructurePage() {
   const fetchGrades = useCallback(async () => {
     setLoadingGrades(true)
     const [gradeRes, countRes] = await Promise.all([
-      fetch('/api/admin/academic/grade-levels'),
-      fetch('/api/admin/academic/grade-levels/user-counts').catch(() => null),
+      fetch('/api/admin/academic/grade-levels', { credentials: 'include' }),
+      fetch('/api/admin/academic/grade-levels/user-counts', { credentials: 'include' }).catch(() => null),
     ])
     const gradeJson = await gradeRes.json()
     setGradeLevels(gradeJson.data ?? [])
@@ -88,7 +77,7 @@ export default function AcademicStructurePage() {
     } else {
       // Fetch counts via a separate query inline
       try {
-        const cr = await fetch('/api/admin/academic/grade-levels?includeCounts=1')
+        const cr = await fetch('/api/admin/academic/grade-levels?includeCounts=1', { credentials: 'include' })
         const cj = await cr.json()
         if (cj.counts) setUserCounts(cj.counts)
       } catch { /* silent */ }
@@ -98,7 +87,7 @@ export default function AcademicStructurePage() {
 
   const fetchUserCounts = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/students?countByGrade=1')
+      const res = await fetch('/api/admin/students?countByGrade=1', { credentials: 'include' })
       const json = await res.json()
       if (json.counts) setUserCounts(json.counts)
     } catch { /* silent */ }
@@ -106,7 +95,7 @@ export default function AcademicStructurePage() {
 
   const fetchSubtypes = useCallback(async (gradeLevelId: number) => {
     setLoadingSubtypes(true)
-    const res = await fetch(`/api/admin/academic/subtypes?gradeLevelId=${gradeLevelId}`)
+    const res = await fetch(`/api/admin/academic/subtypes?gradeLevelId=${gradeLevelId}`, { credentials: 'include' })
     const json = await res.json()
     setSubtypes(json.data ?? [])
     setLoadingSubtypes(false)
@@ -117,13 +106,25 @@ export default function AcademicStructurePage() {
     const url = subtypeId != null
       ? `/api/admin/academic/sections?gradeLevelId=${gradeLevelId}&subtypeId=${subtypeId}`
       : `/api/admin/academic/sections?gradeLevelId=${gradeLevelId}`
-    const res = await fetch(url)
+    const res = await fetch(url, { credentials: 'include' })
     const json = await res.json()
     setSections(json.data ?? [])
     setLoadingSections(false)
   }, [])
 
   useEffect(() => { fetchGrades() }, [fetchGrades])
+
+  useEffect(() => {
+    fetch('/api/settings', { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => {
+        const s: Record<string, string> = j.data ?? {}
+        setL1(s.group_label_l1 ?? 'Group')
+        setL2(s.group_label_l2 ?? 'Subgroup')
+        setL3(s.group_label_l3 ?? 'Unit')
+      })
+      .catch(() => {})
+  }, [])
 
   const selectGrade = (gl: GradeLevel) => {
     setSelectedGrade(gl)
@@ -154,6 +155,7 @@ export default function AcademicStructurePage() {
     await fetch('/api/admin/academic/grade-levels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ name: newGradeName.trim() }),
     })
     setNewGradeName('')
@@ -167,6 +169,7 @@ export default function AcademicStructurePage() {
     await fetch(`/api/admin/academic/grade-levels/${editingGrade.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ name: editingGrade.name }),
     })
     setEditingGrade(null)
@@ -175,7 +178,7 @@ export default function AcademicStructurePage() {
   }
 
   const deleteGrade = async (gl: GradeLevel) => {
-    const res = await fetch(`/api/admin/academic/grade-levels/${gl.id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/admin/academic/grade-levels/${gl.id}`, { method: 'DELETE', credentials: 'include' })
     if (res.status === 409) {
       const json = await res.json()
       setDeleteModal({ type: 'grade', id: gl.id, name: gl.name, userCount: json.userCount, apiPath: `/api/admin/academic/grade-levels/${gl.id}` })
@@ -189,7 +192,7 @@ export default function AcademicStructurePage() {
   const forceDelete = async () => {
     if (!deleteModal) return
     setDeleting(true)
-    await fetch(`${deleteModal.apiPath}?force=true`, { method: 'DELETE' })
+    await fetch(`${deleteModal.apiPath}?force=true`, { method: 'DELETE', credentials: 'include' })
     setDeleteModal(null)
     setDeleteConfirm2(false)
     if (deleteModal.type === 'grade' && selectedGrade?.id === deleteModal.id) {
@@ -209,6 +212,7 @@ export default function AcademicStructurePage() {
     await fetch('/api/admin/academic/subtypes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ name: newSubtypeName.trim(), grade_level_id: selectedGrade.id }),
     })
     setNewSubtypeName('')
@@ -222,6 +226,7 @@ export default function AcademicStructurePage() {
     await fetch(`/api/admin/academic/subtypes/${editingSubtype.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ name: editingSubtype.name }),
     })
     setEditingSubtype(null)
@@ -230,7 +235,7 @@ export default function AcademicStructurePage() {
   }
 
   const deleteSubtype = async (st: Subtype) => {
-    const res = await fetch(`/api/admin/academic/subtypes/${st.id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/admin/academic/subtypes/${st.id}`, { method: 'DELETE', credentials: 'include' })
     if (res.status === 409) {
       const json = await res.json()
       setDeleteModal({ type: 'subtype', id: st.id, name: st.name, userCount: json.userCount, apiPath: `/api/admin/academic/subtypes/${st.id}` })
@@ -248,6 +253,7 @@ export default function AcademicStructurePage() {
     await fetch('/api/admin/academic/sections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         name: newSectionName.trim(),
         grade_level_id: selectedGrade.id,
@@ -265,6 +271,7 @@ export default function AcademicStructurePage() {
     await fetch(`/api/admin/academic/sections/${editingSection.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ name: editingSection.name }),
     })
     setEditingSection(null)
@@ -273,7 +280,7 @@ export default function AcademicStructurePage() {
   }
 
   const deleteSection = async (sec: Section) => {
-    const res = await fetch(`/api/admin/academic/sections/${sec.id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/admin/academic/sections/${sec.id}`, { method: 'DELETE', credentials: 'include' })
     if (res.status === 409) {
       const json = await res.json()
       setDeleteModal({ type: 'section', id: sec.id, name: sec.name, userCount: json.userCount, apiPath: `/api/admin/academic/sections/${sec.id}` })
@@ -283,81 +290,22 @@ export default function AcademicStructurePage() {
     if (selectedGrade) await fetchSections(selectedGrade.id, selectedSubtype?.id ?? null)
   }
 
-  // --- Teacher Assignments ---
-  const fetchTeachers = useCallback(async () => {
-    const res = await fetch('/api/users?role=teacher&limit=100')
-    const json = await res.json()
-    setTeachers(json.data?.users ?? json.data ?? [])
-  }, [])
-
-  const fetchAssignments = useCallback(async (teacherId: number) => {
-    setLoadingAssignments(true)
-    const res = await fetch(`/api/admin/teacher-assignments?teacherId=${teacherId}`)
-    const json = await res.json()
-    setAssignments(json.data ?? [])
-    setLoadingAssignments(false)
-  }, [])
-
-  useEffect(() => {
-    if (assignmentsOpen && teachers.length === 0) fetchTeachers()
-  }, [assignmentsOpen, teachers.length, fetchTeachers])
-
-  useEffect(() => {
-    if (selectedTeacher) fetchAssignments(selectedTeacher.id)
-  }, [selectedTeacher, fetchAssignments])
-
-  useEffect(() => {
-    if (addGl !== '') {
-      fetch(`/api/admin/academic/subtypes?gradeLevelId=${addGl}`).then(r => r.json()).then(j => setAssignSubtypes(j.data ?? []))
-      fetch(`/api/admin/academic/sections?gradeLevelId=${addGl}`).then(r => r.json()).then(j => setAssignSections(j.data ?? []))
-      setAddSub('')
-      setAddSec('')
-    } else {
-      setAssignSubtypes([])
-      setAssignSections([])
-    }
-  }, [addGl])
-
-  const addAssignment = async () => {
-    if (!selectedTeacher || addingAssignment) return
-    setAddingAssignment(true)
-    await fetch('/api/admin/teacher-assignments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        teacher_id: selectedTeacher.id,
-        grade_level_id: addGl !== '' ? Number(addGl) : null,
-        subtype_id: addSub !== '' ? Number(addSub) : null,
-        section_id: addSec !== '' ? Number(addSec) : null,
-      }),
-    })
-    setAddGl('')
-    setAddSub('')
-    setAddSec('')
-    await fetchAssignments(selectedTeacher.id)
-    setAddingAssignment(false)
-  }
-
-  const removeAssignment = async (id: number) => {
-    await fetch(`/api/admin/teacher-assignments/${id}`, { method: 'DELETE' })
-    if (selectedTeacher) await fetchAssignments(selectedTeacher.id)
-  }
-
   if (!user || !requireAdmin(user.role)) return null
 
-  const typeLabel = (m: DeleteConfirmModal) => m.type === 'grade' ? 'grade level' : m.type === 'subtype' ? 'subtype' : 'section'
+  const typeLabel = (m: DeleteConfirmModal) =>
+    m.type === 'grade' ? `${l1.toLowerCase()} level` : m.type === 'subtype' ? l2.toLowerCase() : l3.toLowerCase()
 
   return (
-    <Layout>
+    <AdminLayout>
       <div className="p-6 max-w-7xl mx-auto">
-        <h1 className="text-2xl font-bold text-white mb-1">Academic Structure</h1>
-        <p className="text-gray-400 text-sm mb-6">Manage grade levels, subtypes, and sections.</p>
+        <h1 className="text-2xl font-bold text-white mb-1">{l1} Structure</h1>
+        <p className="text-gray-400 text-sm mb-6">{`Manage ${l1.toLowerCase()} levels, ${l2.toLowerCase()}s, and ${l3.toLowerCase()}s.`}</p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Panel 1: Grade Levels */}
           <div className="bg-gray-900 rounded-xl border border-gray-800 flex flex-col">
             <div className="px-4 py-3 border-b border-gray-800">
-              <h2 className="text-sm font-semibold text-gray-200">Grade Levels</h2>
+              <h2 className="text-sm font-semibold text-gray-200">{l1} Levels</h2>
             </div>
             <div className="flex-1 overflow-y-auto divide-y divide-gray-800">
               {loadingGrades ? (
@@ -417,7 +365,7 @@ export default function AcademicStructurePage() {
             <div className="px-3 py-2.5 border-t border-gray-800 flex gap-2">
               <input
                 className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#84050C]"
-                placeholder="New grade level…"
+                placeholder={`New ${l1.toLowerCase()} level…`}
                 value={newGradeName}
                 onChange={(e) => setNewGradeName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') addGrade() }}
@@ -436,13 +384,13 @@ export default function AcademicStructurePage() {
           <div className="bg-gray-900 rounded-xl border border-gray-800 flex flex-col">
             <div className="px-4 py-3 border-b border-gray-800">
               <h2 className="text-sm font-semibold text-gray-200">
-                {selectedGrade ? `${selectedGrade.name} — Subtypes` : 'Subtypes'}
+                {selectedGrade ? `${selectedGrade.name} — ${l2}s` : `${l2}s`}
                 <span className="ml-1 text-gray-500 font-normal">(optional)</span>
               </h2>
             </div>
             {!selectedGrade ? (
               <div className="flex-1 flex items-center justify-center p-6 text-center text-gray-500 text-sm">
-                Select a grade level to manage its subtypes.
+                {`Select a ${l1.toLowerCase()} level to manage its ${l2.toLowerCase()}s.`}
               </div>
             ) : (
               <>
@@ -462,7 +410,7 @@ export default function AcademicStructurePage() {
                   {loadingSubtypes ? (
                     <div className="p-4 text-center text-gray-500 text-sm">Loading…</div>
                   ) : subtypes.length === 0 ? (
-                    <div className="p-4 text-center text-gray-500 text-sm">No subtypes. Sections can be added directly.</div>
+                    <div className="p-4 text-center text-gray-500 text-sm">{`No ${l2.toLowerCase()}s. ${l3}s can be added directly.`}</div>
                   ) : (
                     subtypes.map((st) => (
                       <div
@@ -511,7 +459,7 @@ export default function AcademicStructurePage() {
                 <div className="px-3 py-2.5 border-t border-gray-800 flex gap-2">
                   <input
                     className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#84050C]"
-                    placeholder="New subtype…"
+                    placeholder={`New ${l2.toLowerCase()}…`}
                     value={newSubtypeName}
                     onChange={(e) => setNewSubtypeName(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') addSubtype() }}
@@ -532,14 +480,14 @@ export default function AcademicStructurePage() {
           <div className="bg-gray-900 rounded-xl border border-gray-800 flex flex-col">
             <div className="px-4 py-3 border-b border-gray-800">
               <h2 className="text-sm font-semibold text-gray-200">
-                Sections
+                {l3}s
                 {selectedSubtype && <span className="ml-1 text-gray-400 font-normal">— {selectedSubtype.name}</span>}
                 {!selectedSubtype && selectedGrade && <span className="ml-1 text-gray-500 font-normal">(no subtype)</span>}
               </h2>
             </div>
             {!selectedGrade ? (
               <div className="flex-1 flex items-center justify-center p-6 text-center text-gray-500 text-sm">
-                Select a grade level to manage sections.
+                {`Select a ${l1.toLowerCase()} level to manage ${l3.toLowerCase()}s.`}
               </div>
             ) : (
               <>
@@ -547,7 +495,7 @@ export default function AcademicStructurePage() {
                   {loadingSections ? (
                     <div className="text-center text-gray-500 text-sm py-4">Loading…</div>
                   ) : sections.length === 0 ? (
-                    <div className="text-center text-gray-500 text-sm py-4">No sections yet.</div>
+                    <div className="text-center text-gray-500 text-sm py-4">{`No ${l3.toLowerCase()}s yet.`}</div>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {sections.map((sec) => (
@@ -591,7 +539,7 @@ export default function AcademicStructurePage() {
                 <div className="px-3 py-2.5 border-t border-gray-800 flex gap-2">
                   <input
                     className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#84050C]"
-                    placeholder="New section…"
+                    placeholder={`New ${l3.toLowerCase()}…`}
                     value={newSectionName}
                     onChange={(e) => setNewSectionName(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') addSection() }}
@@ -609,116 +557,6 @@ export default function AcademicStructurePage() {
           </div>
         </div>
 
-        {/* Teacher Assignments Panel */}
-        <div className="mt-6 bg-gray-900 rounded-xl border border-gray-800">
-          <button
-            className="w-full flex items-center justify-between px-5 py-4 text-left"
-            onClick={() => setAssignmentsOpen(v => !v)}
-          >
-            <div>
-              <h2 className="text-sm font-semibold text-gray-200">Teacher Assignments</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Assign teachers to grade levels, subtypes, or sections.</p>
-            </div>
-            <svg className={`w-5 h-5 text-gray-400 transition-transform ${assignmentsOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-          </button>
-
-          {assignmentsOpen && (
-            <div className="border-t border-gray-800 p-5 space-y-5">
-              {/* Teacher picker */}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Select Teacher</label>
-                <select
-                  className="w-full max-w-xs bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-[#84050C]"
-                  value={selectedTeacher?.id ?? ''}
-                  onChange={(e) => {
-                    const t = teachers.find(t => t.id === Number(e.target.value)) ?? null
-                    setSelectedTeacher(t)
-                    setAssignments([])
-                  }}
-                >
-                  <option value="">-- Pick a teacher --</option>
-                  {teachers.map(t => <option key={t.id} value={t.id}>{t.name} ({t.email})</option>)}
-                </select>
-              </div>
-
-              {selectedTeacher && (
-                <>
-                  {/* Current assignments */}
-                  <div>
-                    <p className="text-xs font-medium text-gray-400 mb-2">Current Assignments</p>
-                    {loadingAssignments ? (
-                      <p className="text-xs text-gray-500">Loading…</p>
-                    ) : assignments.length === 0 ? (
-                      <p className="text-xs text-gray-500">No assignments yet.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {assignments.map(a => (
-                          <div key={a.id} className="flex items-center gap-1.5 bg-gray-800 border border-gray-700 rounded-full px-3 py-1 text-xs text-gray-300">
-                            <span>{[a.gl_name, a.sub_name, a.sec_name].filter(Boolean).join(' › ') || 'All'}</span>
-                            <button onClick={() => removeAssignment(a.id)} className="text-gray-500 hover:text-red-400 ml-1">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Add assignment */}
-                  <div>
-                    <p className="text-xs font-medium text-gray-400 mb-2">Add Assignment</p>
-                    <div className="flex flex-wrap gap-2 items-end">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Grade Level</label>
-                        <select
-                          className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#84050C]"
-                          value={addGl}
-                          onChange={(e) => setAddGl(e.target.value === '' ? '' : Number(e.target.value))}
-                        >
-                          <option value="">-- Any --</option>
-                          {gradeLevels.map(gl => <option key={gl.id} value={gl.id}>{gl.name}</option>)}
-                        </select>
-                      </div>
-                      {assignSubtypes.length > 0 && (
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">Subtype</label>
-                          <select
-                            className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#84050C]"
-                            value={addSub}
-                            onChange={(e) => setAddSub(e.target.value === '' ? '' : Number(e.target.value))}
-                          >
-                            <option value="">-- Any --</option>
-                            {assignSubtypes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                          </select>
-                        </div>
-                      )}
-                      {assignSections.length > 0 && (
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">Section</label>
-                          <select
-                            className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#84050C]"
-                            value={addSec}
-                            onChange={(e) => setAddSec(e.target.value === '' ? '' : Number(e.target.value))}
-                          >
-                            <option value="">-- Any --</option>
-                            {assignSections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                          </select>
-                        </div>
-                      )}
-                      <button
-                        onClick={addAssignment}
-                        disabled={addingAssignment}
-                        className="px-3 py-1.5 bg-[#84050C] text-white text-sm rounded hover:bg-[#9e0610] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {addingAssignment ? 'Adding…' : 'Add'}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Safe delete confirmation modal */}
@@ -729,18 +567,18 @@ export default function AcademicStructurePage() {
               <>
                 <h3 className="text-base font-semibold text-white">Cannot Delete {deleteModal.name}</h3>
                 <p className="text-sm text-gray-300">
-                  This {typeLabel(deleteModal)} has <strong className="text-white">{deleteModal.userCount} student(s)</strong> assigned.
+                  This {typeLabel(deleteModal)} has <strong className="text-white">{deleteModal.userCount} member(s)</strong> assigned.
                   You must remove them before deleting.
                 </p>
                 <p className="text-sm text-gray-400">
-                  You can force-delete — this will clear all students&apos; {typeLabel(deleteModal)} info and flag them for re-verification.
+                  You can force-delete — this will clear all members&apos; {typeLabel(deleteModal)} info and flag them for re-verification.
                 </p>
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={() => setDeleteConfirm2(true)}
                     className="flex-1 px-4 py-2 bg-red-700 hover:bg-red-600 text-white text-sm rounded-lg font-medium transition-colors"
                   >
-                    Remove all students &amp; delete
+                    Remove all members &amp; delete
                   </button>
                   <button
                     onClick={() => setDeleteModal(null)}
@@ -754,7 +592,7 @@ export default function AcademicStructurePage() {
               <>
                 <h3 className="text-base font-semibold text-white">Are you sure?</h3>
                 <p className="text-sm text-gray-300">
-                  This will reset <strong className="text-white">{deleteModal.userCount} student(s)</strong>&apos; school information and require re-verification. This cannot be undone.
+                  This will reset <strong className="text-white">{deleteModal.userCount} member(s)</strong>&apos; school information and require re-verification. This cannot be undone.
                 </p>
                 <div className="flex gap-3 pt-2">
                   <button
@@ -762,7 +600,7 @@ export default function AcademicStructurePage() {
                     disabled={deleting}
                     className="flex-1 px-4 py-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-sm rounded-lg font-medium transition-colors"
                   >
-                    {deleting ? 'Deleting…' : 'Yes, delete and reset students'}
+                    {deleting ? 'Deleting…' : 'Yes, delete and reset members'}
                   </button>
                   <button
                     onClick={() => { setDeleteModal(null); setDeleteConfirm2(false) }}
@@ -776,6 +614,6 @@ export default function AcademicStructurePage() {
           </div>
         </div>
       )}
-    </Layout>
+    </AdminLayout>
   )
 }

@@ -1,3 +1,4 @@
+﻿export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { db, ensureInit } from '@/lib/db'

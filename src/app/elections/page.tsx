@@ -169,7 +169,7 @@ export default function ElectionsPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<FilterTab>('all')
 
-  const adminRoles = ['master_admin', 'teacher_admin', 'student_admin']
+  const adminRoles = ['master_admin', 'admin', 'moderator', 'teacher_admin', 'student_admin']
   const isAdmin = user ? adminRoles.includes(user.role) : false
   const idVerified = !!user?.id_verified
 
@@ -227,7 +227,7 @@ export default function ElectionsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Elections</h1>
-            <p className="text-sm text-gray-500 mt-1">Browse and participate in school elections</p>
+            <p className="text-sm text-gray-500 mt-1">Browse and participate in community elections</p>
           </div>
           {isAdmin && (
             <Link
@@ -241,6 +241,18 @@ export default function ElectionsPage() {
             </Link>
           )}
         </div>
+
+        {/* Unverified warning */}
+        {!idVerified && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3 text-sm text-amber-700">
+            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>Your identity must be verified to vote.{' '}
+              <a href="/verify-id" className="underline font-medium">Upload ID →</a>
+            </span>
+          </div>
+        )}
 
         {/* Filter Tabs */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
