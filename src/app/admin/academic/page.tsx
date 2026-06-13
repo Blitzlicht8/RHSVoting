@@ -233,7 +233,6 @@ export default function AcademicStructurePage() {
   useEffect(() => { fetchAllVerifiers() }, [fetchAllVerifiers])
 
   const loadGroupStructure = async () => {
-    if (groupStructure.length > 0) return
     setLoadingStructure(true)
     try {
       const res = await fetch('/api/admin/academic/structure', { credentials: 'include' })
@@ -242,6 +241,14 @@ export default function AcademicStructurePage() {
     } finally {
       setLoadingStructure(false)
     }
+  }
+
+  const removeVerifier = async (userId: number) => {
+    const ids = allVerifierRows.filter(r => r.user_id === userId).map(r => r.id)
+    await Promise.all(ids.map(id =>
+      fetch(`/api/admin/academic/verifiers/${id}`, { method: 'DELETE', credentials: 'include' })
+    ))
+    await fetchAllVerifiers()
   }
 
   const loadUserAssignments = useCallback(async (userId: number): Promise<VerifierAssignment[]> => {
@@ -390,7 +397,7 @@ export default function AcademicStructurePage() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ name: newGradeName.trim() }),
     })
-    setNewGradeName(''); await fetchGrades(); setSaving(false)
+    setNewGradeName(''); await fetchGrades(); loadGroupStructure(); setSaving(false)
   }
   const saveGrade = async () => {
     if (!editingGrade || saving) return
@@ -399,7 +406,7 @@ export default function AcademicStructurePage() {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ name: editingGrade.name }),
     })
-    setEditingGrade(null); await fetchGrades(); setSaving(false)
+    setEditingGrade(null); await fetchGrades(); loadGroupStructure(); setSaving(false)
   }
   const deleteGrade = async (gl: GradeLevel) => {
     const res = await fetch(`/api/admin/academic/grade-levels/${gl.id}`, { method: 'DELETE', credentials: 'include' })
@@ -409,7 +416,7 @@ export default function AcademicStructurePage() {
       setDeleteConfirm2(false); return
     }
     if (selectedGrade?.id === gl.id) { setSelectedGrade(null); setSubtypes([]); setSections([]) }
-    await fetchGrades()
+    await fetchGrades(); loadGroupStructure()
   }
   const forceDelete = async () => {
     if (!deleteModal) return
@@ -423,6 +430,7 @@ export default function AcademicStructurePage() {
     await fetchGrades()
     if (selectedGrade && deleteModal.type === 'subtype') await fetchSubtypes(selectedGrade.id)
     if (selectedGrade && deleteModal.type === 'section') await fetchSections(selectedGrade.id, selectedSubtype?.id ?? null)
+    loadGroupStructure()
     setDeleting(false)
   }
 
@@ -434,7 +442,7 @@ export default function AcademicStructurePage() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ name: newSubtypeName.trim(), grade_level_id: selectedGrade.id }),
     })
-    setNewSubtypeName(''); await fetchSubtypes(selectedGrade.id); setSaving(false)
+    setNewSubtypeName(''); await fetchSubtypes(selectedGrade.id); loadGroupStructure(); setSaving(false)
   }
   const saveSubtype = async () => {
     if (!editingSubtype || saving) return
@@ -443,7 +451,7 @@ export default function AcademicStructurePage() {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ name: editingSubtype.name }),
     })
-    setEditingSubtype(null); if (selectedGrade) await fetchSubtypes(selectedGrade.id); setSaving(false)
+    setEditingSubtype(null); if (selectedGrade) await fetchSubtypes(selectedGrade.id); loadGroupStructure(); setSaving(false)
   }
   const deleteSubtype = async (st: Subtype) => {
     const res = await fetch(`/api/admin/academic/subtypes/${st.id}`, { method: 'DELETE', credentials: 'include' })
@@ -454,6 +462,7 @@ export default function AcademicStructurePage() {
     }
     if (selectedSubtype?.id === st.id) clearSubtype()
     if (selectedGrade) await fetchSubtypes(selectedGrade.id)
+    loadGroupStructure()
   }
 
   // --- Section CRUD ---
@@ -464,7 +473,7 @@ export default function AcademicStructurePage() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ name: newSectionName.trim(), grade_level_id: selectedGrade.id, subtype_id: selectedSubtype?.id ?? null }),
     })
-    setNewSectionName(''); await fetchSections(selectedGrade.id, selectedSubtype?.id ?? null); setSaving(false)
+    setNewSectionName(''); await fetchSections(selectedGrade.id, selectedSubtype?.id ?? null); loadGroupStructure(); setSaving(false)
   }
   const saveSection = async () => {
     if (!editingSection || saving) return
@@ -473,7 +482,7 @@ export default function AcademicStructurePage() {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ name: editingSection.name }),
     })
-    setEditingSection(null); if (selectedGrade) await fetchSections(selectedGrade.id, selectedSubtype?.id ?? null); setSaving(false)
+    setEditingSection(null); if (selectedGrade) await fetchSections(selectedGrade.id, selectedSubtype?.id ?? null); loadGroupStructure(); setSaving(false)
   }
   const deleteSection = async (sec: Section) => {
     const res = await fetch(`/api/admin/academic/sections/${sec.id}`, { method: 'DELETE', credentials: 'include' })
@@ -483,6 +492,7 @@ export default function AcademicStructurePage() {
       setDeleteConfirm2(false); return
     }
     if (selectedGrade) await fetchSections(selectedGrade.id, selectedSubtype?.id ?? null)
+    loadGroupStructure()
   }
 
   if (!user || !requireAdmin(user.role)) return null
@@ -728,23 +738,35 @@ export default function AcademicStructurePage() {
                           })}
                         </div>
                       </div>
-                      <button
-                        onClick={() => {
-                          const eligible: EligibleUser = {
-                            id: u.user_id,
+                      <div className="flex gap-1.5 shrink-0 mt-0.5">
+                        <button
+                          onClick={() => {
+                            const eligible: EligibleUser = {
+                              id: u.user_id,
+                              name: u.user_name,
+                              role: u.user_role,
+                              avatar_url: u.user_avatar_url,
+                              grade_level_id: rows[0].grade_level_id,
+                              subtype_id: rows[0].subtype_id,
+                              section_id: rows[0].section_id,
+                            }
+                            selectVerifier(eligible)
+                          }}
+                          className="text-xs text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 px-2.5 py-1 rounded transition-colors"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => setPendingSimpleDelete({
                             name: u.user_name,
-                            role: u.user_role,
-                            avatar_url: u.user_avatar_url,
-                            grade_level_id: rows[0].grade_level_id,
-                            subtype_id: rows[0].subtype_id,
-                            section_id: rows[0].section_id,
-                          }
-                          selectVerifier(eligible)
-                        }}
-                        className="shrink-0 text-xs text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 px-2.5 py-1 rounded transition-colors mt-0.5"
-                      >
-                        Edit
-                      </button>
+                            label: 'verifier',
+                            onConfirm: () => removeVerifier(u.user_id),
+                          })}
+                          className="text-xs text-gray-400 hover:text-red-400 bg-gray-700 hover:bg-gray-700 px-2.5 py-1 rounded transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   )
                 })
