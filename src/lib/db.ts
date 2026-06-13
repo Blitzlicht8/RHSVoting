@@ -353,6 +353,7 @@ async function _init(): Promise<void> {
     `ALTER TABLE candidates ADD COLUMN user_id INTEGER`,
     `ALTER TABLE users ADD COLUMN needs_academic_update INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE users ADD COLUMN verification_status TEXT`,
+    `ALTER TABLE verification_requests ADD COLUMN updated_at TEXT`,
   ]
   for (const sql of newColumns) {
     await db.execute({ sql, args: [] }).catch(() => {})
