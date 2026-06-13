@@ -214,7 +214,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   await logActivity(authUser.id, 'user_edited', `Admin edited user ${targetId}: ${Object.keys(body).join(', ')}`, ip)
 
   const updated = await db.execute({
-    sql: `SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at, updated_at
+    sql: `SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at, updated_at, avatar_url, bio
           FROM users WHERE id = ?`,
     args: [targetId],
   })

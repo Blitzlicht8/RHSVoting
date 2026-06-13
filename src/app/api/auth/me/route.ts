@@ -12,7 +12,7 @@ export async function GET(_request: NextRequest) {
   }
 
   const result = await db.execute({
-    sql: 'SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at FROM users WHERE id = ?',
+    sql: 'SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at, avatar_url FROM users WHERE id = ?',
     args: [authUser.id],
   })
   const user = result.rows[0]
