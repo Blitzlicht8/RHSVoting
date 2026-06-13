@@ -9,7 +9,7 @@ interface GradeLevel { id: number; name: string; order_index: number; active: nu
 interface Subtype { id: number; grade_level_id: number; name: string; order_index: number; active: number }
 interface Section { id: number; grade_level_id: number; subtype_id: number | null; name: string; active: number }
 function requireAdmin(role?: string) {
-  return role === 'master_admin' || role === 'teacher_admin'
+  return role === 'master_admin' || role === 'admin'
 }
 
 interface DeleteConfirmModal {

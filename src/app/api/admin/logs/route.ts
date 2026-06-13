@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   await ensureInit()
   const authUser = await getAuthUser()
   if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const allowed = ['master_admin', 'teacher_admin']
+  const allowed = ['master_admin', 'admin']
   if (!allowed.includes(authUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)

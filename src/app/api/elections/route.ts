@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   const admin = isAdmin(authUser.role)
   const role = authUser.role as string
-  const isStudentRole = role === 'student' || role === 'student_admin'
+  const isStudentRole = role === 'member' || role === 'moderator'
 
   let whereClause = admin ? '' : `WHERE e.status IN ('active', 'ended')`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -169,7 +169,7 @@ export default function ElectionsPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<FilterTab>('all')
 
-  const adminRoles = ['master_admin', 'admin', 'moderator', 'teacher_admin', 'student_admin']
+  const adminRoles = ['master_admin', 'admin', 'moderator']
   const isAdmin = user ? adminRoles.includes(user.role) : false
   const idVerified = !!user?.id_verified
 

@@ -11,7 +11,7 @@ import LightboxModal from '@/components/ui/LightboxModal'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 
-type Role = 'master_admin' | 'admin' | 'moderator' | 'staff' | 'member' | 'teacher_admin' | 'student_admin' | 'teacher' | 'student'
+type Role = 'master_admin' | 'admin' | 'moderator' | 'staff' | 'member'
 
 interface UserRow {
   id: number
@@ -53,11 +53,6 @@ const ROLE_LABELS: Record<string, string> = {
   moderator: 'Moderator',
   staff: 'Staff',
   member: 'Member',
-  // legacy display
-  teacher_admin: 'Admin (Legacy)',
-  student_admin: 'Mod (Legacy)',
-  teacher: 'Staff (Legacy)',
-  student: 'Member (Legacy)',
 }
 
 const ROLE_BADGE: Record<string, 'danger' | 'warning' | 'purple' | 'info' | 'default'> = {
@@ -66,30 +61,25 @@ const ROLE_BADGE: Record<string, 'danger' | 'warning' | 'purple' | 'info' | 'def
   moderator: 'purple',
   staff: 'info',
   member: 'default',
-  teacher_admin: 'warning',
-  student_admin: 'purple',
-  teacher: 'info',
-  student: 'default',
 }
 
 const ALL_ROLES: Role[] = ['master_admin', 'admin', 'moderator', 'staff', 'member']
 
 const ROLE_LEVEL: Record<string, number> = {
   member: 0, staff: 1, moderator: 2, admin: 3, master_admin: 4,
-  student: 0, teacher: 1, student_admin: 2, teacher_admin: 3,
 }
 
 function getAssignableRoles(currentUserRole: Role): Role[] {
   if (currentUserRole === 'master_admin') return ALL_ROLES
-  if (currentUserRole === 'admin' || currentUserRole === 'teacher_admin') return ['moderator', 'staff', 'member']
-  if (currentUserRole === 'moderator' || currentUserRole === 'student_admin') return ['member']
+  if (currentUserRole === 'admin') return ['moderator', 'staff', 'member']
+  if (currentUserRole === 'moderator') return ['member']
   return []
 }
 
 function canDeleteUser(actorRole: Role, target: UserRow, selfId: number): boolean {
   if (target.id === selfId) return false
   if (actorRole === 'master_admin') return true
-  if (actorRole === 'admin' || actorRole === 'teacher_admin') return (ROLE_LEVEL[target.role] ?? 0) < ROLE_LEVEL['admin']
+  if (actorRole === 'admin') return (ROLE_LEVEL[target.role] ?? 0) < ROLE_LEVEL['admin']
   return false
 }
 
@@ -196,9 +186,7 @@ export default function UsersPage() {
   const isAdmin =
     currentUser?.role === 'master_admin' ||
     currentUser?.role === 'admin' ||
-    currentUser?.role === 'teacher_admin' ||
-    currentUser?.role === 'moderator' ||
-    currentUser?.role === 'student_admin'
+    currentUser?.role === 'moderator'
 
   const fetchUsers = useCallback(async (p: number, s: string, r: string) => {
     setLoading(true)
@@ -511,10 +499,10 @@ export default function UsersPage() {
   }
 
   const assignableRoles = currentUser ? getAssignableRoles(currentUser.role as Role) : []
-  const canVerify = currentUser?.role === 'master_admin' || currentUser?.role === 'teacher_admin'
+  const canVerify = currentUser?.role === 'master_admin' || currentUser?.role === 'admin'
   const totalPages = data ? Math.ceil(data.total / 20) : 1
-  const isStudentRole = createForm.role === 'student' || createForm.role === 'student_admin'
-  const isEditStudentRole = editForm.role === 'student' || editForm.role === 'student_admin'
+  const isStudentRole = createForm.role === 'member'
+  const isEditStudentRole = editForm.role === 'member'
 
   return (
     <AdminLayout>
@@ -532,7 +520,7 @@ export default function UsersPage() {
               onClick={() => {
                 setShowCreateModal(true)
                 setCreateForm({
-                  name: '', email: '', password: generatePassword(), role: 'student',
+                  name: '', email: '', password: generatePassword(), role: 'member',
                   grade_level_id: '', subtype_id: '', section_id: '',
                   email_verified: true, id_verified: false,
                 })
@@ -982,7 +970,7 @@ export default function UsersPage() {
                 onChange={(e) => setEditForm(f => ({ ...f, role: e.target.value as Role, grade_level_id: '', subtype_id: '', section_id: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
               >
-                {(currentUser?.role === 'master_admin' ? ALL_ROLES : (['student', 'teacher', 'student_admin'] as Role[])).map((r) => (
+                {(currentUser?.role === 'master_admin' ? ALL_ROLES : (['member', 'staff'] as Role[])).map((r) => (
                   <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                 ))}
               </select>
@@ -1237,7 +1225,7 @@ export default function UsersPage() {
             </select>
           </div>
 
-          {/* Academic fields for student / student_admin */}
+          {/* Academic fields for member / moderator */}
           {isStudentRole && (
             <>
               {/* Grade Level */}

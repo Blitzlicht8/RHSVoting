@@ -508,9 +508,9 @@ export default function ElectionDetailPage() {
   const [myVoteCandidateIds, setMyVoteCandidateIds] = useState<number[]>([])
   const [loading, setLoading] = useState(true)
 
-  const adminRoles = ['master_admin', 'admin', 'moderator', 'teacher_admin', 'student_admin']
+  const adminRoles = ['master_admin', 'admin', 'moderator']
   const isAdmin = user ? adminRoles.includes(user.role) : false
-  const isStudentRole = user ? (user.role === 'student' || user.role === 'student_admin') : false
+  const isStudentRole = user ? user.role === 'member' : false
   const idVerified = !!user?.id_verified
 
   const fetchElection = useCallback(async () => {

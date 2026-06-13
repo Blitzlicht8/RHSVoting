@@ -117,7 +117,7 @@ export default function SettingsPage() {
   const [showAddReq, setShowAddReq] = useState(false)
   const addReqRef = useRef<HTMLInputElement>(null)
 
-  const canEditSettings = ['master_admin', 'admin', 'teacher_admin'].includes(user?.role ?? '')
+  const canEditSettings = ['master_admin', 'admin'].includes(user?.role ?? '')
 
   useEffect(() => {
     if (!authLoading && user && !canEditSettings) {
@@ -262,7 +262,7 @@ export default function SettingsPage() {
           <div className="text-center">
             <div className="text-4xl mb-3">🔒</div>
             <h2 className="text-xl font-semibold text-gray-900">Access Denied</h2>
-            <p className="text-gray-500 mt-1">Teacher Admin or above required.</p>
+            <p className="text-gray-500 mt-1">Admin or above required.</p>
           </div>
         </div>
       </AdminLayout>
@@ -270,7 +270,7 @@ export default function SettingsPage() {
   }
 
   const isMaster = user.role === 'master_admin'
-  const canToggle = ['master_admin', 'admin', 'teacher_admin'].includes(user.role)
+  const canToggle = ['master_admin', 'admin'].includes(user.role)
   const autoVerifyOn = settings['auto_verify_id'] === 'true'
   const otpRequiredOn = settings['otp_required_login'] === 'true'
 
@@ -385,7 +385,7 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Verification Requirements — visible to teacher_admin+ */}
+          {/* Verification Requirements — visible to admin+ */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-base font-semibold text-gray-900">Verification Requirements</h2>

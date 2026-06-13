@@ -53,7 +53,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   if (!commentRow.rows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const row = commentRow.rows[0]
-  const isAdmin = ['master_admin', 'teacher_admin', 'student_admin'].includes(authUser.role as string)
+  const isAdmin = ['master_admin', 'admin', 'moderator'].includes(authUser.role as string)
   const isCommentOwner = Number(row.author_id) === authUser.id
   const isPostOwner = Number(row.post_author_id) === authUser.id
   if (!isAdmin && !isCommentOwner && !isPostOwner) {

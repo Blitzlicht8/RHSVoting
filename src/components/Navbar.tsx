@@ -106,7 +106,7 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
               >
                 My Profile
               </Link>
-              {user && ['master_admin', 'admin', 'moderator', 'teacher_admin', 'student_admin'].includes(user.role) && (
+              {user && ['master_admin', 'admin', 'moderator'].includes(user.role) && (
                 <Link
                   href="/admin/users"
                   onClick={() => setShowDropdown(false)}

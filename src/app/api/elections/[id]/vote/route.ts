@@ -19,7 +19,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   }
 
   const role = authUser.role as string
-  const isStudentRole = role === 'student' || role === 'student_admin'
+  const isStudentRole = role === 'member' || role === 'moderator'
 
   if (isStudentRole) {
     // Students only see their own vote selections — no aggregates

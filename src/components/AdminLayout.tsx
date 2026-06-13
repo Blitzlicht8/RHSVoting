@@ -32,14 +32,14 @@ const ADMIN_NAV: AdminNavItem[] = [
   { href: '/admin/users', label: 'Members', icon: <Users className="w-5 h-5" /> },
   { href: '/admin/academic', label: 'Group Structure', icon: <BookOpen className="w-5 h-5" /> },
   { href: '/admin/elections', label: 'Manage Elections', icon: <ListChecks className="w-5 h-5" /> },
-  { href: '/admin/reports', label: 'Reports', icon: <Flag className="w-5 h-5" />, roles: ['master_admin', 'admin', 'teacher_admin'] },
-  { href: '/admin/logs', label: 'Activity Logs', icon: <FileText className="w-5 h-5" />, roles: ['master_admin', 'admin', 'teacher_admin'] },
-  { href: '/admin/settings', label: 'Settings', icon: <Settings className="w-5 h-5" />, roles: ['master_admin', 'admin', 'teacher_admin'] },
+  { href: '/admin/reports', label: 'Reports', icon: <Flag className="w-5 h-5" />, roles: ['master_admin', 'admin'] },
+  { href: '/admin/logs', label: 'Activity Logs', icon: <FileText className="w-5 h-5" />, roles: ['master_admin', 'admin'] },
+  { href: '/admin/settings', label: 'Settings', icon: <Settings className="w-5 h-5" />, roles: ['master_admin', 'admin'] },
   { href: '/admin/roles', label: 'Roles & Permissions', icon: <Shield className="w-5 h-5" />, roles: ['master_admin'] },
 ]
 
 function isAdminRole(role: string): boolean {
-  return ['master_admin', 'admin', 'moderator', 'teacher_admin', 'student_admin'].includes(role)
+  return ['master_admin', 'admin', 'moderator'].includes(role)
 }
 
 interface AdminLayoutProps {

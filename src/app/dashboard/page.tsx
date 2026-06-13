@@ -136,7 +136,7 @@ export default function DashboardPage() {
   const [pendingVerifications, setPendingVerifications] = useState<number>(0)
   const [loading, setLoading] = useState(true)
 
-  const adminRoles = ['master_admin', 'teacher_admin', 'student_admin']
+  const adminRoles = ['master_admin', 'admin', 'moderator']
   const isAdmin = user ? adminRoles.includes(user.role) : false
 
   useEffect(() => {

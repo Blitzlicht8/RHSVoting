@@ -51,10 +51,10 @@ const STATUS_BADGE: Record<VerifStatus, 'warning' | 'success' | 'danger'> = {
 
 const ROLE_LABELS: Record<string, string> = {
   master_admin: 'Master Admin',
-  teacher_admin: 'Teacher Admin',
-  student_admin: 'Student Admin',
-  teacher: 'Teacher',
-  student: 'Student',
+  admin: 'Admin',
+  moderator: 'Moderator',
+  staff: 'Staff',
+  member: 'Member',
 }
 
 const AVATAR_COLORS = [
@@ -250,8 +250,8 @@ export default function VerificationsPage() {
         {/* Header */}
         <h1 className="text-2xl font-bold text-gray-900 mb-4">ID Verifications</h1>
 
-        {/* Teacher-scoped note */}
-        {user?.role === 'teacher' && (
+        {/* Staff-scoped note */}
+        {user?.role === 'staff' && (
           <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 flex items-center gap-2 text-sm text-blue-700">
             <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>
             Showing requests for your assigned grades and sections only.
@@ -350,9 +350,9 @@ export default function VerificationsPage() {
                       <Badge variant="info" size="sm">
                         {ROLE_LABELS[req.user_role] || req.user_role}
                       </Badge>
-                      {req.intended_role === 'student' && (
+                      {req.intended_role === 'member' && (
                         <>
-                          <Badge variant="default" size="sm">Student</Badge>
+                          <Badge variant="default" size="sm">Member</Badge>
                           {(req as any).grade_level_name ? (
                             <span className="text-xs text-gray-500">
                               {(req as any).grade_level_name}{(req as any).section_name ? ` · ${(req as any).section_name}` : ''}
@@ -367,8 +367,8 @@ export default function VerificationsPage() {
                           ) : null}
                         </>
                       )}
-                      {req.intended_role === 'teacher' && (
-                        <Badge variant="default" size="sm">Teacher</Badge>
+                      {req.intended_role === 'staff' && (
+                        <Badge variant="default" size="sm">Staff</Badge>
                       )}
                       {req.doc_type && (
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-[#FEE2E2]/60 text-[#6B0409] border border-[#FEE2E2]">
@@ -469,7 +469,7 @@ export default function VerificationsPage() {
                 <div className="text-xs text-gray-500">{selectedImageRequest.user_email}</div>
                 {selectedImageRequest.intended_role === 'student' && (
                   <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                    <Badge variant="default" size="sm">Student</Badge>
+                    <Badge variant="default" size="sm">Member</Badge>
                     {selectedImageRequest.grade_level && (
                       <span className="text-xs text-gray-500">Grade {selectedImageRequest.grade_level}</span>
                     )}
@@ -480,7 +480,7 @@ export default function VerificationsPage() {
                 )}
                 {selectedImageRequest.intended_role === 'teacher' && (
                   <div className="mt-0.5">
-                    <Badge variant="default" size="sm">Teacher</Badge>
+                    <Badge variant="default" size="sm">Staff</Badge>
                   </div>
                 )}
               </div>

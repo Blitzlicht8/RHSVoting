@@ -1,4 +1,4 @@
-export type Role = 'master_admin' | 'teacher_admin' | 'student_admin' | 'teacher' | 'student' | 'admin' | 'moderator' | 'member' | string;
+export type Role = 'master_admin' | 'admin' | 'moderator' | 'staff' | 'member' | string;
 
 export type ElectionStatus = 'draft' | 'active' | 'ended';
 

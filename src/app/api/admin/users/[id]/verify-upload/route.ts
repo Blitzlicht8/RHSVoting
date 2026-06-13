@@ -8,7 +8,7 @@ import { logActivity } from '@/lib/logger'
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   await ensureInit()
   const authUser = await getAuthUser()
-  if (!authUser || !['master_admin', 'teacher_admin'].includes(authUser.role as string))
+  if (!authUser || !['master_admin', 'admin'].includes(authUser.role as string))
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const targetId = parseInt(params.id)

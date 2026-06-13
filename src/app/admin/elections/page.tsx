@@ -59,8 +59,8 @@ export default function ElectionsPage() {
 
   const isAdmin =
     user?.role === 'master_admin' ||
-    user?.role === 'teacher_admin' ||
-    user?.role === 'student_admin'
+    user?.role === 'admin' ||
+    user?.role === 'moderator'
 
   const fetchElections = useCallback(async () => {
     setLoading(true)

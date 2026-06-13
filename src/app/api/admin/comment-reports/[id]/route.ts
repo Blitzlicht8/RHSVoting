@@ -6,7 +6,7 @@ import { getAuthUser } from '@/lib/auth'
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   await ensureInit()
   const auth = await getAuthUser()
-  if (!auth || !['master_admin', 'teacher_admin', 'admin'].includes(auth.role as string))
+  if (!auth || !['master_admin', 'admin'].includes(auth.role as string))
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { action } = await req.json()
   const id = parseInt(params.id)

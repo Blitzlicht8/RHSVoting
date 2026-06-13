@@ -37,7 +37,7 @@ export async function PATCH(request: NextRequest) {
   const authUser = await getAuthUser()
   if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const canEdit = ['master_admin', 'admin', 'teacher_admin'].includes(authUser.role as string)
+  const canEdit = ['master_admin', 'admin'].includes(authUser.role as string)
   if (!canEdit) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await request.json()

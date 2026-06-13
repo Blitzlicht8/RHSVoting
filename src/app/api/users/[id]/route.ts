@@ -6,24 +6,19 @@ import { logActivity } from '@/lib/logger'
 import { Role } from '@/types'
 import { InValue } from '@libsql/client'
 
-const ALL_ROLES: Role[] = ['master_admin', 'admin', 'moderator', 'staff', 'member', 'teacher_admin', 'student_admin', 'teacher', 'student']
+const ALL_ROLES: Role[] = ['master_admin', 'admin', 'moderator', 'staff', 'member']
 
 const ROLE_LEVEL: Record<string, number> = {
   member: 0,
   staff: 1,
   moderator: 2,
   admin: 3,
-  student: 0,
-  teacher: 1,
-  student_admin: 2,
-  teacher_admin: 3,
   master_admin: 4,
 }
 
 function canDelete(actorRole: string, targetRole: string): boolean {
   if (actorRole === 'master_admin') return true
   if (actorRole === 'admin') return (ROLE_LEVEL[targetRole] ?? -1) < ROLE_LEVEL['admin']
-  if (actorRole === 'teacher_admin') return (ROLE_LEVEL[targetRole] ?? -1) < ROLE_LEVEL['teacher_admin']
   return false
 }
 
@@ -95,10 +90,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
   const existingUser = existing.rows[0]
 
-  // Role hierarchy check: teacher_admin cannot edit users of equal or higher role
+  // Role hierarchy check: admin cannot edit users of equal or higher role
   const actorLevel = ROLE_LEVEL[authUser.role as string] ?? -1
   const targetLevel = ROLE_LEVEL[existingUser.role as string] ?? -1
-  if (authUser.role === 'teacher_admin' && targetLevel >= ROLE_LEVEL['teacher_admin']) {
+  if (authUser.role === 'admin' && targetLevel >= ROLE_LEVEL['admin']) {
     return NextResponse.json({ error: 'Cannot edit users of equal or higher role' }, { status: 403 })
   }
 
@@ -123,7 +118,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (!ALL_ROLES.includes(body.role as Role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
     }
-    const adminOnlyRoles: Role[] = ['master_admin', 'teacher_admin', 'student_admin']
+    const adminOnlyRoles: Role[] = ['master_admin', 'admin']
     if (authUser.role !== 'master_admin' && adminOnlyRoles.includes(body.role as Role)) {
       return NextResponse.json({ error: 'Only master_admin can assign admin roles' }, { status: 403 })
     }
@@ -131,7 +126,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     values.push(body.role)
   }
 
-  const canVerify = ['master_admin', 'teacher_admin'].includes(authUser.role as string)
+  const canVerify = ['master_admin', 'admin'].includes(authUser.role as string)
 
   if (body.email_verified !== undefined && canVerify) {
     setClauses.push('email_verified = ?')
@@ -236,7 +231,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   }
 
   const actorRole = authUser.role as string
-  if (!['master_admin', 'admin', 'teacher_admin'].includes(actorRole)) {
+  if (!['master_admin', 'admin'].includes(actorRole)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

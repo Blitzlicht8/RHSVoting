@@ -7,7 +7,7 @@ export interface User {
   id: number
   email: string
   name: string
-  role: 'master_admin' | 'teacher_admin' | 'student_admin' | 'teacher' | 'student' | string
+  role: 'master_admin' | 'admin' | 'moderator' | 'staff' | 'member' | string
   email_verified: boolean | number
   id_verified: boolean | number
   id_image: string | null

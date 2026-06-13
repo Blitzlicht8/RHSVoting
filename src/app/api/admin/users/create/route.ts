@@ -8,7 +8,7 @@ import { logActivity } from '@/lib/logger'
 export async function POST(request: NextRequest) {
   await ensureInit()
   const authUser = await getAuthUser()
-  if (!authUser || !['master_admin', 'teacher_admin'].includes(authUser.role as string))
+  if (!authUser || !['master_admin', 'admin'].includes(authUser.role as string))
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await request.json()
@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
   if (!name?.trim() || !email?.trim() || !password || !role)
     return NextResponse.json({ error: 'name, email, password, role required' }, { status: 400 })
 
-  // teacher_admin cannot create master_admin or teacher_admin
-  if (authUser.role === 'teacher_admin' && ['master_admin', 'teacher_admin', 'student_admin'].includes(role))
+  // admin cannot create master_admin or admin
+  if (authUser.role === 'admin' && ['master_admin', 'admin', 'moderator'].includes(role))
     return NextResponse.json({ error: 'Insufficient permissions to assign this role' }, { status: 403 })
 
   const existing = await db.execute({ sql: `SELECT id FROM users WHERE email = ?`, args: [email.trim()] })

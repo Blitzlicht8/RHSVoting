@@ -150,7 +150,7 @@ export default function PostCard({ post, currentUserId, currentUserRole, current
     setCommentReportReason('')
   }
 
-  const isAdmin = ['master_admin', 'teacher_admin', 'student_admin'].includes(currentUserRole ?? '')
+  const isAdmin = ['master_admin', 'admin', 'moderator'].includes(currentUserRole ?? '')
 
   const handleDelete = () => {
     setConfirmMsg('Delete this post? This cannot be undone.')

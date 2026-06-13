@@ -17,9 +17,9 @@ interface Member {
 }
 
 function roleBadgeCls(role: string): string {
-  if (['master_admin', 'admin', 'teacher_admin'].includes(role)) return 'bg-[#84050C] text-white'
-  if (['moderator', 'student_admin'].includes(role)) return 'bg-purple-100 text-purple-700'
-  if (['staff', 'teacher'].includes(role)) return 'bg-blue-100 text-blue-700'
+  if (['master_admin', 'admin'].includes(role)) return 'bg-[#84050C] text-white'
+  if (role === 'moderator') return 'bg-purple-100 text-purple-700'
+  if (role === 'staff') return 'bg-blue-100 text-blue-700'
   return 'bg-gray-100 text-gray-600'
 }
 

@@ -9,7 +9,7 @@ export async function DELETE(
 ) {
   await ensureInit()
   const authUser = await getAuthUser()
-  if (!authUser || !['master_admin', 'teacher_admin'].includes(authUser.role as string)) {
+  if (!authUser || !['master_admin', 'admin'].includes(authUser.role as string)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

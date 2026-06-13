@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   if (!authUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const allowedRoles = ['master_admin', 'teacher_admin', 'student_admin', 'teacher']
+  const allowedRoles = ['master_admin', 'admin', 'moderator', 'staff']
   if (!allowedRoles.includes(authUser.role as string)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
@@ -36,8 +36,8 @@ export async function GET(request: NextRequest) {
 
   let where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
-  // Teachers only see requests for their assigned grades/sections
-  if (role === 'teacher') {
+  // Staff only see requests for their assigned grades/sections
+  if (role === 'staff') {
     const teacherCondition = `(
       vr.grade_level_id IN (SELECT grade_level_id FROM teacher_assignments WHERE teacher_id = ${authUser.id} AND grade_level_id IS NOT NULL)
       OR vr.section_id IN (SELECT section_id FROM teacher_assignments WHERE teacher_id = ${authUser.id} AND section_id IS NOT NULL)
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
 
   const userRoleRow = await db.execute({ sql: 'SELECT role FROM users WHERE id = ?', args: [authUser.id] })
   const userRole = userRoleRow.rows[0]?.role as string | undefined
-  const isStudent = !userRole || userRole === 'student' || userRole === 'student_admin'
+  const isStudent = !userRole || userRole === 'member'
   if (isStudent) {
     if (!grade_level_id) return NextResponse.json({ error: 'Grade level is required' }, { status: 400 })
     if (!section_id) return NextResponse.json({ error: 'Section is required' }, { status: 400 })

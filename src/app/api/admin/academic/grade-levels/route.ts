@@ -5,7 +5,7 @@ import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
 
 function requireAdmin(role: string) {
-  return ['master_admin', 'teacher_admin'].includes(role)
+  return ['master_admin', 'admin'].includes(role)
 }
 
 export async function GET() {

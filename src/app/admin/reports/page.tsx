@@ -21,7 +21,7 @@ export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
 
-  const allowed = ['master_admin', 'teacher_admin']
+  const allowed = ['master_admin', 'admin']
 
   useEffect(() => {
     if (!user || !allowed.includes(user.role)) return

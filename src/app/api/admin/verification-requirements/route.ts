@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 
-const ALLOWED = ['master_admin', 'teacher_admin']
+const ALLOWED = ['master_admin', 'admin']
 
 export async function GET() {
   await ensureInit()

@@ -172,7 +172,7 @@ export default function ProfilePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSubtype, selectedGrade, showAcademicModal])
 
-  const isStudent = authUser?.role === 'student' || authUser?.role === 'student_admin'
+  const isStudent = authUser?.role === 'member' || authUser?.role === 'moderator'
 
   const l1 = settings.group_label_l1 ?? 'Grade Level'
   const l2 = settings.group_label_l2 ?? 'Track / Strand'
@@ -275,7 +275,7 @@ export default function ProfilePage() {
 
   // --- Academic save ---
   async function saveAcademic() {
-    if (authUser?.role === 'student' || authUser?.role === 'student_admin') {
+    if (authUser?.role === 'member' || authUser?.role === 'moderator') {
       if (!selectedGrade) { addToast('Select a grade level', 'error'); return }
       if (filteredSubtypes.length > 0 && !selectedSubtype) { addToast('Select a track/strand', 'error'); return }
       if (filteredSections.length === 0) { addToast('No sections available. Contact admin.', 'error'); return }

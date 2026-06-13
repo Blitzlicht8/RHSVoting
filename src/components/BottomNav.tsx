@@ -5,7 +5,7 @@ import { LayoutDashboard, Newspaper, Vote, UserCircle, Shield } from 'lucide-rea
 import { useAuth } from '@/components/providers/AuthProvider'
 
 function isAdmin(role: string) {
-  return ['master_admin', 'admin', 'moderator', 'teacher_admin', 'student_admin'].includes(role)
+  return ['master_admin', 'admin', 'moderator'].includes(role)
 }
 
 export default function BottomNav({ onOpenSidebar }: { onOpenSidebar?: () => void }) {

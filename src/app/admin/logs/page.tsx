@@ -122,7 +122,7 @@ export default function LogsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
 
-  const allowed = ['master_admin', 'teacher_admin']
+  const allowed = ['master_admin', 'admin']
 
   useEffect(() => {
     if (!authLoading && user && !allowed.includes(user.role)) {
