@@ -12,11 +12,12 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const search = searchParams.get('search')
+  const userId = searchParams.get('userId')
 
-  // User search mode: return eligible users (moderator+) matching query
+  // User search mode: eligible users (moderator+) with their own group fields for pre-selection
   if (search !== null) {
     const result = await db.execute({
-      sql: `SELECT id, name, role, avatar_url
+      sql: `SELECT id, name, role, avatar_url, grade_level_id, subtype_id, section_id
             FROM users
             WHERE role IN ('moderator', 'admin', 'master_admin')
               AND active = 1
@@ -28,10 +29,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: result.rows })
   }
 
-  // List verifiers mode: return assigned verifiers for the given group combo
+  // Per-user mode: all verifier assignments for a given user
+  if (userId) {
+    const result = await db.execute({
+      sql: `SELECT gv.id, gv.user_id, gv.grade_level_id, gv.subtype_id, gv.section_id, gv.created_at,
+                   u.name AS user_name, u.role AS user_role, u.avatar_url AS user_avatar_url
+            FROM group_verifiers gv
+            JOIN users u ON u.id = gv.user_id
+            WHERE gv.user_id = ?
+            ORDER BY gv.grade_level_id, gv.subtype_id, gv.section_id`,
+      args: [parseInt(userId)],
+    })
+    return NextResponse.json({ data: result.rows })
+  }
+
+  // Per-group mode: verifiers for a specific group combo (kept for any future use)
   const gradeLevelId = searchParams.get('gradeLevelId')
   if (!gradeLevelId)
-    return NextResponse.json({ error: 'gradeLevelId required' }, { status: 400 })
+    return NextResponse.json({ error: 'gradeLevelId, userId, or search required' }, { status: 400 })
 
   const subtypeId = searchParams.get('subtypeId')
   const sectionId = searchParams.get('sectionId')
@@ -54,7 +69,7 @@ export async function GET(request: NextRequest) {
   }
 
   const result = await db.execute({
-    sql: `SELECT gv.id, gv.user_id, gv.created_at,
+    sql: `SELECT gv.id, gv.user_id, gv.grade_level_id, gv.subtype_id, gv.section_id, gv.created_at,
                  u.name AS user_name, u.role AS user_role, u.avatar_url AS user_avatar_url
           FROM group_verifiers gv
           JOIN users u ON u.id = gv.user_id
@@ -78,7 +93,6 @@ export async function POST(request: NextRequest) {
   if (!user_id || !grade_level_id)
     return NextResponse.json({ error: 'user_id and grade_level_id required' }, { status: 400 })
 
-  // Ensure target user is moderator+
   const userCheck = await db.execute({
     sql: `SELECT id FROM users WHERE id = ? AND role IN ('moderator', 'admin', 'master_admin') AND active = 1`,
     args: [user_id],
