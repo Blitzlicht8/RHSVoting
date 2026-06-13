@@ -136,7 +136,6 @@ export default function UsersPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<Role | ''>('')
-  const [idModalUser, setIdModalUser] = useState<UserRow | null>(null)
   const [patchingId, setPatchingId] = useState<number | null>(null)
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<UserRow | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -156,8 +155,9 @@ export default function UsersPage() {
   // Document lightbox
   const [lightboxUrls, setLightboxUrls] = useState<string[]>([])
   const [lightboxIndex, setLightboxIndex] = useState(0)
-  const [userDocs, setUserDocs] = useState<string[]>([])
+  const [userDocs, setUserDocs] = useState<{ id: number; file_path: string }[]>([])
   const [docsLoading, setDocsLoading] = useState(false)
+  const [deletingDocId, setDeletingDocId] = useState<number | null>(null)
 
   // Upload & verify
   const [uploadFiles, setUploadFiles] = useState<File[]>([])
@@ -263,7 +263,7 @@ export default function UsersPage() {
     setDocsLoading(true)
     fetch(`/api/users/${editUser.id}`, { credentials: 'include' })
       .then(r => r.json())
-      .then(j => setUserDocs((j.data?.documents as string[]) ?? []))
+      .then(j => setUserDocs((j.data?.documents as { id: number; file_path: string }[]) ?? []))
       .catch(() => setUserDocs([]))
       .finally(() => setDocsLoading(false))
   }, [editUser])
@@ -325,6 +325,27 @@ export default function UsersPage() {
     }
   }
 
+  const handleDeleteDoc = async (docId: number) => {
+    if (!editUser) return
+    setDeletingDocId(docId)
+    try {
+      const res = await fetch(`/api/admin/users/${editUser.id}/documents/${docId}`, {
+        method: 'DELETE', credentials: 'include',
+      })
+      if (res.ok) {
+        setUserDocs(ds => ds.filter(d => d.id !== docId))
+        addToast('Document deleted', 'success')
+      } else {
+        const json = await res.json()
+        addToast(json.error || 'Delete failed', 'error')
+      }
+    } catch {
+      addToast('Network error', 'error')
+    } finally {
+      setDeletingDocId(null)
+    }
+  }
+
   const handleUploadVerify = async () => {
     if (!editUser || !uploadFiles.length) return
     setUploading(true)
@@ -351,7 +372,7 @@ export default function UsersPage() {
         // Refresh docs list
         const docsRes = await fetch(`/api/users/${editUser.id}`, { credentials: 'include' })
         const docsJson = await docsRes.json()
-        setUserDocs((docsJson.data?.documents as string[]) ?? [])
+        setUserDocs((docsJson.data?.documents as { id: number; file_path: string }[]) ?? [])
       } else {
         addToast(json.error || 'Upload failed', 'error')
       }
@@ -683,17 +704,6 @@ export default function UsersPage() {
                               <PencilIcon />
                             </button>
                           )}
-                          {u.id_image ? (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setIdModalUser(u)}
-                            >
-                              View ID
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-gray-400">No ID</span>
-                          )}
                           {currentUser && canDeleteUser(currentUser.role as Role, u, currentUser.id) && (
                             <Button
                               variant="ghost"
@@ -818,11 +828,6 @@ export default function UsersPage() {
                           </option>
                         ))}
                       </select>
-                      {u.id_image && (
-                        <Button variant="secondary" size="sm" onClick={() => setIdModalUser(u)}>
-                          View ID
-                        </Button>
-                      )}
                       {currentUser && canDeleteUser(currentUser.role as Role, u, currentUser.id) && (
                         <Button
                           variant="ghost"
@@ -867,25 +872,6 @@ export default function UsersPage() {
           </>
         )}
       </div>
-
-      {/* ID Image Modal */}
-      <Modal
-        isOpen={!!idModalUser}
-        onClose={() => setIdModalUser(null)}
-        title={idModalUser ? `${idModalUser.name}'s ID` : ''}
-        size="lg"
-      >
-        {idModalUser?.id_image && (
-          <div className="flex flex-col items-center gap-4">
-            <div className="text-sm text-gray-500">{idModalUser.email}</div>
-            <img
-              src={idModalUser.id_image}
-              alt="School ID"
-              className="w-full rounded-lg object-contain max-h-[60vh] border border-gray-200"
-            />
-          </div>
-        )}
-      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal
@@ -1037,11 +1023,23 @@ export default function UsersPage() {
                 </div>
               ) : userDocs.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {userDocs.map((url, idx) => (
-                    <img key={idx} src={url} alt={`Document ${idx + 1}`}
-                      className="w-16 h-16 object-cover rounded-lg cursor-pointer border border-gray-200 hover:border-[#84050C] transition-colors"
-                      onClick={() => { setLightboxUrls(userDocs); setLightboxIndex(idx) }}
-                    />
+                  {userDocs.map((doc, idx) => (
+                    <div key={doc.id} className="relative group/doc">
+                      <img src={doc.file_path} alt={`Document ${idx + 1}`}
+                        className="w-16 h-16 object-cover rounded-lg cursor-pointer border border-gray-200 hover:border-[#84050C] transition-colors"
+                        onClick={() => { setLightboxUrls(userDocs.map(d => d.file_path)); setLightboxIndex(idx) }}
+                      />
+                      {canVerify && (
+                        <button
+                          disabled={deletingDocId === doc.id}
+                          onClick={() => handleDeleteDoc(doc.id)}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover/doc:opacity-100 transition-opacity hover:bg-red-700 disabled:opacity-50"
+                          title="Delete document"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               ) : (

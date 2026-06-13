@@ -24,6 +24,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   const now = new Date().toISOString()
 
+  // Remove any existing verification_request so UNIQUE(user_id) doesn't block re-upload
+  await db.execute({ sql: `DELETE FROM verification_requests WHERE user_id = ?`, args: [targetId] })
+
   // Upload all files first
   const uploadedUrls: string[] = []
   for (const file of files) {

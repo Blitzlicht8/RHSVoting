@@ -51,13 +51,13 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   }
 
   const docs = await db.execute({
-    sql: `SELECT vd.file_path FROM verification_documents vd
+    sql: `SELECT vd.id, vd.file_path FROM verification_documents vd
           JOIN verification_requests vr ON vr.id = vd.verification_request_id
           WHERE vr.user_id = ? ORDER BY vd.created_at DESC`,
     args: [targetId]
   })
 
-  return NextResponse.json({ data: { user, documents: docs.rows.map(r => r.file_path) } })
+  return NextResponse.json({ data: { user, documents: docs.rows.map(r => ({ id: Number(r.id), file_path: String(r.file_path) })) } })
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
