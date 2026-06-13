@@ -11,7 +11,7 @@ import LightboxModal from '@/components/ui/LightboxModal'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 
-type Role = 'master_admin' | 'teacher_admin' | 'student_admin' | 'teacher' | 'student'
+type Role = 'master_admin' | 'admin' | 'moderator' | 'staff' | 'member' | 'teacher_admin' | 'student_admin' | 'teacher' | 'student'
 
 interface UserRow {
   id: number
@@ -47,39 +47,49 @@ interface UsersResponse {
   limit: number
 }
 
-const ROLE_LABELS: Record<Role, string> = {
+const ROLE_LABELS: Record<string, string> = {
   master_admin: 'Master Admin',
-  teacher_admin: 'Teacher Admin',
-  student_admin: 'Student Admin',
-  teacher: 'Teacher',
-  student: 'Student',
+  admin: 'Admin',
+  moderator: 'Moderator',
+  staff: 'Staff',
+  member: 'Member',
+  // legacy display
+  teacher_admin: 'Admin (Legacy)',
+  student_admin: 'Mod (Legacy)',
+  teacher: 'Staff (Legacy)',
+  student: 'Member (Legacy)',
 }
 
-const ROLE_BADGE: Record<Role, 'danger' | 'warning' | 'purple' | 'info' | 'default'> = {
+const ROLE_BADGE: Record<string, 'danger' | 'warning' | 'purple' | 'info' | 'default'> = {
   master_admin: 'danger',
+  admin: 'warning',
+  moderator: 'purple',
+  staff: 'info',
+  member: 'default',
   teacher_admin: 'warning',
   student_admin: 'purple',
   teacher: 'info',
   student: 'default',
 }
 
-const ALL_ROLES: Role[] = ['master_admin', 'teacher_admin', 'student_admin', 'teacher', 'student']
+const ALL_ROLES: Role[] = ['master_admin', 'admin', 'moderator', 'staff', 'member']
 
-const ROLE_LEVEL: Record<Role, number> = {
-  student: 0, teacher: 1, student_admin: 2, teacher_admin: 3, master_admin: 4,
+const ROLE_LEVEL: Record<string, number> = {
+  member: 0, staff: 1, moderator: 2, admin: 3, master_admin: 4,
+  student: 0, teacher: 1, student_admin: 2, teacher_admin: 3,
 }
 
 function getAssignableRoles(currentUserRole: Role): Role[] {
   if (currentUserRole === 'master_admin') return ALL_ROLES
-  if (currentUserRole === 'teacher_admin') return ['teacher', 'student']
-  if (currentUserRole === 'student_admin') return ['student']
+  if (currentUserRole === 'admin' || currentUserRole === 'teacher_admin') return ['moderator', 'staff', 'member']
+  if (currentUserRole === 'moderator' || currentUserRole === 'student_admin') return ['member']
   return []
 }
 
 function canDeleteUser(actorRole: Role, target: UserRow, selfId: number): boolean {
   if (target.id === selfId) return false
   if (actorRole === 'master_admin') return true
-  if (actorRole === 'teacher_admin') return ROLE_LEVEL[target.role] < ROLE_LEVEL['teacher_admin']
+  if (actorRole === 'admin' || actorRole === 'teacher_admin') return (ROLE_LEVEL[target.role] ?? 0) < ROLE_LEVEL['admin']
   return false
 }
 
@@ -143,7 +153,7 @@ export default function UsersPage() {
   // Edit modal state
   const [editUser, setEditUser] = useState<UserRow | null>(null)
   const [editForm, setEditForm] = useState<EditForm>({
-    name: '', email: '', role: 'student',
+    name: '', email: '', role: 'member',
     grade_level_id: '', subtype_id: '', section_id: '',
     email_verified: false, active: true,
   })
@@ -168,7 +178,7 @@ export default function UsersPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createForm, setCreateForm] = useState({
-    name: '', email: '', password: '', role: 'student' as Role,
+    name: '', email: '', password: '', role: 'member' as Role,
     grade_level_id: '', subtype_id: '', section_id: '',
     email_verified: true, id_verified: false,
   })
@@ -182,7 +192,9 @@ export default function UsersPage() {
 
   const isAdmin =
     currentUser?.role === 'master_admin' ||
+    currentUser?.role === 'admin' ||
     currentUser?.role === 'teacher_admin' ||
+    currentUser?.role === 'moderator' ||
     currentUser?.role === 'student_admin'
 
   const fetchUsers = useCallback(async (p: number, s: string, r: string) => {

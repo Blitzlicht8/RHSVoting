@@ -164,7 +164,7 @@ export default function SettingsPage() {
       const res = await fetch('/api/settings', { credentials: 'include' })
       const json = await res.json()
       if (res.ok) {
-        setSettings(json.data.settings)
+        setSettings(json.data ?? {})
       } else {
         addToast(json.error || 'Failed to load settings', 'error')
       }

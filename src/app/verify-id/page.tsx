@@ -105,7 +105,7 @@ export default function VerifyIdPage() {
 
   // Multi-step state (for uiState === 'upload')
   const [verifyStep, setVerifyStep]     = useState<VerifyStep>('type_select')
-  const [intendedRole, setIntendedRole] = useState<'student' | 'teacher' | ''>('')
+  const [intendedRole, setIntendedRole] = useState<'member' | 'staff' | ''>('')
   const [stepError, setStepError]       = useState<string | null>(null)
 
   // Cascading dropdowns
@@ -119,6 +119,11 @@ export default function VerifyIdPage() {
   // Settings
   const [docTypeOptions, setDocTypeOptions] = useState<string[]>(DEFAULT_DOC_TYPES)
   const [appName, setAppName] = useState('Community Hub')
+  const [groupL1, setGroupL1] = useState('Group')
+  const [groupL2, setGroupL2] = useState('Subgroup')
+  const [groupL3, setGroupL3] = useState('Unit')
+  const [memberLabel, setMemberLabel] = useState('Member')
+  const [staffLabel, setStaffLabel] = useState('Staff')
 
   // Document type
   const [docType, setDocType] = useState<DocType>('')
@@ -138,6 +143,9 @@ export default function VerifyIdPage() {
     fetch('/api/settings').then(r => r.json()).then(j => {
       const s = j.data ?? {}
       if (s.app_name) setAppName(s.app_name)
+      if (s.group_label_l1) setGroupL1(s.group_label_l1)
+      if (s.group_label_l2) setGroupL2(s.group_label_l2)
+      if (s.group_label_l3) setGroupL3(s.group_label_l3)
       if (s.doc_type_labels) {
         try {
           const arr = JSON.parse(s.doc_type_labels)
@@ -293,9 +301,9 @@ export default function VerifyIdPage() {
     if (files.length === 0) return
 
     const formData = new FormData()
-    formData.append('intended_role', intendedRole || 'student')
+    formData.append('intended_role', intendedRole || 'member')
     formData.append('doc_type', docType)
-    if (intendedRole === 'student') {
+    if (intendedRole === 'member') {
       if (gradeLevelId) formData.append('grade_level_id', gradeLevelId)
       if (subtypeId)    formData.append('subtype_id', subtypeId)
       if (sectionId)    formData.append('section_id', sectionId)
@@ -474,7 +482,7 @@ export default function VerifyIdPage() {
             {/* Progress indicator */}
             {(() => {
               const stepNum = verifyStep === 'type_select' ? 1 : verifyStep === 'student_info' ? 2 : 3
-              const totalSteps = intendedRole === 'teacher' ? 2 : 3
+              const totalSteps = intendedRole === 'staff' ? 2 : 3
               return (
                 <div className="flex items-center gap-2">
                   {Array.from({ length: totalSteps }, (_, i) => (
@@ -497,74 +505,74 @@ export default function VerifyIdPage() {
             {/* Step 1: Type select */}
             {verifyStep === 'type_select' && (
               <div className="space-y-4">
-                <p className="text-sm font-medium text-gray-700">Are you a student or a teacher?</p>
+                <p className="text-sm font-medium text-gray-700">What is your role in this community?</p>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => {
-                      setIntendedRole('student')
+                      setIntendedRole('member')
                       setStepError(null)
                       setVerifyStep('student_info')
                     }}
-                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60/50 transition-all text-center focus:outline-none focus:ring-2 focus:ring-[#84050C]"
+                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60 transition-all text-center focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                   >
                     <svg className="w-8 h-8 text-[#84050C]" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                     </svg>
-                    <span className="text-sm font-semibold text-gray-900">Student</span>
+                    <span className="text-sm font-semibold text-gray-900">{memberLabel}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      setIntendedRole('teacher')
+                      setIntendedRole('staff')
                       setStepError(null)
                       setVerifyStep('upload_photo')
                     }}
-                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60/50 transition-all text-center focus:outline-none focus:ring-2 focus:ring-[#84050C]"
+                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60 transition-all text-center focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                   >
                     <svg className="w-8 h-8 text-[#84050C]" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0M12 12.75h.008v.008H12v-.008z" />
                     </svg>
-                    <span className="text-sm font-semibold text-gray-900">Teacher</span>
+                    <span className="text-sm font-semibold text-gray-900">{staffLabel}</span>
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Step 2: Student info — cascading dropdowns + doc type */}
+            {/* Step 2: Member info — cascading dropdowns + doc type */}
             {verifyStep === 'student_info' && (
               <div className="space-y-4">
-                <p className="text-sm font-medium text-gray-700">Tell us about your grade and section.</p>
+                <p className="text-sm font-medium text-gray-700">Tell us about your {groupL1.toLowerCase()} and {groupL3.toLowerCase()}.</p>
 
-                {/* Grade Level */}
+                {/* Group L1 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Grade Level <span className="text-red-500">*</span>
+                    {groupL1} <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={gradeLevelId}
                     onChange={(e) => { setGradeLevelId(e.target.value); setStepError(null) }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                   >
-                    <option value="">Select grade level…</option>
+                    <option value="">Select {groupL1.toLowerCase()}…</option>
                     {gradeLevels.map(g => (
                       <option key={g.id} value={String(g.id)}>{g.name}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Subtype — only shown when subtypes exist */}
+                {/* Group L2 — only shown when subtypes exist */}
                 {subtypes.length > 0 && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Track / Strand
+                      {groupL2}
                     </label>
                     <select
                       value={subtypeId}
                       onChange={(e) => { setSubtypeId(e.target.value); setStepError(null) }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                     >
-                      <option value="">Select track / strand…</option>
+                      <option value="">Select {groupL2.toLowerCase()}…</option>
                       {subtypes.map(s => (
                         <option key={s.id} value={String(s.id)}>{s.name}</option>
                       ))}
@@ -572,18 +580,18 @@ export default function VerifyIdPage() {
                   </div>
                 )}
 
-                {/* Section — only shown when sections exist */}
+                {/* Group L3 — only shown when sections exist */}
                 {sections.length > 0 && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Section <span className="text-red-500">*</span>
+                      {groupL3} <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={sectionId}
                       onChange={(e) => { setSectionId(e.target.value); setStepError(null) }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                     >
-                      <option value="">Select section…</option>
+                      <option value="">Select {groupL3.toLowerCase()}…</option>
                       {sections.map(s => (
                         <option key={s.id} value={String(s.id)}>{s.name}</option>
                       ))}
@@ -621,10 +629,10 @@ export default function VerifyIdPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (!gradeLevelId) { setStepError('Please select a grade level.'); return }
-                      if (subtypes.length > 0 && !subtypeId) { setStepError('Please select a track/strand.'); return }
-                      if (sections.length === 0) { setStepError('No sections found for this grade. Contact admin.'); return }
-                      if (!sectionId) { setStepError('Please select a section.'); return }
+                      if (!gradeLevelId) { setStepError(`Please select a ${groupL1.toLowerCase()}.`); return }
+                      if (subtypes.length > 0 && !subtypeId) { setStepError(`Please select a ${groupL2.toLowerCase()}.`); return }
+                      if (sections.length === 0) { setStepError(`No ${groupL3.toLowerCase()} found. Contact admin.`); return }
+                      if (!sectionId) { setStepError(`Please select a ${groupL3.toLowerCase()}.`); return }
                       setStepError(null)
                       setVerifyStep('upload_photo')
                     }}
@@ -644,7 +652,7 @@ export default function VerifyIdPage() {
                     type="button"
                     onClick={() => {
                       setStepError(null)
-                      setVerifyStep(intendedRole === 'teacher' ? 'type_select' : 'student_info')
+                      setVerifyStep(intendedRole === 'staff' ? 'type_select' : 'student_info')
                     }}
                     className="text-sm text-[#84050C] hover:text-[#6B0409] font-medium flex items-center gap-1"
                   >
@@ -655,8 +663,8 @@ export default function VerifyIdPage() {
                   </button>
                 </div>
 
-                {/* Doc type selector for teachers (students set it in step 2) */}
-                {intendedRole === 'teacher' && (
+                {/* Doc type selector for staff (members set it in step 2) */}
+                {intendedRole === 'staff' && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Document Type <span className="text-red-500">*</span>

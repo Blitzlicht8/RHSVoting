@@ -368,6 +368,7 @@ async function _init(): Promise<void> {
     { name: 'master_admin', is_system: 1, perms: '{"manageUsers":true,"manageElections":true,"manageSettings":true,"manageRoles":true,"viewReports":true,"verifyMembers":true,"managePosts":true}' },
     { name: 'admin', is_system: 0, perms: '{"manageUsers":true,"manageElections":true,"viewReports":true,"verifyMembers":true,"managePosts":true}' },
     { name: 'moderator', is_system: 0, perms: '{"viewReports":true,"managePosts":true}' },
+    { name: 'staff', is_system: 0, perms: '{"managePosts":true}' },
     { name: 'member', is_system: 0, perms: '{}' },
   ]
   for (const r of roleSeeds) {
