@@ -1,4 +1,4 @@
-export type Role = 'master_admin' | 'teacher_admin' | 'student_admin' | 'teacher' | 'student';
+export type Role = 'master_admin' | 'teacher_admin' | 'student_admin' | 'teacher' | 'student' | 'admin' | 'moderator' | 'member' | string;
 
 export type ElectionStatus = 'draft' | 'active' | 'ended';
 
@@ -19,6 +19,7 @@ export interface User {
   subtype_id?: number | null;
   section_id?: number | null;
   avatar_url?: string | null;
+  bio?: string | null;
 }
 
 export interface AuthUser {
@@ -180,4 +181,42 @@ export interface UserAchievement {
   description: string | null;
   year: number | null;
   order_index: number;
+}
+
+export interface AppRole {
+  id: number;
+  name: string;
+  is_system: 0 | 1;
+  permissions: Record<string, boolean>;
+  created_at: string;
+}
+
+export interface NameHistory {
+  id: number;
+  user_id: number;
+  old_name: string;
+  new_name: string;
+  changed_at: string;
+}
+
+export interface CommentReport {
+  id: number;
+  comment_id: number;
+  reporter_id: number;
+  reason: string | null;
+  status: string;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export interface AppSettings {
+  auto_verify_id: string;
+  otp_required_login: string;
+  app_name: string;
+  group_label_l1: string;
+  group_label_l2: string;
+  group_label_l3: string;
+  doc_type_labels: string;
+  org_type: string;
 }

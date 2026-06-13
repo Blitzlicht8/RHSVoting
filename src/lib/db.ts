@@ -336,6 +336,16 @@ async function _init(): Promise<void> {
         )`,
         args: [],
       },
+      {
+        sql: `CREATE TABLE IF NOT EXISTS roles (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          is_system INTEGER NOT NULL DEFAULT 0,
+          permissions TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )`,
+        args: [],
+      },
     ],
     'write'
   )
@@ -343,9 +353,26 @@ async function _init(): Promise<void> {
   // Seed default settings
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_verify_id', 'false')`, args: [] })
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('otp_required_login', 'true')`, args: [] })
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('app_name', 'Community Hub')`, args: [] })
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('group_label_l1', 'Group')`, args: [] })
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('group_label_l2', 'Subgroup')`, args: [] })
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('group_label_l3', 'Unit')`, args: [] })
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('doc_type_labels', '["Government ID","School ID","Employee ID"]')`, args: [] })
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('org_type', 'community')`, args: [] })
   // Normalize legacy '1'/'0' values to 'true'/'false'
   await db.execute({ sql: `UPDATE settings SET value = ? WHERE key = ? AND value = ?`, args: ['true', 'otp_required_login', '1'] })
   await db.execute({ sql: `UPDATE settings SET value = ? WHERE key = ? AND value = ?`, args: ['false', 'auto_verify_id', '0'] })
+
+  // Seed default roles
+  const roleSeeds = [
+    { name: 'master_admin', is_system: 1, perms: '{"manageUsers":true,"manageElections":true,"manageSettings":true,"manageRoles":true,"viewReports":true,"verifyMembers":true,"managePosts":true}' },
+    { name: 'admin', is_system: 0, perms: '{"manageUsers":true,"manageElections":true,"viewReports":true,"verifyMembers":true,"managePosts":true}' },
+    { name: 'moderator', is_system: 0, perms: '{"viewReports":true,"managePosts":true}' },
+    { name: 'member', is_system: 0, perms: '{}' },
+  ]
+  for (const r of roleSeeds) {
+    await db.execute({ sql: `INSERT OR IGNORE INTO roles (name, is_system, permissions) VALUES (?,?,?)`, args: [r.name, r.is_system, r.perms] })
+  }
 
   // Seed default grade levels
   await db.execute({ sql: `INSERT OR IGNORE INTO grade_levels (name, order_index) VALUES ('Grade 7', 0)`, args: [] })
@@ -380,6 +407,8 @@ async function _init(): Promise<void> {
     `ALTER TABLE verification_requests ADD COLUMN updated_at TEXT`,
     `ALTER TABLE verification_documents ADD COLUMN created_at TEXT`,
     `ALTER TABLE verification_documents ADD COLUMN doc_type TEXT`,
+    `ALTER TABLE users ADD COLUMN role_id INTEGER`,
+    `ALTER TABLE users ADD COLUMN bio TEXT`,
   ]
   for (const sql of newColumns) {
     await db.execute({ sql, args: [] }).catch(() => {})

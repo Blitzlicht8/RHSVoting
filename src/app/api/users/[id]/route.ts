@@ -40,7 +40,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
   const result = await db.execute({
     sql: `SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at, updated_at,
-                 grade_level_id, subtype_id, section_id, avatar_url
+                 grade_level_id, subtype_id, section_id, avatar_url, bio
           FROM users WHERE id = ?`,
     args: [targetId],
   })

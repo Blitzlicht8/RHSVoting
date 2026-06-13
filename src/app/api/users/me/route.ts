@@ -10,7 +10,7 @@ export async function GET() {
 
   const result = await db.execute({
     sql: `SELECT u.id, u.email, u.name, u.role, u.email_verified, u.id_verified,
-                 u.avatar_url, u.grade_level_id, u.subtype_id, u.section_id, u.active,
+                 u.avatar_url, u.bio, u.grade_level_id, u.subtype_id, u.section_id, u.active,
                  u.needs_academic_update,
                  gl.name as grade_level_name,
                  gs.name as subtype_name,
@@ -57,6 +57,7 @@ export async function PATCH(request: NextRequest) {
     sets.push('name = ?'); vals.push(newName)
   }
   if (body.avatar_url !== undefined) { sets.push('avatar_url = ?'); vals.push(body.avatar_url) }
+  if (body.bio !== undefined) { sets.push('bio = ?'); vals.push(body.bio ?? null) }
   if (body.grade_level_id !== undefined) {
     sets.push('grade_level_id = ?'); vals.push(body.grade_level_id)
     sets.push('subtype_id = ?'); vals.push(body.subtype_id ?? null)

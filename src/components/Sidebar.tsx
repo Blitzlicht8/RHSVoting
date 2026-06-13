@@ -15,6 +15,8 @@ import {
   Flag,
   FileText,
   Settings,
+  Settings2,
+  Shield,
   LogOut,
 } from 'lucide-react'
 import { useAuth } from '@/components/providers/AuthProvider'
@@ -61,7 +63,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     href: '/admin/users',
-    label: 'Users',
+    label: 'Members',
     adminOnly: true,
     icon: <Users className="w-5 h-5" />,
   },
@@ -95,8 +97,22 @@ const NAV_ITEMS: NavItem[] = [
     href: '/admin/settings',
     label: 'Settings',
     adminOnly: true,
-    adminRoles: ['master_admin'],
+    adminRoles: ['master_admin', 'teacher_admin'],
     icon: <Settings className="w-5 h-5" />,
+  },
+  {
+    href: '/admin/app-config',
+    label: 'App Config',
+    adminOnly: true,
+    adminRoles: ['master_admin'],
+    icon: <Settings2 className="w-5 h-5" />,
+  },
+  {
+    href: '/admin/roles',
+    label: 'Roles & Permissions',
+    adminOnly: true,
+    adminRoles: ['master_admin'],
+    icon: <Shield className="w-5 h-5" />,
   },
 ]
 
@@ -210,8 +226,17 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       {user && (
         <div className="border-t border-gray-800 p-4">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-              {user.name.charAt(0).toUpperCase()}
+            <div className="w-9 h-9 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
+              {user.avatar_url ? (
+                <img
+                  src={user.avatar_url}
+                  alt={user.name}
+                  className="w-9 h-9 rounded-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                />
+              ) : (
+                <span className="text-sm font-bold">{user.name.charAt(0).toUpperCase()}</span>
+              )}
             </div>
             <div className="min-w-0">
               <p className="text-sm font-medium text-white truncate">{user.name}</p>

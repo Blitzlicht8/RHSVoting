@@ -67,10 +67,19 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setShowDropdown((v) => !v)}
-            className="w-9 h-9 rounded-full bg-[#84050C] text-white text-sm font-semibold flex items-center justify-center hover:bg-[#6B0409] transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C] focus:ring-offset-2"
+            className="w-9 h-9 rounded-full bg-[#84050C] text-white text-sm font-semibold flex items-center justify-center hover:bg-[#6B0409] transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C] focus:ring-offset-2 overflow-hidden"
             aria-label="User menu"
           >
-            {user?.name?.charAt(0).toUpperCase() || '?'}
+            {user?.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt={user.name}
+                className="w-9 h-9 rounded-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+            ) : (
+              <span className="text-sm font-semibold">{user?.name?.charAt(0)?.toUpperCase() || '?'}</span>
+            )}
           </button>
 
           {showDropdown && (

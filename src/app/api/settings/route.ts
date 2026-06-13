@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 
-const ALLOWED_KEYS = ['auto_verify_id', 'otp_required_login'] as const
+const ALLOWED_KEYS = [
+  'auto_verify_id',
+  'otp_required_login',
+  'app_name',
+  'group_label_l1',
+  'group_label_l2',
+  'group_label_l3',
+  'doc_type_labels',
+  'org_type',
+] as const
 type SettingKey = (typeof ALLOWED_KEYS)[number]
 
 export async function GET(_request: NextRequest) {
@@ -19,7 +28,7 @@ export async function GET(_request: NextRequest) {
     settings[row.key as string] = row.value as string
   }
 
-  return NextResponse.json({ data: { settings } })
+  return NextResponse.json({ data: settings })
 }
 
 export async function PATCH(request: NextRequest) {
