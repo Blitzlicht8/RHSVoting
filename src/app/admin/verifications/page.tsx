@@ -93,17 +93,14 @@ export default function VerificationsPage() {
   const [rejectNotes, setRejectNotes] = useState('')
   const [actioning, setActioning] = useState<number | null>(null)
 
-  const isAdmin =
-    user?.role === 'master_admin' ||
-    user?.role === 'teacher_admin' ||
-    user?.role === 'student_admin'
+  const isAdmin = ['master_admin', 'admin', 'moderator'].includes(user?.role ?? '')
 
   const fetchSettings = useCallback(async () => {
     setLoadingSettings(true)
     try {
       const res = await fetch('/api/settings', { credentials: 'include' })
       const json = await res.json()
-      if (res.ok) setSettings(json.data.settings)
+      if (res.ok) setSettings(json.data)
     } catch {
       // silent
     } finally {
