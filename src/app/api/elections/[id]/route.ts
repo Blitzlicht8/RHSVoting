@@ -35,8 +35,8 @@ async function syncPositions(electionId: number, positions: PositionInput[]) {
       const candName = (cand.name ?? '').trim()
       if (!candName) continue
       await db.execute({
-        sql: `INSERT INTO candidates (election_id, position_id, name, bio, grade_level, section, student_user_id, photo_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [electionId, posId, candName, cand.bio ?? null, cand.grade_level ?? null, cand.section ?? null, cand.student_user_id ?? null, cand.photo_url ?? null],
+        sql: `INSERT INTO candidates (election_id, position_id, name, bio, grade_level, section, student_user_id, user_id, photo_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [electionId, posId, candName, cand.bio ?? null, cand.grade_level ?? null, cand.section ?? null, cand.student_user_id ?? null, cand.student_user_id ?? null, cand.photo_url ?? null],
       })
     }
   }
@@ -83,7 +83,12 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   const positions = positionsResult.rows as unknown as Position[]
 
   const candidatesResult = await db.execute({
-    sql: 'SELECT * FROM candidates WHERE election_id = ?',
+    sql: `SELECT c.id, c.position_id, c.election_id, c.name, c.bio,
+                 c.grade_level, c.section, c.student_user_id, c.user_id,
+                 COALESCE(u.avatar_url, c.photo_url) AS photo_url
+          FROM candidates c
+          LEFT JOIN users u ON u.id = COALESCE(c.student_user_id, c.user_id)
+          WHERE c.election_id = ?`,
     args: [electionId],
   })
   const candidates = candidatesResult.rows as unknown as Candidate[]
