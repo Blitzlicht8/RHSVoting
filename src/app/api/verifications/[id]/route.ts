@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   await ensureInit()
@@ -85,6 +86,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     sql: 'SELECT * FROM verification_requests WHERE id = ?',
     args: [requestId],
   })
+
+  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  const userId = Number(verReq.user_id)
+  await logActivity(authUser.id, `verification_${newStatus}`, `${newStatus} verification for user ${userId}`, ip)
 
   return NextResponse.json({ data: { request: updated.rows[0] }, message: `Verification ${newStatus}` })
 }

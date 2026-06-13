@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 
 function requireAdmin(role: string) {
   return ['master_admin', 'teacher_admin'].includes(role)
@@ -43,5 +44,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     })
   }
   await db.execute({ sql: `DELETE FROM grade_levels WHERE id = ?`, args: [id] })
+  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  await logActivity(authUser.id, 'grade_level_deleted', `Deleted grade level ${id}`, ip)
   return NextResponse.json({ message: 'Deleted' })
 }

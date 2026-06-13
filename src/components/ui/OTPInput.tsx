@@ -110,12 +110,12 @@ export default function OTPInput({
           aria-label={`Digit ${index + 1} of ${length}`}
           className={[
             'w-12 h-14 text-center text-2xl font-bold border-2 rounded-xl',
-            'focus:ring-4 focus:ring-indigo-100 outline-none transition-all cursor-text',
+            'focus:ring-4 focus:ring-[#FEE2E2] outline-none transition-all cursor-text',
             'disabled:opacity-50 disabled:cursor-not-allowed',
             digit
-              ? 'border-indigo-400 bg-indigo-50'
+              ? 'border-[#BA4955] bg-[#FEE2E2]/60'
               : 'border-gray-300 bg-white',
-            'focus:border-indigo-500',
+            'focus:border-[#84050C]',
           ].join(' ')}
           onChange={(e) => handleChange(index, e.target.value)}
           onKeyDown={(e) => handleKeyDown(index, e)}

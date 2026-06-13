@@ -626,7 +626,7 @@ export default function ElectionDetailPage() {
             <div className="mt-4 flex gap-2">
               <Link
                 href={`/admin/elections/${election.id}/edit`}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#84050C] border border-indigo-200 hover:border-[#84050C]/50 px-3 py-1.5 rounded-lg transition-colors"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#84050C] border border-[#E2A8A4] hover:border-[#84050C]/50 px-3 py-1.5 rounded-lg transition-colors"
               >
                 Edit Election
               </Link>

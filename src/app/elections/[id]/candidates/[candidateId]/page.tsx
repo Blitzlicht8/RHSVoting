@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import Layout from '@/components/Layout'
 import Spinner from '@/components/ui/Spinner'
@@ -21,6 +22,11 @@ interface Achievement {
   title: string
   description: string | null
   year: number | null
+}
+
+function getInitials(name: string) {
+  const p = name.trim().split(/\s+/)
+  return p.length === 1 ? p[0].slice(0, 2).toUpperCase() : (p[0][0] + p[p.length - 1][0]).toUpperCase()
 }
 
 export default function CandidateProfilePage() {
@@ -55,81 +61,119 @@ export default function CandidateProfilePage() {
     load()
   }, [electionId, candidateId, router])
 
-  if (loading) return <Layout><div className="flex justify-center items-center h-64"><Spinner /></div></Layout>
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center h-64">
+          <Spinner />
+        </div>
+      </Layout>
+    )
+  }
+
   if (!candidate) return null
 
-  function getInitials(name: string) {
-    const p = name.trim().split(/\s+/)
-    return p.length === 1 ? p[0].slice(0, 2).toUpperCase() : (p[0][0] + p[p.length - 1][0]).toUpperCase()
-  }
+  const sortedAchievements = [...achievements].sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
 
   return (
     <Layout>
-      <div className="p-6 max-w-2xl mx-auto">
-        {/* Back button */}
-        <button onClick={() => router.back()} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-6">
+      <div className="max-w-2xl mx-auto space-y-5 pb-10">
+
+        {/* Back link */}
+        <Link
+          href={`/elections/${electionId}`}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+        >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
-          Back to Election
-        </button>
+          Back to {candidate.election_name}
+        </Link>
 
-        {/* Header */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
+        {/* Header card */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <div className="flex items-center gap-5">
+            {/* Avatar */}
             {candidate.photo_url ? (
-              <img src={candidate.photo_url} alt={candidate.name} className="w-20 h-20 rounded-full object-cover border-2 border-[#84050C]" />
+              <img
+                src={candidate.photo_url}
+                alt={candidate.name}
+                className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg flex-shrink-0"
+              />
             ) : (
-              <div className="w-20 h-20 rounded-full bg-[#84050C] flex items-center justify-center text-white text-2xl font-bold">
+              <div className="w-24 h-24 rounded-full bg-[#84050C] flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-lg">
                 {getInitials(candidate.name)}
               </div>
             )}
-            <div>
+
+            <div className="min-w-0">
               <h1 className="text-2xl font-bold text-gray-900">{candidate.name}</h1>
-              <div className="text-sm text-[#84050C] font-medium mt-1">{candidate.position_name}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{candidate.election_name}</div>
+
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                {/* Position badge */}
+                <span className="text-sm bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+                  {candidate.position_name}
+                </span>
+
+                {/* Independent badge */}
+                {candidate.user_id === null && (
+                  <span className="text-xs bg-amber-100 text-amber-700 font-medium px-3 py-1 rounded-full">
+                    Independent Candidate
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs text-gray-400 mt-2">{candidate.election_name}</p>
             </div>
           </div>
         </div>
 
-        {/* About / Bio */}
+        {/* About */}
         {candidate.bio && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">About</h2>
-            <p className="text-gray-700 whitespace-pre-wrap">{candidate.bio}</p>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h2 className="text-base font-semibold text-gray-900">About</h2>
+            <p className="text-gray-700 text-sm whitespace-pre-wrap">{candidate.bio}</p>
           </div>
         )}
 
         {/* Achievements */}
-        {achievements.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">Achievements</h2>
-            <ul className="space-y-3">
-              {achievements.map(a => (
-                <li key={a.id} className="flex items-start gap-3">
-                  <span className="w-2 h-2 rounded-full bg-[#84050C] mt-2 flex-shrink-0" />
+        {sortedAchievements.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h2 className="text-base font-semibold text-gray-900">Achievements</h2>
+            <ol className="space-y-3">
+              {sortedAchievements.map((a) => (
+                <li key={a.id} className="flex gap-3">
+                  <span className="text-sm font-bold text-[#84050C] w-12 flex-shrink-0">
+                    {a.year ?? '—'}
+                  </span>
                   <div>
-                    <div className="font-medium text-gray-800">
-                      {a.title}
-                      {a.year && <span className="text-xs text-gray-400 ml-2">{a.year}</span>}
-                    </div>
-                    {a.description && <div className="text-sm text-gray-600">{a.description}</div>}
+                    <div className="text-sm font-semibold text-gray-900">{a.title}</div>
+                    {a.description && (
+                      <div className="text-xs text-gray-500">{a.description}</div>
+                    )}
                   </div>
                 </li>
               ))}
-            </ul>
+            </ol>
           </div>
         )}
 
-        {/* Campaign Posts */}
-        {posts.length > 0 && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Campaign Posts</h2>
-            {posts.map(p => (
-              <PostCard key={p.id} post={p} currentUserId={user?.id ?? 0} />
-            ))}
+        {/* Campaign Posts — only shown if candidate has an account */}
+        {candidate.user_id !== null && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+            <h2 className="text-base font-semibold text-gray-900">Campaign Posts</h2>
+            {posts.length === 0 ? (
+              <p className="text-sm text-gray-400">No campaign posts yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {posts.map((p) => (
+                  <PostCard key={p.id} post={p} currentUserId={user?.id ?? 0} />
+                ))}
+              </div>
+            )}
           </div>
         )}
+
       </div>
     </Layout>
   )

@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
+
 export interface StudentResult {
   id: number
   name: string
@@ -14,8 +16,20 @@ export interface CandidateForm {
   bio: string
   grade_level?: string
   section?: string
+  grade_level_id?: number | null
+  subtype_id?: number | null
+  section_id?: number | null
   student_user_id?: number | null
   mode: 'manual' | 'existing'
+}
+
+interface AcademicOption { id: number; name: string }
+interface AcademicOptions {
+  gradeLevels: AcademicOption[]
+  subtypes: AcademicOption[]
+  sections: AcademicOption[]
+  gradeLevelId: number | null
+  subtypeId: number | null
 }
 
 interface CandidateManagerProps {
@@ -30,6 +44,8 @@ interface CandidateManagerProps {
   onClearStudentSearch: (key: string) => void
 }
 
+const emptyAcademic: AcademicOptions = { gradeLevels: [], subtypes: [], sections: [], gradeLevelId: null, subtypeId: null }
+
 export default function CandidateManager({
   positionIndex: pi,
   candidates,
@@ -41,13 +57,75 @@ export default function CandidateManager({
   onSearchStudents,
   onClearStudentSearch,
 }: CandidateManagerProps) {
+  const [academicOptions, setAcademicOptions] = useState<Record<string, AcademicOptions>>({})
+  const gradeLevelsFetchedRef = useRef(false)
+  const [globalGradeLevels, setGlobalGradeLevels] = useState<AcademicOption[]>([])
+
+  // Fetch grade levels once
+  useEffect(() => {
+    if (gradeLevelsFetchedRef.current) return
+    gradeLevelsFetchedRef.current = true
+    fetch('/api/academic/grade-levels', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((json) => {
+        const levels: AcademicOption[] = json.data?.gradeLevels ?? json.data?.grade_levels ?? json.data ?? []
+        setGlobalGradeLevels(Array.isArray(levels) ? levels : [])
+      })
+      .catch(() => {})
+  }, [])
+
+  const getKey = (ci: number) => `${pi}_${ci}`
+
+  const getAcademic = (ci: number): AcademicOptions =>
+    academicOptions[getKey(ci)] ?? { ...emptyAcademic, gradeLevels: globalGradeLevels }
+
+  const setAcademic = (ci: number, patch: Partial<AcademicOptions>) =>
+    setAcademicOptions((prev) => ({
+      ...prev,
+      [getKey(ci)]: { ...(prev[getKey(ci)] ?? { ...emptyAcademic, gradeLevels: globalGradeLevels }), ...patch },
+    }))
+
+  const handleGradeLevelChange = async (ci: number, glId: number, glName: string) => {
+    setAcademic(ci, { gradeLevelId: glId, subtypeId: null, subtypes: [], sections: [] })
+    onUpdateCandidate(pi, ci, { grade_level: glName, grade_level_id: glId, subtype_id: null, section_id: null, section: '' })
+    try {
+      const r = await fetch(`/api/academic/subtypes?gradeLevelId=${glId}`, { credentials: 'include' })
+      const json = await r.json()
+      const subtypes: AcademicOption[] = json.data?.subtypes ?? json.data ?? []
+      if (subtypes.length === 0) {
+        // no subtypes — fetch sections directly
+        const rs = await fetch(`/api/academic/sections?gradeLevelId=${glId}`, { credentials: 'include' })
+        const jsons = await rs.json()
+        const sections: AcademicOption[] = jsons.data?.sections ?? jsons.data ?? []
+        setAcademic(ci, { subtypes: [], sections, gradeLevelId: glId })
+      } else {
+        setAcademic(ci, { subtypes, sections: [], gradeLevelId: glId })
+      }
+    } catch {}
+  }
+
+  const handleSubtypeChange = async (ci: number, stId: number, glId: number) => {
+    setAcademic(ci, { subtypeId: stId, sections: [] })
+    onUpdateCandidate(pi, ci, { subtype_id: stId, section_id: null, section: '' })
+    try {
+      const r = await fetch(`/api/academic/sections?gradeLevelId=${glId}&subtypeId=${stId}`, { credentials: 'include' })
+      const json = await r.json()
+      const sections: AcademicOption[] = json.data?.sections ?? json.data ?? []
+      setAcademic(ci, { sections })
+    } catch {}
+  }
+
+  const handleSectionChange = (ci: number, secId: number, secName: string) => {
+    onUpdateCandidate(pi, ci, { section: secName, section_id: secId })
+  }
+
   return (
     <div className="ml-0 space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-gray-600">Candidates</span>
         <button
           onClick={() => onAddCandidate(pi)}
-          className="text-xs text-[#84050C] hover:text-indigo-700 font-medium flex items-center gap-1"
+          className="text-xs text-[#84050C] hover:text-[#6B0409] font-medium flex items-center gap-1"
         >
           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -193,22 +271,68 @@ export default function CandidateManager({
                   rows={1}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] resize-none"
                 />
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    value={cand.grade_level || ''}
-                    onChange={(e) => onUpdateCandidate(pi, ci, { grade_level: e.target.value })}
-                    placeholder="Grade Level (optional)"
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
-                  />
-                  <input
-                    type="text"
-                    value={cand.section || ''}
-                    onChange={(e) => onUpdateCandidate(pi, ci, { section: e.target.value })}
-                    placeholder="Section (optional)"
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
-                  />
-                </div>
+                {/* Academic cascading dropdowns */}
+                {(() => {
+                  const acad = getAcademic(ci)
+                  const selectClass = 'w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white'
+                  return (
+                    <div className="space-y-2">
+                      {/* Grade Level */}
+                      <select
+                        value={acad.gradeLevelId ?? ''}
+                        onChange={(e) => {
+                          const id = Number(e.target.value)
+                          const name = acad.gradeLevels.find((g) => g.id === id)?.name ?? ''
+                          if (id) handleGradeLevelChange(ci, id, name)
+                          else onUpdateCandidate(pi, ci, { grade_level: '', grade_level_id: null, subtype_id: null, section_id: null, section: '' })
+                        }}
+                        className={selectClass}
+                      >
+                        <option value="">Grade Level (optional)</option>
+                        {(acad.gradeLevels.length ? acad.gradeLevels : globalGradeLevels).map((gl) => (
+                          <option key={gl.id} value={gl.id}>{gl.name}</option>
+                        ))}
+                      </select>
+
+                      {/* Subtype (shown only if subtypes exist) */}
+                      {acad.subtypes.length > 0 && (
+                        <select
+                          value={acad.subtypeId ?? ''}
+                          onChange={(e) => {
+                            const id = Number(e.target.value)
+                            if (id && acad.gradeLevelId) handleSubtypeChange(ci, id, acad.gradeLevelId)
+                            else { setAcademic(ci, { subtypeId: null, sections: [] }); onUpdateCandidate(pi, ci, { subtype_id: null, section_id: null, section: '' }) }
+                          }}
+                          className={selectClass}
+                        >
+                          <option value="">Subtype (required)</option>
+                          {acad.subtypes.map((st) => (
+                            <option key={st.id} value={st.id}>{st.name}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {/* Section */}
+                      {acad.sections.length > 0 && (
+                        <select
+                          value={cand.section_id ?? ''}
+                          onChange={(e) => {
+                            const id = Number(e.target.value)
+                            const name = acad.sections.find((s) => s.id === id)?.name ?? ''
+                            if (id) handleSectionChange(ci, id, name)
+                            else onUpdateCandidate(pi, ci, { section: '', section_id: null })
+                          }}
+                          className={selectClass}
+                        >
+                          <option value="">Section (required)</option>
+                          {acad.sections.map((sec) => (
+                            <option key={sec.id} value={sec.id}>{sec.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )}
           </div>

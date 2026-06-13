@@ -62,7 +62,7 @@ function ElectionCard({
     >
       <div className="p-5 flex flex-col h-full">
         <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="font-semibold text-gray-900 text-lg truncate group-hover:text-indigo-600 transition-colors">
+          <h3 className="font-semibold text-gray-900 text-lg truncate group-hover:text-[#84050C] transition-colors">
             {election.title}
           </h3>
           <StatusBadge status={election.status} />
@@ -91,7 +91,7 @@ function ElectionCard({
           {election.status === 'active' && idVerified && !election.hasVoted && (
             <Link
               href={`/elections/${election.id}`}
-              className="inline-flex items-center gap-1 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-1.5 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1 text-sm font-semibold text-white bg-[#84050C] hover:bg-[#6B0409] px-4 py-1.5 rounded-lg transition-colors"
             >
               Vote Now →
             </Link>
@@ -112,7 +112,7 @@ function ElectionCard({
           {election.status === 'ended' && (
             <Link
               href={`/elections/${election.id}`}
-              className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-700 border border-indigo-200 hover:border-indigo-300 px-4 py-1.5 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1 text-sm font-medium text-[#84050C] hover:text-[#6B0409] border border-[#E2A8A4] hover:border-[#D47F88] px-4 py-1.5 rounded-lg transition-colors"
             >
               View Results
             </Link>
@@ -127,7 +127,7 @@ function ElectionCard({
               </Link>
               <Link
                 href={`/admin/elections/${election.id}/edit`}
-                className="text-sm text-indigo-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200 hover:border-indigo-300 transition-colors"
+                className="text-sm text-[#84050C] hover:text-[#6B0409] px-3 py-1.5 rounded-lg border border-[#E2A8A4] hover:border-[#D47F88] transition-colors"
               >
                 Edit
               </Link>
@@ -232,7 +232,7 @@ export default function ElectionsPage() {
           {isAdmin && (
             <Link
               href="/admin/elections"
-              className="inline-flex items-center gap-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg transition-colors"
+              className="inline-flex items-center gap-2 text-sm font-medium text-white bg-[#84050C] hover:bg-[#6B0409] px-4 py-2 rounded-lg transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

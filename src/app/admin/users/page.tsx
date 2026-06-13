@@ -7,6 +7,7 @@ import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import Spinner from '@/components/ui/Spinner'
 import { Skeleton } from '@/components/ui/Skeleton'
+import LightboxModal from '@/components/ui/LightboxModal'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 
@@ -20,8 +21,23 @@ interface UserRow {
   email_verified: 0 | 1
   id_verified: 0 | 1
   id_image: string | null
+  avatar_url: string | null
   active: 0 | 1
   created_at: string
+  grade_level_id?: number | null
+  subtype_id?: number | null
+  section_id?: number | null
+}
+
+interface EditForm {
+  name: string
+  email: string
+  role: Role
+  grade_level_id: string
+  subtype_id: string
+  section_id: string
+  email_verified: boolean
+  active: boolean
 }
 
 interface UsersResponse {
@@ -73,13 +89,37 @@ function getInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-const AVATAR_COLORS = [
-  'bg-[#84050C]', 'bg-purple-500', 'bg-pink-500', 'bg-blue-500',
-  'bg-teal-500', 'bg-green-500', 'bg-yellow-500', 'bg-orange-500',
-]
+const AVATAR_COLORS = ['bg-[#84050C]', 'bg-blue-500', 'bg-green-600', 'bg-purple-600', 'bg-amber-500']
 
 function avatarColor(id: number): string {
   return AVATAR_COLORS[id % AVATAR_COLORS.length]
+}
+
+function UserAvatar({ user, size = 'sm' }: { user: UserRow; size?: 'sm' | 'md' }) {
+  const dim = size === 'sm' ? 'w-9 h-9 text-xs' : 'w-10 h-10 text-sm'
+  if (user.avatar_url) {
+    return (
+      <img
+        src={user.avatar_url}
+        alt={user.name}
+        className={`${dim} rounded-full object-cover flex-shrink-0`}
+      />
+    )
+  }
+  return (
+    <div className={`${dim} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 ${avatarColor(user.id)}`}>
+      {getInitials(user.name)}
+    </div>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+  )
 }
 
 function generatePassword(): string {
@@ -100,6 +140,29 @@ export default function UsersPage() {
   const [patchingId, setPatchingId] = useState<number | null>(null)
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<UserRow | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+
+  // Edit modal state
+  const [editUser, setEditUser] = useState<UserRow | null>(null)
+  const [editForm, setEditForm] = useState<EditForm>({
+    name: '', email: '', role: 'student',
+    grade_level_id: '', subtype_id: '', section_id: '',
+    email_verified: false, active: true,
+  })
+  const [editGradeLevels, setEditGradeLevels] = useState<Array<{id:number,name:string}>>([])
+  const [editSubtypes, setEditSubtypes] = useState<Array<{id:number,name:string}>>([])
+  const [editSections, setEditSections] = useState<Array<{id:number,name:string}>>([])
+  const [saving, setSaving] = useState(false)
+
+  // Document lightbox
+  const [lightboxUrls, setLightboxUrls] = useState<string[]>([])
+  const [lightboxIndex, setLightboxIndex] = useState(0)
+  const [userDocs, setUserDocs] = useState<string[]>([])
+  const [docsLoading, setDocsLoading] = useState(false)
+
+  // Upload & verify
+  const [uploadFiles, setUploadFiles] = useState<File[]>([])
+  const [uploading, setUploading] = useState(false)
+  const uploadInputRef = useRef<HTMLInputElement | null>(null)
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -174,6 +237,130 @@ export default function UsersPage() {
     const url = `/api/academic/sections?gradeLevelId=${createForm.grade_level_id}${createForm.subtype_id?`&subtypeId=${createForm.subtype_id}`:''}`
     fetch(url).then(r=>r.json()).then(j=>setSections(j.data??[]))
   }, [createForm.grade_level_id, createForm.subtype_id])
+
+  // Edit modal — load grade levels
+  useEffect(() => {
+    if (!editUser) return
+    fetch('/api/academic/grade-levels').then(r => r.json()).then(j => setEditGradeLevels(j.data ?? []))
+  }, [editUser])
+
+  // Edit modal — load subtypes on grade change
+  useEffect(() => {
+    if (!editForm.grade_level_id) { setEditSubtypes([]); setEditSections([]); return }
+    fetch(`/api/academic/subtypes?gradeLevelId=${editForm.grade_level_id}`).then(r=>r.json()).then(j=>setEditSubtypes(j.data??[]))
+  }, [editForm.grade_level_id])
+
+  // Edit modal — load sections on grade/subtype change
+  useEffect(() => {
+    if (!editForm.grade_level_id) { setEditSections([]); return }
+    const url = `/api/academic/sections?gradeLevelId=${editForm.grade_level_id}${editForm.subtype_id?`&subtypeId=${editForm.subtype_id}`:''}`
+    fetch(url).then(r=>r.json()).then(j=>setEditSections(j.data??[]))
+  }, [editForm.grade_level_id, editForm.subtype_id])
+
+  // Edit modal — load user documents
+  useEffect(() => {
+    if (!editUser) { setUserDocs([]); return }
+    setDocsLoading(true)
+    fetch(`/api/users/${editUser.id}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => setUserDocs((j.data?.documents as string[]) ?? []))
+      .catch(() => setUserDocs([]))
+      .finally(() => setDocsLoading(false))
+  }, [editUser])
+
+  const openEditModal = (u: UserRow) => {
+    setEditUser(u)
+    setEditForm({
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      grade_level_id: u.grade_level_id ? String(u.grade_level_id) : '',
+      subtype_id: u.subtype_id ? String(u.subtype_id) : '',
+      section_id: u.section_id ? String(u.section_id) : '',
+      email_verified: !!u.email_verified,
+      active: !!u.active,
+    })
+    setUploadFiles([])
+    setUserDocs([])
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editUser) return
+    setSaving(true)
+    try {
+      const patch: Record<string, unknown> = {}
+      if (editForm.name !== editUser.name) patch.name = editForm.name
+      if (editForm.email !== editUser.email) patch.email = editForm.email
+      if (editForm.role !== editUser.role) patch.role = editForm.role
+      if (editForm.email_verified !== !!editUser.email_verified) patch.email_verified = editForm.email_verified
+      if (editForm.active !== !!editUser.active) patch.active = editForm.active
+      const newGl = editForm.grade_level_id ? parseInt(editForm.grade_level_id) : null
+      const newSt = editForm.subtype_id ? parseInt(editForm.subtype_id) : null
+      const newSec = editForm.section_id ? parseInt(editForm.section_id) : null
+      if (newGl !== (editUser.grade_level_id ?? null)) patch.grade_level_id = newGl
+      if (newSt !== (editUser.subtype_id ?? null)) patch.subtype_id = newSt
+      if (newSec !== (editUser.section_id ?? null)) patch.section_id = newSec
+
+      if (Object.keys(patch).length > 0) {
+        const res = await fetch(`/api/users/${editUser.id}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        })
+        const json = await res.json()
+        if (!res.ok) { addToast(json.error || 'Update failed', 'error'); return }
+        const updated = json.data?.user
+        setData(prev => prev ? {
+          ...prev,
+          users: prev.users.map(u => u.id === editUser.id ? { ...u, ...updated } : u)
+        } : prev)
+        addToast('User updated', 'success')
+      }
+      setEditUser(null)
+    } catch {
+      addToast('Network error', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleUploadVerify = async () => {
+    if (!editUser || !uploadFiles.length) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      uploadFiles.forEach(f => fd.append('files', f))
+      if (editForm.grade_level_id) fd.append('grade_level_id', editForm.grade_level_id)
+      if (editForm.subtype_id) fd.append('subtype_id', editForm.subtype_id)
+      if (editForm.section_id) fd.append('section_id', editForm.section_id)
+      const res = await fetch(`/api/admin/users/${editUser.id}/verify-upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: fd,
+      })
+      const json = await res.json()
+      if (res.ok) {
+        addToast('User verified & documents uploaded', 'success')
+        setData(prev => prev ? {
+          ...prev,
+          users: prev.users.map(u => u.id === editUser.id ? { ...u, id_verified: 1, email_verified: 1 } : u)
+        } : prev)
+        setUploadFiles([])
+        if (uploadInputRef.current) uploadInputRef.current.value = ''
+        // Refresh docs list
+        const docsRes = await fetch(`/api/users/${editUser.id}`, { credentials: 'include' })
+        const docsJson = await docsRes.json()
+        setUserDocs((docsJson.data?.documents as string[]) ?? [])
+      } else {
+        addToast(json.error || 'Upload failed', 'error')
+      }
+    } catch {
+      addToast('Network error', 'error')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const patchUser = useCallback(async (id: number, patch: Partial<{ role: Role; active: 0 | 1; email_verified: 0 | 1; id_verified: 0 | 1 }>) => {
     setPatchingId(id)
@@ -273,6 +460,7 @@ export default function UsersPage() {
   const canVerify = currentUser?.role === 'master_admin' || currentUser?.role === 'teacher_admin'
   const totalPages = data ? Math.ceil(data.total / 20) : 1
   const isStudentRole = createForm.role === 'student' || createForm.role === 'student_admin'
+  const isEditStudentRole = editForm.role === 'student' || editForm.role === 'student_admin'
 
   return (
     <Layout>
@@ -372,9 +560,7 @@ export default function UsersPage() {
                       {/* Name / Email */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${avatarColor(u.id)}`}>
-                            {getInitials(u.name)}
-                          </div>
+                          <UserAvatar user={u} size="sm" />
                           <div>
                             <div className="font-medium text-gray-900">{u.name}</div>
                             <div className="text-xs text-gray-500">{u.email}</div>
@@ -488,6 +674,15 @@ export default function UsersPage() {
                       {/* Actions */}
                       <td className="px-4 py-4 text-center">
                         <div className="flex items-center justify-center gap-2">
+                          {canVerify && u.id !== currentUser?.id && (
+                            <button
+                              onClick={() => openEditModal(u)}
+                              className="p-1.5 text-gray-500 hover:text-[#84050C] hover:bg-red-50 rounded-md transition-colors"
+                              title="Edit user"
+                            >
+                              <PencilIcon />
+                            </button>
+                          )}
                           {u.id_image ? (
                             <Button
                               variant="secondary"
@@ -526,9 +721,7 @@ export default function UsersPage() {
               {data.users.map((u) => (
                 <div key={u.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                   <div className="flex items-start gap-3 mb-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 ${avatarColor(u.id)}`}>
-                      {getInitials(u.name)}
-                    </div>
+                    <UserAvatar user={u} size="md" />
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-gray-900 truncate">{u.name}</div>
                       <div className="text-xs text-gray-500 truncate">{u.email}</div>
@@ -536,6 +729,15 @@ export default function UsersPage() {
                         {ROLE_LABELS[u.role]}
                       </Badge>
                     </div>
+                    {canVerify && u.id !== currentUser?.id && (
+                      <button
+                        onClick={() => openEditModal(u)}
+                        className="p-1.5 text-gray-400 hover:text-[#84050C] hover:bg-red-50 rounded-md"
+                        title="Edit user"
+                      >
+                        <PencilIcon />
+                      </button>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-3">
@@ -723,6 +925,164 @@ export default function UsersPage() {
           </div>
         )}
       </Modal>
+
+      {/* Edit User Modal */}
+      <Modal
+        isOpen={!!editUser}
+        onClose={() => setEditUser(null)}
+        title={editUser ? `Edit: ${editUser.name}` : 'Edit User'}
+        size="md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditUser(null)}>Cancel</Button>
+            <Button variant="primary" loading={saving} disabled={saving} onClick={handleSaveEdit}>
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        {editUser && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <input type="text" value={editForm.name}
+                onChange={(e) => setEditForm(f => ({ ...f, name: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" value={editForm.email}
+                onChange={(e) => setEditForm(f => ({ ...f, email: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+              <select value={editForm.role}
+                onChange={(e) => setEditForm(f => ({ ...f, role: e.target.value as Role, grade_level_id: '', subtype_id: '', section_id: '' }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+              >
+                {(currentUser?.role === 'master_admin' ? ALL_ROLES : (['student', 'teacher', 'student_admin'] as Role[])).map((r) => (
+                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                ))}
+              </select>
+            </div>
+            {isEditStudentRole && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
+                  <select value={editForm.grade_level_id}
+                    onChange={(e) => setEditForm(f => ({ ...f, grade_level_id: e.target.value, subtype_id: '', section_id: '' }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+                  >
+                    <option value="">— Select grade level —</option>
+                    {editGradeLevels.map((gl) => (
+                      <option key={gl.id} value={String(gl.id)}>{gl.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {editSubtypes.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Track / Strand</label>
+                    <select value={editForm.subtype_id}
+                      onChange={(e) => setEditForm(f => ({ ...f, subtype_id: e.target.value, section_id: '' }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+                    >
+                      <option value="">— Select track/strand —</option>
+                      {editSubtypes.map((st) => (
+                        <option key={st.id} value={String(st.id)}>{st.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {editSections.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+                    <select value={editForm.section_id}
+                      onChange={(e) => setEditForm(f => ({ ...f, section_id: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+                    >
+                      <option value="">— Select section —</option>
+                      {editSections.map((sec) => (
+                        <option key={sec.id} value={String(sec.id)}>{sec.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </>
+            )}
+            <div className="flex items-center gap-6 pt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={editForm.email_verified}
+                  onChange={(e) => setEditForm(f => ({ ...f, email_verified: e.target.checked }))}
+                  className="w-4 h-4 rounded border-gray-300 text-[#84050C] focus:ring-[#84050C]"
+                />
+                <span className="text-sm text-gray-700">Email Verified</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={editForm.active}
+                  onChange={(e) => setEditForm(f => ({ ...f, active: e.target.checked }))}
+                  className="w-4 h-4 rounded border-gray-300 text-[#84050C] focus:ring-[#84050C]"
+                />
+                <span className="text-sm text-gray-700">Active</span>
+              </label>
+            </div>
+            {/* Verification documents */}
+            <div className="border-t pt-4">
+              <div className="text-sm font-medium text-gray-700 mb-2">Verification Documents</div>
+              {docsLoading ? (
+                <div className="flex gap-2">
+                  {[1,2,3].map(i => <Skeleton key={i} className="w-16 h-16 rounded-lg" />)}
+                </div>
+              ) : userDocs.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {userDocs.map((url, idx) => (
+                    <img key={idx} src={url} alt={`Document ${idx + 1}`}
+                      className="w-16 h-16 object-cover rounded-lg cursor-pointer border border-gray-200 hover:border-[#84050C] transition-colors"
+                      onClick={() => { setLightboxUrls(userDocs); setLightboxIndex(idx) }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">No documents uploaded.</p>
+              )}
+            </div>
+            {/* Upload & Approve */}
+            {canVerify && (
+              <div className="border-t pt-4">
+                <div className="text-sm font-medium text-gray-700 mb-2">Upload &amp; Approve Document</div>
+                <input
+                  ref={uploadInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  multiple
+                  onChange={(e) => setUploadFiles(Array.from(e.target.files ?? []).slice(0, 3))}
+                  className="block w-full text-xs text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#FEE2E2] file:text-[#6B0409] hover:file:bg-red-100 mb-2"
+                />
+                {uploadFiles.length > 0 && (
+                  <div className="text-xs text-gray-500 mb-2">{uploadFiles.map(f => f.name).join(', ')}</div>
+                )}
+                <Button variant="primary" size="sm" loading={uploading}
+                  disabled={uploading || !uploadFiles.length} onClick={handleUploadVerify}
+                >
+                  Upload &amp; Verify User
+                </Button>
+                <p className="text-xs text-gray-400 mt-1">Max 3 files, 5MB each. Images or PDF.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Lightbox */}
+      {lightboxUrls.length > 0 && (
+        <LightboxModal
+          urls={lightboxUrls}
+          startIndex={lightboxIndex}
+          onClose={() => setLightboxUrls([])}
+        />
+      )}
 
       {/* Create User Modal */}
       <Modal

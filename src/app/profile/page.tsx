@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Layout from '@/components/Layout'
 import Button from '@/components/ui/Button'
@@ -66,10 +66,11 @@ export default function ProfilePage() {
   const [nameInput, setNameInput] = useState('')
   const [nameSaving, setNameSaving] = useState(false)
 
-  // Avatar URL state
-  const [editingAvatar, setEditingAvatar] = useState(false)
+  // Avatar state
+  const [avatarTab, setAvatarTab] = useState<'upload' | 'url'>('upload')
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const avatarFileRef = useRef<HTMLInputElement>(null)
   const [avatarInput, setAvatarInput] = useState('')
-  const [avatarSaving, setAvatarSaving] = useState(false)
 
   // Academic change state
   const [showAcademicModal, setShowAcademicModal] = useState(false)
@@ -121,22 +122,41 @@ export default function ProfilePage() {
     fetchProfile()
   }, [fetchProfile])
 
-  // Load academic selectors when modal opens
+  // Load grade levels when modal opens; pre-populate selections from profile
   useEffect(() => {
     if (!showAcademicModal) return
-    Promise.all([
-      fetch('/api/academic/grade-levels').then(r => r.json()),
-      fetch('/api/academic/subtypes').then(r => r.json()),
-      fetch('/api/academic/sections').then(r => r.json()),
-    ]).then(([gl, st, sc]) => {
+    fetch('/api/academic/grade-levels').then(r => r.json()).then(gl => {
       setGradeLevels(gl.data ?? [])
-      setSubtypes(st.data ?? [])
-      setSections(sc.data ?? [])
       setSelectedGrade(profile?.grade_level_id ?? '')
       setSelectedSubtype(profile?.subtype_id ?? '')
       setSelectedSection(profile?.section_id ?? '')
     })
   }, [showAcademicModal, profile])
+
+  // Cascade: grade → subtypes
+  useEffect(() => {
+    if (!showAcademicModal) return
+    setSubtypes([])
+    setSections([])
+    if (!selectedGrade) return
+    fetch(`/api/academic/subtypes?gradeLevelId=${selectedGrade}`)
+      .then(r => r.json())
+      .then(st => setSubtypes(st.data ?? []))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGrade, showAcademicModal])
+
+  // Cascade: subtype → sections
+  useEffect(() => {
+    if (!showAcademicModal || !selectedGrade) return
+    setSections([])
+    const url = selectedSubtype
+      ? `/api/academic/sections?gradeLevelId=${selectedGrade}&subtypeId=${selectedSubtype}`
+      : `/api/academic/sections?gradeLevelId=${selectedGrade}`
+    fetch(url)
+      .then(r => r.json())
+      .then(sc => setSections(sc.data ?? []))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSubtype, selectedGrade, showAcademicModal])
 
   const isStudent = authUser?.role === 'student' || authUser?.role === 'student_admin'
 
@@ -168,30 +188,59 @@ export default function ProfilePage() {
     }
   }
 
-  // --- Avatar save ---
-  async function saveAvatar() {
-    setAvatarSaving(true)
+  // --- Avatar upload ---
+  async function uploadAvatar(file: File) {
+    if (!file.type.startsWith('image/')) { addToast('Only image files allowed', 'error'); return }
+    if (file.size > 5 * 1024 * 1024) { addToast('File too large — max 5 MB', 'error'); return }
+    setAvatarUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('purpose', 'avatar')
+      const res = await fetch('/api/upload', { method: 'POST', credentials: 'include', body: fd })
+      const json = await res.json()
+      if (res.ok) {
+        setProfile(p => p ? { ...p, avatar_url: json.data.url } : p)
+        addToast('Photo updated', 'success')
+        refetch()
+      } else {
+        addToast(json.error ?? 'Upload failed', 'error')
+      }
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
+  async function saveAvatarUrl() {
+    setAvatarUploading(true)
     try {
       const res = await fetch('/api/users/me', {
         method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ avatar_url: avatarInput.trim() || null }),
       })
       const json = await res.json()
       if (res.ok) {
         setProfile(p => p ? { ...p, avatar_url: avatarInput.trim() || null } : p)
-        setEditingAvatar(false)
-        addToast('Profile photo updated', 'success')
+        addToast('Photo updated', 'success')
+        refetch()
       } else {
-        addToast(json.error ?? 'Failed to update photo', 'error')
+        addToast(json.error ?? 'Failed to update', 'error')
       }
     } finally {
-      setAvatarSaving(false)
+      setAvatarUploading(false)
     }
   }
 
   // --- Academic save ---
   async function saveAcademic() {
+    if (authUser?.role === 'student' || authUser?.role === 'student_admin') {
+      if (!selectedGrade) { addToast('Select a grade level', 'error'); return }
+      if (filteredSubtypes.length > 0 && !selectedSubtype) { addToast('Select a track/strand', 'error'); return }
+      if (filteredSections.length === 0) { addToast('No sections available. Contact admin.', 'error'); return }
+      if (!selectedSection) { addToast('Select a section', 'error'); return }
+    }
     setAcademicSaving(true)
     try {
       const res = await fetch('/api/users/me', {
@@ -307,10 +356,9 @@ export default function ProfilePage() {
     }
   }
 
-  const filteredSubtypes = subtypes.filter(s => s.grade_level_id === selectedGrade)
-  const filteredSections = sections.filter(s =>
-    selectedSubtype ? s.subtype_id === selectedSubtype : s.grade_level_id === selectedGrade
-  )
+  // subtypes and sections are now fetched filtered from the API; use them directly
+  const filteredSubtypes = subtypes
+  const filteredSections = sections
 
   if (loading) {
     return (
@@ -341,7 +389,31 @@ export default function ProfilePage() {
               )}
             </div>
             <div className="flex-1">
-              {editingAvatar ? (
+              <div className="flex border border-gray-200 rounded-lg overflow-hidden mb-3 w-fit">
+                <button
+                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${avatarTab === 'upload' ? 'bg-[#84050C] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                  onClick={() => setAvatarTab('upload')}
+                >Upload Photo</button>
+                <button
+                  className={`px-3 py-1.5 text-sm font-medium transition-colors ${avatarTab === 'url' ? 'bg-[#84050C] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                  onClick={() => setAvatarTab('url')}
+                >Use URL</button>
+              </div>
+              {avatarTab === 'upload' ? (
+                <div>
+                  <input
+                    ref={avatarFileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatar(f) }}
+                  />
+                  <Button size="sm" variant="secondary" loading={avatarUploading} onClick={() => avatarFileRef.current?.click()}>
+                    Choose Photo
+                  </Button>
+                  <p className="text-xs text-gray-400 mt-1">JPEG, PNG, WebP or GIF · max 5 MB</p>
+                </div>
+              ) : (
                 <div className="space-y-2">
                   <input
                     type="url"
@@ -350,19 +422,7 @@ export default function ProfilePage() {
                     placeholder="https://example.com/photo.jpg"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]/30 focus:border-[#84050C]"
                   />
-                  <div className="flex gap-2">
-                    <Button size="sm" loading={avatarSaving} onClick={saveAvatar}>Save</Button>
-                    <Button size="sm" variant="secondary" onClick={() => setEditingAvatar(false)}>Cancel</Button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-sm text-gray-500 mb-2">
-                    {profile.avatar_url ? 'Photo URL is set' : 'No photo set — showing initials'}
-                  </p>
-                  <Button size="sm" variant="secondary" onClick={() => { setAvatarInput(profile.avatar_url ?? ''); setEditingAvatar(true) }}>
-                    Change Photo
-                  </Button>
+                  <Button size="sm" loading={avatarUploading} onClick={saveAvatarUrl}>Save URL</Button>
                 </div>
               )}
             </div>
@@ -634,7 +694,12 @@ export default function ProfilePage() {
             <Button variant="secondary" onClick={() => setShowAcademicModal(false)}>Cancel</Button>
             <Button
               onClick={() => setShowAcademicWarning(true)}
-              disabled={!selectedGrade}
+              disabled={
+                !selectedGrade ||
+                (filteredSubtypes.length > 0 && !selectedSubtype) ||
+                filteredSections.length === 0 ||
+                !selectedSection
+              }
             >
               Continue
             </Button>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 
 function requireAdmin(role: string) {
   return ['master_admin', 'teacher_admin'].includes(role)
@@ -39,5 +40,8 @@ export async function POST(request: NextRequest) {
     sql: `INSERT INTO sections (grade_level_id, subtype_id, name) VALUES (?,?,?) RETURNING *`,
     args: [body.grade_level_id, body.subtype_id ?? null, body.name.trim()],
   })
+  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  const name = body.name.trim()
+  await logActivity(authUser.id, 'section_created', `Created section: ${name}`, ip)
   return NextResponse.json({ data: result.rows[0] }, { status: 201 })
 }

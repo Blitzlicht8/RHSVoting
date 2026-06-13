@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 import { InValue } from '@libsql/client'
 
 export async function GET(request: NextRequest) {
@@ -52,9 +53,13 @@ export async function GET(request: NextRequest) {
   const requestsResult = await db.execute({
     sql: `SELECT vr.*, u.name AS user_name, u.email AS user_email, u.role AS user_role,
                  u.grade_level, u.section, vr.intended_role,
-                 vr.grade_level_id, vr.subtype_id, vr.section_id, vr.doc_type
+                 vr.grade_level_id, vr.subtype_id, vr.section_id, vr.doc_type,
+                 gl.name AS grade_level_name, gs.name AS subtype_name, s.name AS section_name
           FROM verification_requests vr
           JOIN users u ON u.id = vr.user_id
+          LEFT JOIN grade_levels gl ON gl.id = vr.grade_level_id
+          LEFT JOIN grade_subtypes gs ON gs.id = vr.subtype_id
+          LEFT JOIN sections s ON s.id = vr.section_id
           ${where}
           ORDER BY vr.created_at DESC
           LIMIT ? OFFSET ?`,
@@ -120,12 +125,31 @@ export async function POST(request: NextRequest) {
   const subtype_id     = formData.get('subtype_id')     ? Number(formData.get('subtype_id'))     : null
   const section_id     = formData.get('section_id')     ? Number(formData.get('section_id'))     : null
 
+  const userRoleRow = await db.execute({ sql: 'SELECT role FROM users WHERE id = ?', args: [authUser.id] })
+  const userRole = userRoleRow.rows[0]?.role as string | undefined
+  const isStudent = !userRole || userRole === 'student' || userRole === 'student_admin'
+  if (isStudent) {
+    if (!grade_level_id) return NextResponse.json({ error: 'Grade level is required' }, { status: 400 })
+    if (!section_id) return NextResponse.json({ error: 'Section is required' }, { status: 400 })
+  }
+
   const rawFiles = formData.getAll('file') as File[]
   if (rawFiles.length === 0) {
     return NextResponse.json({ error: 'At least one file is required.' }, { status: 400 })
   }
   if (rawFiles.length > 3) {
     return NextResponse.json({ error: 'Maximum 3 files allowed.' }, { status: 400 })
+  }
+
+  // Validate file size and type before uploading
+  for (const file of rawFiles) {
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: `File "${file.name}" exceeds 5 MB limit.` }, { status: 400 })
+    }
+    const allowed = ['image/jpeg','image/png','image/webp','image/heic','image/heif','image/gif','application/pdf']
+    if (!allowed.includes(file.type)) {
+      return NextResponse.json({ error: `File "${file.name}" has unsupported type.` }, { status: 400 })
+    }
   }
 
   // Upload each file to Vercel Blob
@@ -140,10 +164,16 @@ export async function POST(request: NextRequest) {
   // Use first URL as the legacy id_image field
   const primaryUrl = uploadedUrls[0]
 
+  // Delete any previously rejected request so the unique user_id constraint doesn't block resubmission
+  await db.execute({
+    sql: `DELETE FROM verification_requests WHERE user_id = ? AND status = 'rejected'`,
+    args: [authUser.id],
+  })
+
   // INSERT verification_request
   const insertResult = await db.execute({
     sql: `INSERT INTO verification_requests
-            (user_id, id_image, status, intended_role, grade_level_id, subtype_id, section_id, doc_type, created_at, updated_at)
+            (user_id, image_path, status, intended_role, grade_level_id, subtype_id, section_id, doc_type, created_at, updated_at)
           VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
     args: [
       authUser.id,
@@ -178,6 +208,9 @@ export async function POST(request: NextRequest) {
           WHERE id = ?`,
     args: [grade_level_id, subtype_id, section_id, authUser.id],
   })
+
+  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  await logActivity(authUser.id, 'verification_submitted', `Submitted ${rawFiles.length} document(s) for verification`, ip)
 
   return NextResponse.json({
     data: { id: verificationRequestId },

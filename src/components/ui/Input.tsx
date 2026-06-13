@@ -18,7 +18,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       leftIcon ? 'pl-10' : '',
       error
         ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-        : 'border-gray-300 focus:ring-indigo-500 focus:border-indigo-500',
+        : 'border-gray-300 focus:ring-[#84050C] focus:border-[#84050C]',
       className,
     ]
       .filter(Boolean)

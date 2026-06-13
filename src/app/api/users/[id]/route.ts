@@ -39,7 +39,8 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   }
 
   const result = await db.execute({
-    sql: `SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at, updated_at
+    sql: `SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at, updated_at,
+                 grade_level_id, subtype_id, section_id, avatar_url
           FROM users WHERE id = ?`,
     args: [targetId],
   })
@@ -49,7 +50,14 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
-  return NextResponse.json({ data: { user } })
+  const docs = await db.execute({
+    sql: `SELECT vd.file_path FROM verification_documents vd
+          JOIN verification_requests vr ON vr.id = vd.verification_request_id
+          WHERE vr.user_id = ? ORDER BY vd.created_at DESC`,
+    args: [targetId]
+  })
+
+  return NextResponse.json({ data: { user, documents: docs.rows.map(r => r.file_path) } })
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
@@ -80,6 +88,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
   const existingUser = existing.rows[0]
+
+  // Role hierarchy check: teacher_admin cannot edit users of equal or higher role
+  const actorLevel = ROLE_LEVEL[authUser.role as string] ?? -1
+  const targetLevel = ROLE_LEVEL[existingUser.role as string] ?? -1
+  if (authUser.role === 'teacher_admin' && targetLevel >= ROLE_LEVEL['teacher_admin']) {
+    return NextResponse.json({ error: 'Cannot edit users of equal or higher role' }, { status: 403 })
+  }
 
   const body = await request.json()
   const setClauses: string[] = []
@@ -122,6 +137,29 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     values.push(body.id_verified ? 1 : 0)
   }
 
+  if (body.grade_level_id !== undefined && adminUser) {
+    setClauses.push('grade_level_id = ?')
+    values.push(body.grade_level_id ?? null)
+  }
+
+  if (body.subtype_id !== undefined && adminUser) {
+    setClauses.push('subtype_id = ?')
+    values.push(body.subtype_id ?? null)
+  }
+
+  if (body.section_id !== undefined && adminUser) {
+    setClauses.push('section_id = ?')
+    values.push(body.section_id ?? null)
+  }
+
+  if (body.email !== undefined && adminUser) {
+    if (typeof body.email !== 'string' || !body.email.includes('@')) {
+      return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
+    }
+    setClauses.push('email = ?')
+    values.push(body.email.trim())
+  }
+
   if (setClauses.length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
   }
@@ -160,6 +198,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     await logActivity(authUser.id, 'id_verified_admin',
       `${body.id_verified ? 'Approved' : 'Revoked'} ID verification for ${targetEmail}`, ip)
   }
+
+  await logActivity(authUser.id, 'user_edited', `Admin edited user ${targetId}: ${Object.keys(body).join(', ')}`, ip)
 
   const updated = await db.execute({
     sql: `SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at, updated_at

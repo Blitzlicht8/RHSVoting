@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 
 export async function GET() {
   await ensureInit()
@@ -61,5 +62,8 @@ export async function PATCH(request: NextRequest) {
   vals.push(authUser.id)
 
   await db.execute({ sql: `UPDATE users SET ${sets.join(', ')} WHERE id = ?`, args: vals })
+  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  const changed = Object.keys(body).join(', ')
+  await logActivity(authUser.id, 'profile_updated', `Updated profile fields: ${changed}`, ip)
   return NextResponse.json({ message: 'Updated' })
 }

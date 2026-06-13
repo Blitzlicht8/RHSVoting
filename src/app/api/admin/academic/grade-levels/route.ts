@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 
 function requireAdmin(role: string) {
   return ['master_admin', 'teacher_admin'].includes(role)
@@ -28,5 +29,8 @@ export async function POST(request: NextRequest) {
     sql: `INSERT INTO grade_levels (name, order_index) VALUES (?, ?) RETURNING *`,
     args: [body.name.trim(), body.order_index ?? next],
   })
+  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  const name = body.name.trim()
+  await logActivity(authUser.id, 'grade_level_created', `Created grade level: ${name}`, ip)
   return NextResponse.json({ data: result.rows[0] }, { status: 201 })
 }

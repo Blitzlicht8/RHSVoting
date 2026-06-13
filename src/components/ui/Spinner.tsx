@@ -17,7 +17,7 @@ export default function Spinner({ size = 'md', className = '' }: SpinnerProps) {
 
   return (
     <svg
-      className={['animate-spin text-indigo-600', className].filter(Boolean).join(' ')}
+      className={['animate-spin text-[#84050C]', className].filter(Boolean).join(' ')}
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"

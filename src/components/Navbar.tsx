@@ -67,7 +67,7 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setShowDropdown((v) => !v)}
-            className="w-9 h-9 rounded-full bg-indigo-600 text-white text-sm font-semibold flex items-center justify-center hover:bg-indigo-700 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            className="w-9 h-9 rounded-full bg-[#84050C] text-white text-sm font-semibold flex items-center justify-center hover:bg-[#6B0409] transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C] focus:ring-offset-2"
             aria-label="User menu"
           >
             {user?.name?.charAt(0).toUpperCase() || '?'}

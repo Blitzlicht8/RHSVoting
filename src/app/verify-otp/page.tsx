@@ -20,19 +20,19 @@ function LogoIcon() {
     >
       <path
         d="M24 4L6 12v12c0 10.5 7.7 20.3 18 22.6C34.3 44.3 42 34.5 42 24V12L24 4z"
-        fill="#4f46e5"
+        fill="#84050C"
         opacity="0.15"
       />
       <path
         d="M24 4L6 12v12c0 10.5 7.7 20.3 18 22.6C34.3 44.3 42 34.5 42 24V12L24 4z"
-        stroke="#4f46e5"
+        stroke="#84050C"
         strokeWidth="2.5"
         strokeLinejoin="round"
       />
-      <rect x="16" y="18" width="4" height="3" rx="1" fill="#4f46e5" />
-      <rect x="22" y="19" width="10" height="1.5" rx="0.75" fill="#4f46e5" />
-      <rect x="16" y="24" width="4" height="3" rx="1" fill="#4f46e5" opacity="0.5" />
-      <rect x="22" y="25" width="10" height="1.5" rx="0.75" fill="#4f46e5" opacity="0.5" />
+      <rect x="16" y="18" width="4" height="3" rx="1" fill="#84050C" />
+      <rect x="22" y="19" width="10" height="1.5" rx="0.75" fill="#84050C" />
+      <rect x="16" y="24" width="4" height="3" rx="1" fill="#84050C" opacity="0.5" />
+      <rect x="22" y="25" width="10" height="1.5" rx="0.75" fill="#84050C" opacity="0.5" />
       <path
         d="M17 19.5l1.2 1.2 2-2"
         stroke="white"
@@ -47,7 +47,7 @@ function LogoIcon() {
 function EnvelopeOpenIcon() {
   return (
     <svg
-      className="w-16 h-16 text-indigo-600"
+      className="w-16 h-16 text-[#84050C]"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.5"
@@ -198,7 +198,7 @@ function VerifyOtpInner() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-indigo-50/30 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-gradient-to-br from-[#FEE2E2]/60 via-white to-[#FEE2E2]/60/30 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 w-full max-w-md">
 
         {/* Branding */}
@@ -208,7 +208,7 @@ function VerifyOtpInner() {
 
         {/* Envelope icon + title */}
         <div className="flex flex-col items-center gap-4 mb-8">
-          <div className="w-20 h-20 rounded-2xl bg-indigo-50 flex items-center justify-center">
+          <div className="w-20 h-20 rounded-2xl bg-[#FEE2E2]/60 flex items-center justify-center">
             <EnvelopeOpenIcon />
           </div>
           <div className="text-center space-y-1">
@@ -252,7 +252,7 @@ function VerifyOtpInner() {
               <button
                 type="button"
                 onClick={handleResend}
-                className="text-sm text-indigo-600 hover:text-indigo-700 font-medium transition-colors"
+                className="text-sm text-[#84050C] hover:text-[#6B0409] font-medium transition-colors"
               >
                 Resend code
               </button>
@@ -282,7 +282,7 @@ export default function VerifyOtpPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-indigo-50/30 flex items-center justify-center p-4">
+        <main className="min-h-screen bg-gradient-to-br from-[#FEE2E2]/60 via-white to-[#FEE2E2]/60/30 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 w-full max-w-md flex items-center justify-center min-h-[320px]">
             <div className="flex flex-col items-center gap-3 text-gray-400">
               <svg className="animate-spin w-8 h-8" fill="none" viewBox="0 0 24 24">

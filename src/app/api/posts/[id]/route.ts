@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 import { Role } from '@/types'
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
@@ -13,5 +14,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   if (post.rows[0].author_id !== authUser.id && !isAdmin(authUser.role as Role))
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   await db.execute({ sql: `DELETE FROM posts WHERE id=?`, args: [postId] })
+  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  await logActivity(authUser.id, 'post_deleted', `Deleted post ${postId}`, ip)
   return NextResponse.json({ message: 'Deleted' })
 }

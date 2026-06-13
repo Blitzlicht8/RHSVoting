@@ -67,19 +67,19 @@ function LogoIcon() {
     >
       <path
         d="M24 4L6 12v12c0 10.5 7.7 20.3 18 22.6C34.3 44.3 42 34.5 42 24V12L24 4z"
-        fill="#4f46e5"
+        fill="#84050C"
         opacity="0.15"
       />
       <path
         d="M24 4L6 12v12c0 10.5 7.7 20.3 18 22.6C34.3 44.3 42 34.5 42 24V12L24 4z"
-        stroke="#4f46e5"
+        stroke="#84050C"
         strokeWidth="2.5"
         strokeLinejoin="round"
       />
-      <rect x="16" y="18" width="4" height="3" rx="1" fill="#4f46e5" />
-      <rect x="22" y="19" width="10" height="1.5" rx="0.75" fill="#4f46e5" />
-      <rect x="16" y="24" width="4" height="3" rx="1" fill="#4f46e5" opacity="0.5" />
-      <rect x="22" y="25" width="10" height="1.5" rx="0.75" fill="#4f46e5" opacity="0.5" />
+      <rect x="16" y="18" width="4" height="3" rx="1" fill="#84050C" />
+      <rect x="22" y="19" width="10" height="1.5" rx="0.75" fill="#84050C" />
+      <rect x="16" y="24" width="4" height="3" rx="1" fill="#84050C" opacity="0.5" />
+      <rect x="22" y="25" width="10" height="1.5" rx="0.75" fill="#84050C" opacity="0.5" />
       <path d="M17 19.5l1.2 1.2 2-2" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
@@ -289,6 +289,7 @@ export default function VerifyIdPage() {
     try {
       const res = await fetch('/api/verifications', {
         method: 'POST',
+        credentials: 'include',
         body: formData,
       })
       const json = await res.json()
@@ -325,7 +326,7 @@ export default function VerifyIdPage() {
         {/* Header */}
         <div className="flex items-center gap-2 mb-8">
           <LogoIcon />
-          <span className="text-lg font-bold text-gray-900">SchoolVoting</span>
+          <span className="text-lg font-bold text-gray-900">RHS E-Voting</span>
         </div>
 
         {/* ── Loading ── */}
@@ -346,7 +347,7 @@ export default function VerifyIdPage() {
             <div>
               <h1 className="text-xl font-bold text-gray-900">Identity verified</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Your identity has been confirmed. You have full access to SchoolVoting.
+                Your identity has been confirmed. You have full access to RHS E-Voting.
               </p>
             </div>
             <Button
@@ -462,7 +463,7 @@ export default function VerifyIdPage() {
                       <div
                         className={[
                           'h-1.5 rounded-full flex-1 transition-colors',
-                          i < stepNum ? 'bg-indigo-500' : 'bg-gray-200',
+                          i < stepNum ? 'bg-[#84050C]' : 'bg-gray-200',
                         ].join(' ')}
                       />
                     </div>
@@ -486,9 +487,9 @@ export default function VerifyIdPage() {
                       setStepError(null)
                       setVerifyStep('student_info')
                     }}
-                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all text-center focus:outline-none focus:ring-2 focus:ring-[#84050C]"
+                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60/50 transition-all text-center focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                   >
-                    <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <svg className="w-8 h-8 text-[#84050C]" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                     </svg>
                     <span className="text-sm font-semibold text-gray-900">Student</span>
@@ -500,9 +501,9 @@ export default function VerifyIdPage() {
                       setStepError(null)
                       setVerifyStep('upload_photo')
                     }}
-                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all text-center focus:outline-none focus:ring-2 focus:ring-[#84050C]"
+                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60/50 transition-all text-center focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                   >
-                    <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <svg className="w-8 h-8 text-[#84050C]" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
                     </svg>
                     <span className="text-sm font-semibold text-gray-900">Teacher</span>
@@ -556,7 +557,7 @@ export default function VerifyIdPage() {
                 {sections.length > 0 && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Section
+                      Section <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={sectionId}
@@ -601,14 +602,14 @@ export default function VerifyIdPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (!gradeLevelId) {
-                        setStepError('Please select a grade level.')
-                        return
-                      }
+                      if (!gradeLevelId) { setStepError('Please select a grade level.'); return }
+                      if (subtypes.length > 0 && !subtypeId) { setStepError('Please select a track/strand.'); return }
+                      if (sections.length === 0) { setStepError('No sections found for this grade. Contact admin.'); return }
+                      if (!sectionId) { setStepError('Please select a section.'); return }
                       setStepError(null)
                       setVerifyStep('upload_photo')
                     }}
-                    className="flex-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C]"
+                    className="flex-1 px-4 py-2 rounded-lg bg-[#84050C] hover:bg-[#6B0409] text-white text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                   >
                     Continue
                   </button>
@@ -745,10 +746,10 @@ function UploadForm({
         className={[
           'w-full rounded-xl border-2 border-dashed p-8 flex flex-col items-center gap-3',
           'transition-all duration-200 cursor-pointer outline-none',
-          'focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
+          'focus-visible:ring-2 focus-visible:ring-[#84050C] focus-visible:ring-offset-2',
           isDragging
-            ? 'border-indigo-400 bg-indigo-50 scale-[1.01]'
-            : 'border-gray-300 bg-gray-50 hover:border-indigo-400 hover:bg-indigo-50/50',
+            ? 'border-[#BA4955] bg-[#FEE2E2]/60 scale-[1.01]'
+            : 'border-gray-300 bg-gray-50 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60/50',
           (uploading || files.length >= MAX_FILES) ? 'opacity-50 cursor-not-allowed' : '',
         ].join(' ')}
         aria-label="Click or drag and drop to upload school documents"
@@ -762,7 +763,7 @@ function UploadForm({
             Images or PDF — max 5 MB each, up to {MAX_FILES} files
           </p>
           {files.length > 0 && (
-            <p className="text-xs text-indigo-500 mt-1 font-medium">
+            <p className="text-xs text-[#84050C] mt-1 font-medium">
               {files.length}/{MAX_FILES} file{files.length !== 1 ? 's' : ''} selected
             </p>
           )}
@@ -790,7 +791,7 @@ function UploadForm({
                     <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
                   </svg>
                 ) : (
-                  <svg className="w-4 h-4 text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 text-[#BA4955] flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3h18M3 3v18" />
                   </svg>
                 )}

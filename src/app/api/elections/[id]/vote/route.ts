@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 import { InValue } from '@libsql/client'
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
@@ -147,5 +148,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'Failed to submit votes. You may have already voted.' }, { status: 409 })
   }
 
+  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  await logActivity(authUser.id, 'vote_cast', `Voted in election ${electionId}`, ip)
   return NextResponse.json({ message: 'Your votes have been submitted!' })
 }

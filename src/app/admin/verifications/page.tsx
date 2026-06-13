@@ -6,6 +6,7 @@ import Modal from '@/components/ui/Modal'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import { Skeleton } from '@/components/ui/Skeleton'
+import LightboxModal from '@/components/ui/LightboxModal'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 
@@ -85,6 +86,7 @@ export default function VerificationsPage() {
 
   const [showImageModal, setShowImageModal] = useState(false)
   const [selectedImageRequest, setSelectedImageRequest] = useState<VerifRequest | null>(null)
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null)
 
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [selectedRejectRequest, setSelectedRejectRequest] = useState<VerifRequest | null>(null)
@@ -354,19 +356,25 @@ export default function VerificationsPage() {
                       {req.intended_role === 'student' && (
                         <>
                           <Badge variant="default" size="sm">Student</Badge>
-                          {req.grade_level && (
-                            <span className="text-xs text-gray-500">Grade {req.grade_level}</span>
-                          )}
-                          {req.section && (
-                            <span className="text-xs text-gray-500">&middot; {req.section}</span>
-                          )}
+                          {(req as any).grade_level_name ? (
+                            <span className="text-xs text-gray-500">
+                              {(req as any).grade_level_name}{(req as any).section_name ? ` · ${(req as any).section_name}` : ''}
+                            </span>
+                          ) : req.grade_level ? (
+                            <>
+                              <span className="text-xs text-gray-500">Grade {req.grade_level}</span>
+                              {req.section && (
+                                <span className="text-xs text-gray-500">&middot; {req.section}</span>
+                              )}
+                            </>
+                          ) : null}
                         </>
                       )}
                       {req.intended_role === 'teacher' && (
                         <Badge variant="default" size="sm">Teacher</Badge>
                       )}
                       {req.doc_type && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-[#FEE2E2]/60 text-[#6B0409] border border-[#FEE2E2]">
                           {req.doc_type}
                         </span>
                       )}
@@ -374,40 +382,27 @@ export default function VerificationsPage() {
                   </div>
                 </div>
 
-                {/* Document gallery */}
-                <div
-                  className="cursor-pointer"
-                  onClick={() => { setSelectedImageRequest(req); setShowImageModal(true) }}
-                  title="Click to view documents"
-                >
-                  {(req.documents && req.documents.length > 0) ? (
-                    <div className={`grid border-y border-gray-100 ${req.documents.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                      {req.documents.slice(0, 4).map((doc, i) => (
-                        doc.file_path.toLowerCase().endsWith('.pdf') ? (
-                          <div key={doc.id} className="h-40 bg-gray-100 flex flex-col items-center justify-center gap-2 border-r border-gray-100 last:border-r-0">
-                            <svg className="w-8 h-8 text-red-400" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                            </svg>
-                            <span className="text-xs text-gray-500">PDF {i + 1}</span>
-                          </div>
-                        ) : (
-                          <img
-                            key={doc.id}
-                            src={doc.file_path}
-                            alt={`Document ${i + 1}`}
-                            className="h-40 w-full object-cover border-r border-gray-100 last:border-r-0 hover:opacity-90 transition-opacity"
-                          />
-                        )
+                {/* Document thumbnails */}
+                {(() => {
+                  const photoUrls = req.documents?.length > 0
+                    ? req.documents.map((d: VerifDocument) => d.file_path)
+                    : req.id_image ? [req.id_image] : []
+                  if (photoUrls.length === 0) return null
+                  return (
+                    <div className="px-4 pb-3 flex flex-wrap gap-2">
+                      {photoUrls.map((url: string, i: number) => (
+                        <img
+                          key={i}
+                          src={url}
+                          alt="Document"
+                          className="w-16 h-16 object-cover rounded-lg cursor-pointer border border-gray-200 hover:opacity-80 transition"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                          onClick={() => setLightbox({ urls: photoUrls, index: i })}
+                        />
                       ))}
                     </div>
-                  ) : (
-                    <img
-                      src={req.id_image}
-                      alt="School ID"
-                      className="w-full h-40 object-cover border-y border-gray-100 hover:opacity-90 transition-opacity"
-                    />
-                  )}
-                </div>
+                  )
+                })()}
 
                 {/* Meta + status */}
                 <div className="px-4 py-3 flex items-center justify-between">
@@ -510,7 +505,7 @@ export default function VerificationsPage() {
                       <svg className="w-6 h-6 text-red-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-sm text-indigo-600 underline">Document {i + 1} (PDF)</span>
+                      <span className="text-sm text-[#84050C] underline">Document {i + 1} (PDF)</span>
                     </a>
                   ) : (
                     <img
@@ -532,6 +527,15 @@ export default function VerificationsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Lightbox */}
+      {lightbox && (
+        <LightboxModal
+          urls={lightbox.urls}
+          startIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+        />
+      )}
 
       {/* Reject Modal */}
       <Modal

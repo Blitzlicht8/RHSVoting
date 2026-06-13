@@ -52,8 +52,81 @@ export interface Election {
 
 // ── GradeTargetingBuilder ────────────────────────────────────────────────────
 
+interface GradeSubtype { id: number; name: string; grade_level_id: number }
+interface Section { id: number; name: string; grade_level_id: number; subtype_id: number | null }
+
+interface GradeState {
+  subtypes: GradeSubtype[]
+  subtypesLoaded: boolean
+  sections: Record<string, Section[]>   // key: subtypeId string or 'direct'
+  sectionsLoaded: Record<string, boolean>
+}
+
+// Selection state (separate from eligibility rules for UI control)
+interface GradeSelection {
+  allGrade: boolean
+  subtypes: Record<number, { checked: boolean; allSubtype: boolean; sections: Record<number, boolean>; allSection: boolean }>
+  directSections: Record<number, boolean>
+  directAllSection: boolean
+}
+
+function buildEligibility(
+  gradeLevels: GradeLevel[],
+  gradeSelections: Record<number, GradeSelection>,
+  gradeStates: Record<number, GradeState>,
+  checkedGradeIds: Set<number>,
+): EligibilityRule[] {
+  const rules: EligibilityRule[] = []
+
+  for (const gradeId of checkedGradeIds) {
+    const sel = gradeSelections[gradeId]
+    if (!sel) continue
+    const gl = gradeLevels.find((g) => g.id === gradeId)
+    if (!gl) continue
+
+    if (sel.allGrade) {
+      rules.push({ grade_level_id: gradeId, subtype_id: null, section_id: null, is_all_grade: false, is_all_subtype: true, is_all_section: true, is_exclude: false })
+      continue
+    }
+
+    const state = gradeStates[gradeId]
+    const hasSubtypes = state?.subtypesLoaded && state.subtypes.length > 0
+
+    if (!hasSubtypes) {
+      // direct sections
+      if (sel.directAllSection) {
+        rules.push({ grade_level_id: gradeId, subtype_id: null, section_id: null, is_all_grade: false, is_all_subtype: true, is_all_section: true, is_exclude: false })
+      } else {
+        const directSections = state?.sections['direct'] ?? []
+        for (const sec of directSections) {
+          if (sel.directSections[sec.id]) {
+            rules.push({ grade_level_id: gradeId, subtype_id: null, section_id: sec.id, is_all_grade: false, is_all_subtype: true, is_all_section: false, is_exclude: false })
+          }
+        }
+      }
+    } else {
+      for (const st of state.subtypes) {
+        const stSel = sel.subtypes[st.id]
+        if (!stSel?.checked) continue
+
+        if (stSel.allSubtype) {
+          rules.push({ grade_level_id: gradeId, subtype_id: st.id, section_id: null, is_all_grade: false, is_all_subtype: false, is_all_section: true, is_exclude: false })
+        } else {
+          const stSections = state.sections[String(st.id)] ?? []
+          for (const sec of stSections) {
+            if (stSel.sections[sec.id]) {
+              rules.push({ grade_level_id: gradeId, subtype_id: st.id, section_id: sec.id, is_all_grade: false, is_all_subtype: false, is_all_section: false, is_exclude: false })
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return rules
+}
+
 function GradeTargetingBuilder({
-  value,
   onChange,
 }: {
   value: EligibilityRule[]
@@ -61,6 +134,10 @@ function GradeTargetingBuilder({
 }) {
   const [gradeLevels, setGradeLevels] = useState<GradeLevel[]>([])
   const [loadingGrades, setLoadingGrades] = useState(true)
+  const [isAllGrades, setIsAllGrades] = useState(false)
+  const [checkedGradeIds, setCheckedGradeIds] = useState<Set<number>>(new Set())
+  const [gradeStates, setGradeStates] = useState<Record<number, GradeState>>({})
+  const [gradeSelections, setGradeSelections] = useState<Record<number, GradeSelection>>({})
   const fetchedRef = useRef(false)
 
   useEffect(() => {
@@ -76,58 +153,254 @@ function GradeTargetingBuilder({
       .finally(() => setLoadingGrades(false))
   }, [])
 
-  const isAllGrade = value.length === 1 && value[0].is_all_grade
-  const selectedIds = new Set(value.filter((r) => !r.is_all_grade).map((r) => r.grade_level_id))
-
-  const handleAllGrade = (checked: boolean) => {
-    if (checked) {
+  // Notify parent whenever selection changes
+  useEffect(() => {
+    if (isAllGrades) {
       onChange([{ grade_level_id: null, subtype_id: null, section_id: null, is_all_grade: true, is_all_subtype: true, is_all_section: true, is_exclude: false }])
-    } else {
-      onChange([])
+      return
+    }
+    onChange(buildEligibility(gradeLevels, gradeSelections, gradeStates, checkedGradeIds))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAllGrades, checkedGradeIds, gradeSelections, gradeStates])
+
+  const fetchSubtypes = async (gradeId: number) => {
+    setGradeStates((prev) => ({
+      ...prev,
+      [gradeId]: { subtypes: [], subtypesLoaded: false, sections: {}, sectionsLoaded: {}, ...prev[gradeId] },
+    }))
+    try {
+      const r = await fetch(`/api/academic/subtypes?gradeLevelId=${gradeId}`, { credentials: 'include' })
+      const json = await r.json()
+      const subtypes: GradeSubtype[] = json.data?.subtypes ?? json.data ?? []
+      setGradeStates((prev) => ({
+        ...prev,
+        [gradeId]: { ...(prev[gradeId] ?? { sections: {}, sectionsLoaded: {} }), subtypes, subtypesLoaded: true },
+      }))
+      if (subtypes.length === 0) {
+        // no subtypes — fetch direct sections
+        fetchDirectSections(gradeId)
+      }
+    } catch {
+      setGradeStates((prev) => ({
+        ...prev,
+        [gradeId]: { ...(prev[gradeId] ?? { sections: {}, sectionsLoaded: {} }), subtypes: [], subtypesLoaded: true },
+      }))
     }
   }
 
-  const handleGradeToggle = (id: number, checked: boolean) => {
+  const fetchDirectSections = async (gradeId: number) => {
+    try {
+      const r = await fetch(`/api/academic/sections?gradeLevelId=${gradeId}`, { credentials: 'include' })
+      const json = await r.json()
+      const sections: Section[] = json.data?.sections ?? json.data ?? []
+      setGradeStates((prev) => ({
+        ...prev,
+        [gradeId]: {
+          ...(prev[gradeId] ?? { subtypes: [], subtypesLoaded: false, sectionsLoaded: {} }),
+          sections: { ...(prev[gradeId]?.sections ?? {}), direct: sections },
+          sectionsLoaded: { ...(prev[gradeId]?.sectionsLoaded ?? {}), direct: true },
+        },
+      }))
+    } catch {}
+  }
+
+  const fetchSubtypeSections = async (gradeId: number, subtypeId: number) => {
+    try {
+      const r = await fetch(`/api/academic/sections?gradeLevelId=${gradeId}&subtypeId=${subtypeId}`, { credentials: 'include' })
+      const json = await r.json()
+      const sections: Section[] = json.data?.sections ?? json.data ?? []
+      setGradeStates((prev) => ({
+        ...prev,
+        [gradeId]: {
+          ...(prev[gradeId] ?? { subtypes: [], subtypesLoaded: false, sectionsLoaded: {} }),
+          sections: { ...(prev[gradeId]?.sections ?? {}), [String(subtypeId)]: sections },
+          sectionsLoaded: { ...(prev[gradeId]?.sectionsLoaded ?? {}), [String(subtypeId)]: true },
+        },
+      }))
+    } catch {}
+  }
+
+  const handleAllGradesToggle = (checked: boolean) => {
+    setIsAllGrades(checked)
     if (checked) {
-      onChange([...value, { grade_level_id: id, subtype_id: null, section_id: null, is_all_grade: false, is_all_subtype: true, is_all_section: true, is_exclude: false }])
-    } else {
-      onChange(value.filter((r) => r.grade_level_id !== id))
+      setCheckedGradeIds(new Set())
+      setGradeSelections({})
     }
   }
 
-  if (loadingGrades) {
-    return <p className="text-sm text-gray-400">Loading grade levels...</p>
+  const handleGradeToggle = (gradeId: number, checked: boolean) => {
+    setCheckedGradeIds((prev) => {
+      const next = new Set(prev)
+      if (checked) { next.add(gradeId) } else { next.delete(gradeId) }
+      return next
+    })
+    if (checked) {
+      setGradeSelections((prev) => ({
+        ...prev,
+        [gradeId]: prev[gradeId] ?? { allGrade: false, subtypes: {}, directSections: {}, directAllSection: false },
+      }))
+      fetchSubtypes(gradeId)
+    }
   }
 
-  if (gradeLevels.length === 0) {
-    return <p className="text-sm text-gray-400">No grade levels found.</p>
+  const updateGradeSel = (gradeId: number, patch: Partial<GradeSelection>) => {
+    setGradeSelections((prev) => ({ ...prev, [gradeId]: { ...(prev[gradeId] ?? { allGrade: false, subtypes: {}, directSections: {}, directAllSection: false }), ...patch } }))
   }
+
+  if (loadingGrades) return <p className="text-sm text-gray-400">Loading grade levels...</p>
+  if (gradeLevels.length === 0) return <p className="text-sm text-gray-400">No grade levels found.</p>
 
   return (
     <div className="space-y-2">
+      {/* All grade levels */}
       <label className="flex items-center gap-3">
-        <input
-          type="checkbox"
-          checked={isAllGrade}
-          onChange={(e) => handleAllGrade(e.target.checked)}
-          className="w-4 h-4"
-        />
+        <input type="checkbox" checked={isAllGrades} onChange={(e) => handleAllGradesToggle(e.target.checked)} className="w-4 h-4" />
         <span className="text-sm text-gray-700 font-medium">All Grade Levels</span>
       </label>
 
-      {!isAllGrade && (
-        <div className="ml-6 space-y-1.5">
-          {gradeLevels.map((gl) => (
-            <label key={gl.id} className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={selectedIds.has(gl.id)}
-                onChange={(e) => handleGradeToggle(gl.id, e.target.checked)}
-                className="w-4 h-4"
-              />
-              <span className="text-sm text-gray-700">{gl.name}</span>
-            </label>
-          ))}
+      {!isAllGrades && (
+        <div className="ml-6 space-y-3">
+          {gradeLevels.map((gl) => {
+            const isChecked = checkedGradeIds.has(gl.id)
+            const sel = gradeSelections[gl.id]
+            const state = gradeStates[gl.id]
+
+            return (
+              <div key={gl.id}>
+                {/* Grade row */}
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={(e) => handleGradeToggle(gl.id, e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm text-gray-700 font-medium">{gl.name}</span>
+                </label>
+
+                {isChecked && sel && (
+                  <div className="ml-6 mt-1.5 space-y-2">
+                    {/* All of this grade */}
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={sel.allGrade}
+                        onChange={(e) => updateGradeSel(gl.id, { allGrade: e.target.checked })}
+                        className="w-3.5 h-3.5"
+                      />
+                      <span className="text-xs text-gray-600 font-medium">All of {gl.name}</span>
+                    </label>
+
+                    {!sel.allGrade && state && (
+                      <>
+                        {!state.subtypesLoaded && (
+                          <p className="text-xs text-gray-400 ml-1">Loading...</p>
+                        )}
+
+                        {/* Subtypes */}
+                        {state.subtypesLoaded && state.subtypes.length > 0 && state.subtypes.map((st) => {
+                          const stSel = sel.subtypes[st.id] ?? { checked: false, allSubtype: false, sections: {}, allSection: false }
+                          return (
+                            <div key={st.id}>
+                              <label className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={stSel.checked}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked
+                                    updateGradeSel(gl.id, {
+                                      subtypes: { ...sel.subtypes, [st.id]: { ...stSel, checked } },
+                                    })
+                                    if (checked && !state.sectionsLoaded[String(st.id)]) {
+                                      fetchSubtypeSections(gl.id, st.id)
+                                    }
+                                  }}
+                                  className="w-3.5 h-3.5"
+                                />
+                                <span className="text-xs text-gray-700">{st.name}</span>
+                              </label>
+
+                              {stSel.checked && (
+                                <div className="ml-6 mt-1 space-y-1">
+                                  {/* All subtype sections */}
+                                  <label className="flex items-center gap-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={stSel.allSubtype}
+                                      onChange={(e) => updateGradeSel(gl.id, {
+                                        subtypes: { ...sel.subtypes, [st.id]: { ...stSel, allSubtype: e.target.checked } },
+                                      })}
+                                      className="w-3 h-3"
+                                    />
+                                    <span className="text-xs text-gray-500">All {st.name} sections</span>
+                                  </label>
+
+                                  {!stSel.allSubtype && (
+                                    <>
+                                      {!state.sectionsLoaded[String(st.id)] && <p className="text-xs text-gray-400">Loading sections...</p>}
+                                      {(state.sections[String(st.id)] ?? []).map((sec) => (
+                                        <label key={sec.id} className="flex items-center gap-3">
+                                          <input
+                                            type="checkbox"
+                                            checked={stSel.sections[sec.id] ?? false}
+                                            onChange={(e) => updateGradeSel(gl.id, {
+                                              subtypes: {
+                                                ...sel.subtypes,
+                                                [st.id]: { ...stSel, sections: { ...stSel.sections, [sec.id]: e.target.checked } },
+                                              },
+                                            })}
+                                            className="w-3 h-3"
+                                          />
+                                          <span className="text-xs text-gray-600">{sec.name}</span>
+                                        </label>
+                                      ))}
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+
+                        {/* Direct sections (no subtypes) */}
+                        {state.subtypesLoaded && state.subtypes.length === 0 && (
+                          <div className="space-y-1">
+                            <label className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={sel.directAllSection}
+                                onChange={(e) => updateGradeSel(gl.id, { directAllSection: e.target.checked })}
+                                className="w-3 h-3"
+                              />
+                              <span className="text-xs text-gray-500">All sections</span>
+                            </label>
+                            {!sel.directAllSection && (
+                              <>
+                                {!state.sectionsLoaded['direct'] && <p className="text-xs text-gray-400">Loading sections...</p>}
+                                {(state.sections['direct'] ?? []).map((sec) => (
+                                  <label key={sec.id} className="flex items-center gap-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={sel.directSections[sec.id] ?? false}
+                                      onChange={(e) => updateGradeSel(gl.id, {
+                                        directSections: { ...sel.directSections, [sec.id]: e.target.checked },
+                                      })}
+                                      className="w-3 h-3"
+                                    />
+                                    <span className="text-xs text-gray-600">{sec.name}</span>
+                                  </label>
+                                ))}
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -175,21 +448,63 @@ export default function ElectionFormModal({
   onSearchStudents,
   onClearStudentSearch,
 }: ElectionFormModalProps) {
+  const [confirmClose, setConfirmClose] = useState(false)
+
+  const handleCloseRequest = () => {
+    if (formData.title.trim().length > 0) {
+      setConfirmClose(true)
+    } else {
+      onClose()
+    }
+  }
+
+  const handleSaveDraft = () => {
+    setConfirmClose(false)
+    onSave()
+  }
+
+  const handleDiscard = () => {
+    setConfirmClose(false)
+    onClose()
+  }
+
   return (
     <Modal
       isOpen={open}
-      onClose={onClose}
+      onClose={handleCloseRequest}
       title={election ? 'Edit Election' : 'New Election'}
       size="lg"
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="secondary" onClick={handleCloseRequest} disabled={saving}>Cancel</Button>
           <Button onClick={onSave} loading={saving}>
             {election ? 'Save Changes' : 'Create Election'}
           </Button>
         </>
       }
     >
+      {confirmClose && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <span className="text-sm text-amber-800">Unsaved changes — Save as draft or Discard?</span>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              className="px-3 py-1 rounded bg-[#84050C] text-white text-xs font-medium hover:bg-[#6B0409] transition-colors"
+            >
+              Save as draft
+            </button>
+            <button
+              type="button"
+              onClick={handleDiscard}
+              className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-6">
         {/* Basic Info */}
         <div>
