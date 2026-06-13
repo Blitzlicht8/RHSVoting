@@ -43,39 +43,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: result.rows })
   }
 
-  // Per-group mode: verifiers for a specific group combo (kept for any future use)
-  const gradeLevelId = searchParams.get('gradeLevelId')
-  if (!gradeLevelId)
-    return NextResponse.json({ error: 'gradeLevelId, userId, or search required' }, { status: 400 })
-
-  const subtypeId = searchParams.get('subtypeId')
-  const sectionId = searchParams.get('sectionId')
-
-  const conditions: string[] = ['gv.grade_level_id = ?']
-  const args: InValue[] = [parseInt(gradeLevelId)]
-
-  if (subtypeId) {
-    conditions.push('gv.subtype_id = ?')
-    args.push(parseInt(subtypeId))
-  } else {
-    conditions.push('gv.subtype_id IS NULL')
-  }
-
-  if (sectionId) {
-    conditions.push('gv.section_id = ?')
-    args.push(parseInt(sectionId))
-  } else {
-    conditions.push('gv.section_id IS NULL')
-  }
-
+  // All-verifiers mode: return every assignment with grade/subtype/section names
   const result = await db.execute({
-    sql: `SELECT gv.id, gv.user_id, gv.grade_level_id, gv.subtype_id, gv.section_id, gv.created_at,
-                 u.name AS user_name, u.role AS user_role, u.avatar_url AS user_avatar_url
+    sql: `SELECT gv.id, gv.user_id, gv.grade_level_id, gv.subtype_id, gv.section_id,
+                 u.name AS user_name, u.role AS user_role, u.avatar_url AS user_avatar_url,
+                 gl.name AS grade_name, st.name AS subtype_name, sec.name AS section_name
           FROM group_verifiers gv
           JOIN users u ON u.id = gv.user_id
-          WHERE ${conditions.join(' AND ')}
-          ORDER BY u.name`,
-    args,
+          LEFT JOIN grade_levels gl ON gl.id = gv.grade_level_id
+          LEFT JOIN grade_subtypes st ON st.id = gv.subtype_id
+          LEFT JOIN sections sec ON sec.id = gv.section_id
+          ORDER BY u.name, gl.name, st.name, sec.name`,
+    args: [],
   })
 
   return NextResponse.json({ data: result.rows })

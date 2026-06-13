@@ -398,13 +398,16 @@ async function _init(): Promise<void> {
     await db.execute({ sql: `INSERT OR IGNORE INTO roles (name, is_system, permissions) VALUES (?,?,?)`, args: [r.name, r.is_system, r.perms] })
   }
 
-  // Seed default grade levels
-  await db.execute({ sql: `INSERT OR IGNORE INTO grade_levels (name, order_index) VALUES ('Grade 7', 0)`, args: [] })
-  await db.execute({ sql: `INSERT OR IGNORE INTO grade_levels (name, order_index) VALUES ('Grade 8', 1)`, args: [] })
-  await db.execute({ sql: `INSERT OR IGNORE INTO grade_levels (name, order_index) VALUES ('Grade 9', 2)`, args: [] })
-  await db.execute({ sql: `INSERT OR IGNORE INTO grade_levels (name, order_index) VALUES ('Grade 10', 3)`, args: [] })
-  await db.execute({ sql: `INSERT OR IGNORE INTO grade_levels (name, order_index) VALUES ('Grade 11', 4)`, args: [] })
-  await db.execute({ sql: `INSERT OR IGNORE INTO grade_levels (name, order_index) VALUES ('Grade 12', 5)`, args: [] })
+  // Seed default grade levels only when table is first created (empty)
+  const glCount = await db.execute({ sql: `SELECT COUNT(*) as cnt FROM grade_levels`, args: [] })
+  if (Number(glCount.rows[0]?.cnt ?? 0) === 0) {
+    await db.execute({ sql: `INSERT INTO grade_levels (name, order_index) VALUES ('Grade 7', 0)`, args: [] })
+    await db.execute({ sql: `INSERT INTO grade_levels (name, order_index) VALUES ('Grade 8', 1)`, args: [] })
+    await db.execute({ sql: `INSERT INTO grade_levels (name, order_index) VALUES ('Grade 9', 2)`, args: [] })
+    await db.execute({ sql: `INSERT INTO grade_levels (name, order_index) VALUES ('Grade 10', 3)`, args: [] })
+    await db.execute({ sql: `INSERT INTO grade_levels (name, order_index) VALUES ('Grade 11', 4)`, args: [] })
+    await db.execute({ sql: `INSERT INTO grade_levels (name, order_index) VALUES ('Grade 12', 5)`, args: [] })
+  }
 
   // Add new columns (idempotent — silently skip if column already exists)
   const newColumns: string[] = [

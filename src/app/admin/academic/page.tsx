@@ -34,6 +34,20 @@ interface VerifierAssignment {
   section_id: number | null
 }
 
+interface VerifierRow {
+  id: number
+  user_id: number
+  grade_level_id: number | null
+  subtype_id: number | null
+  section_id: number | null
+  user_name: string
+  user_role: string
+  user_avatar_url: string | null
+  grade_name: string | null
+  subtype_name: string | null
+  section_name: string | null
+}
+
 function getRoleLabel(role: string): string {
   const labels: Record<string, string> = {
     master_admin: 'Master Admin', admin: 'Admin',
@@ -116,6 +130,8 @@ export default function AcademicStructurePage() {
   const [checkedGroups, setCheckedGroups] = useState<Set<string>>(new Set())
   const [savingAssignments, setSavingAssignments] = useState(false)
   const [expandedGrades, setExpandedGrades] = useState<Set<number>>(new Set())
+  const [allVerifierRows, setAllVerifierRows] = useState<VerifierRow[]>([])
+  const [loadingAllVerifiers, setLoadingAllVerifiers] = useState(true)
 
   useEffect(() => {
     if (user && !requireAdmin(user.role)) router.replace('/dashboard')
@@ -195,6 +211,26 @@ export default function AcademicStructurePage() {
     }, 300)
     return () => clearTimeout(timer)
   }, [verifierSearch])
+
+  const fetchAllVerifiers = useCallback(async () => {
+    setLoadingAllVerifiers(true)
+    try {
+      const res = await fetch('/api/admin/academic/verifiers', { credentials: 'include' })
+      const json = await res.json()
+      setAllVerifierRows((json.data ?? []).map((r: VerifierRow) => ({
+        ...r,
+        id: Number(r.id),
+        user_id: Number(r.user_id),
+        grade_level_id: r.grade_level_id != null ? Number(r.grade_level_id) : null,
+        subtype_id: r.subtype_id != null ? Number(r.subtype_id) : null,
+        section_id: r.section_id != null ? Number(r.section_id) : null,
+      })))
+    } finally {
+      setLoadingAllVerifiers(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchAllVerifiers() }, [fetchAllVerifiers])
 
   const loadGroupStructure = async () => {
     if (groupStructure.length > 0) return
@@ -313,7 +349,10 @@ export default function AcademicStructurePage() {
         ),
       ])
 
-      await loadUserAssignments(selectedVerifier.id)
+      await Promise.all([
+        loadUserAssignments(selectedVerifier.id),
+        fetchAllVerifiers(),
+      ])
     } finally {
       setSavingAssignments(false)
     }
@@ -635,12 +674,85 @@ export default function AcademicStructurePage() {
 
         {/* Verifier Panel */}
         <div className="mt-4 bg-gray-900 rounded-xl border border-gray-800">
-          <div className="px-4 py-3 border-b border-gray-800">
-            <h2 className="text-sm font-semibold text-gray-200">Verifiers</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Search for a moderator or above, then assign them as verifier for one or more groups.</p>
+          <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-gray-200">Verifiers</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Assign moderators or above as verifiers for specific groups.</p>
+            </div>
+            {!selectedVerifier && (
+              <button
+                onClick={() => setVerifierSearch(' ')}
+                className="shrink-0 px-3 py-1.5 bg-[#84050C] hover:bg-[#9e0610] text-white text-xs font-medium rounded-lg transition-colors"
+              >
+                + Assign Verifier
+              </button>
+            )}
           </div>
 
-          <div className="p-4">
+          {/* Current verifiers list */}
+          {!selectedVerifier && (
+            <div className="divide-y divide-gray-800">
+              {loadingAllVerifiers ? (
+                <div className="px-4 py-6 text-center text-gray-500 text-sm">Loading…</div>
+              ) : allVerifierRows.length === 0 ? (
+                <div className="px-4 py-6 text-center text-gray-500 text-sm">No verifiers assigned yet.</div>
+              ) : (() => {
+                // Group rows by user_id
+                const byUser = new Map<number, VerifierRow[]>()
+                for (const row of allVerifierRows) {
+                  if (!byUser.has(row.user_id)) byUser.set(row.user_id, [])
+                  byUser.get(row.user_id)!.push(row)
+                }
+                return Array.from(byUser.entries()).map(([uid, rows]) => {
+                  const u = rows[0]
+                  return (
+                    <div key={uid} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-800/50 transition-colors">
+                      <div className="w-8 h-8 rounded-full bg-[#84050C] flex items-center justify-center relative overflow-hidden shrink-0 mt-0.5">
+                        <span className="text-white text-xs font-medium absolute inset-0 flex items-center justify-center select-none">{u.user_name.charAt(0).toUpperCase()}</span>
+                        {u.user_avatar_url && <img src={u.user_avatar_url} alt="" className="absolute inset-0 w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm text-gray-200 font-medium">{u.user_name}</span>
+                          <span className="text-xs text-gray-500">{getRoleLabel(u.user_role)}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {rows.map(r => {
+                            const parts = [r.grade_name, r.subtype_name, r.section_name].filter(Boolean)
+                            const label = parts.join(' › ')
+                            return (
+                              <span key={r.id} className="inline-flex items-center gap-1 text-xs bg-gray-700 text-gray-300 rounded-full px-2.5 py-0.5">
+                                {label || '—'}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const eligible: EligibleUser = {
+                            id: u.user_id,
+                            name: u.user_name,
+                            role: u.user_role,
+                            avatar_url: u.user_avatar_url,
+                            grade_level_id: rows[0].grade_level_id,
+                            subtype_id: rows[0].subtype_id,
+                            section_id: rows[0].section_id,
+                          }
+                          selectVerifier(eligible)
+                        }}
+                        className="shrink-0 text-xs text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 px-2.5 py-1 rounded transition-colors mt-0.5"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  )
+                })
+              })()}
+            </div>
+          )}
+
+          <div className="p-4 border-t border-gray-800">
             {!selectedVerifier ? (
               /* Search state */
               <div className="max-w-md">
