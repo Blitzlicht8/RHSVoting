@@ -133,7 +133,7 @@ export default function RegisterPage() {
           <Logo />
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900">Create account</h1>
-            <p className="text-sm text-gray-500 mt-1">Join RHS E-Voting today</p>
+            <p className="text-sm text-gray-500 mt-1">Join Community Hub today</p>
           </div>
         </div>
 

@@ -7,7 +7,7 @@ import { AuthProvider } from '@/components/providers/AuthProvider'
 const inter = Inter({ subsets: ['latin'], display: 'swap' })
 
 export const metadata: Metadata = {
-  title: 'RHS E-Voting',
+  title: 'Community Hub',
   description: 'Rizal High School Electronic Voting System',
   icons: { icon: '/rhslogo.png', apple: '/rhslogo.png' },
 }

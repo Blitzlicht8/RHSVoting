@@ -91,8 +91,8 @@ const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif', 'application/pdf']
 const MAX_FILES = 3
 
-const DOC_TYPE_OPTIONS = ['School ID', 'Enrollment Form', 'Registration Form', 'Other Document'] as const
-type DocType = typeof DOC_TYPE_OPTIONS[number]
+const DEFAULT_DOC_TYPES = ['Government ID', 'Enrollment Form', 'Registration Form', 'Other Document']
+type DocType = string
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -116,8 +116,12 @@ export default function VerifyIdPage() {
   const [subtypeId, setSubtypeId]       = useState<string>('')
   const [sectionId, setSectionId]       = useState<string>('')
 
+  // Settings
+  const [docTypeOptions, setDocTypeOptions] = useState<string[]>(DEFAULT_DOC_TYPES)
+  const [appName, setAppName] = useState('Community Hub')
+
   // Document type
-  const [docType, setDocType] = useState<DocType>('School ID')
+  const [docType, setDocType] = useState<DocType>('')
 
   // Upload form state
   const [files, setFiles]           = useState<File[]>([])
@@ -128,9 +132,24 @@ export default function VerifyIdPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dragCounter  = useRef(0)
 
-  // ── Fetch grade levels on mount ────────────────────────────────────────────
+  // ── Fetch settings + grade levels on mount ────────────────────────────────
 
   useEffect(() => {
+    fetch('/api/settings').then(r => r.json()).then(j => {
+      const s = j.data ?? {}
+      if (s.app_name) setAppName(s.app_name)
+      if (s.doc_type_labels) {
+        try {
+          const arr = JSON.parse(s.doc_type_labels)
+          if (Array.isArray(arr) && arr.length) {
+            setDocTypeOptions(arr)
+            setDocType(arr[0])
+          }
+        } catch {}
+      } else {
+        setDocType(DEFAULT_DOC_TYPES[0])
+      }
+    }).catch(() => setDocType(DEFAULT_DOC_TYPES[0]))
     fetch('/api/academic/grade-levels').then(r => r.json()).then(j => setGradeLevels(j.data ?? []))
   }, [])
 
@@ -299,7 +318,7 @@ export default function VerifyIdPage() {
         return
       }
 
-      addToast('Documents submitted successfully. We will review them shortly.', 'success')
+      addToast('Documents submitted. We\'ll review them shortly.', 'success')
       setFiles([])
       await fetchUser()
     } catch {
@@ -326,7 +345,7 @@ export default function VerifyIdPage() {
         {/* Header */}
         <div className="flex items-center gap-2 mb-8">
           <LogoIcon />
-          <span className="text-lg font-bold text-gray-900">RHS E-Voting</span>
+          <span className="text-lg font-bold text-gray-900">{appName}</span>
         </div>
 
         {/* ── Loading ── */}
@@ -347,7 +366,7 @@ export default function VerifyIdPage() {
             <div>
               <h1 className="text-xl font-bold text-gray-900">Identity verified</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Your identity has been confirmed. You have full access to RHS E-Voting.
+                Your identity has been confirmed. You have full access to {appName}.
               </p>
             </div>
             <Button
@@ -582,7 +601,7 @@ export default function VerifyIdPage() {
                     onChange={(e) => setDocType(e.target.value as DocType)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                   >
-                    {DOC_TYPE_OPTIONS.map(opt => (
+                    {docTypeOptions.map(opt => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
@@ -647,7 +666,7 @@ export default function VerifyIdPage() {
                       onChange={(e) => setDocType(e.target.value as DocType)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                     >
-                      {DOC_TYPE_OPTIONS.map(opt => (
+                      {docTypeOptions.map(opt => (
                         <option key={opt} value={opt}>{opt}</option>
                       ))}
                     </select>
@@ -731,7 +750,7 @@ function UploadForm({
         multiple
         className="sr-only"
         onChange={onFileChange}
-        aria-label="Upload school documents"
+        aria-label="Upload verification documents"
       />
 
       {/* Drop zone */}
@@ -752,7 +771,7 @@ function UploadForm({
             : 'border-gray-300 bg-gray-50 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60/50',
           (uploading || files.length >= MAX_FILES) ? 'opacity-50 cursor-not-allowed' : '',
         ].join(' ')}
-        aria-label="Click or drag and drop to upload school documents"
+        aria-label="Click or drag and drop to upload verification documents"
       >
         <UploadCloudIcon />
         <div className="text-center">

@@ -7,13 +7,15 @@ export interface User {
   id: number
   email: string
   name: string
-  role: 'master_admin' | 'teacher_admin' | 'student_admin' | 'teacher' | 'student'
+  role: 'master_admin' | 'teacher_admin' | 'student_admin' | 'teacher' | 'student' | string
   email_verified: boolean | number
   id_verified: boolean | number
   id_image: string | null
   active: boolean | number
   created_at: string
   needs_academic_update?: boolean | number
+  avatar_url?: string | null
+  bio?: string | null
 }
 
 interface AuthContextValue {

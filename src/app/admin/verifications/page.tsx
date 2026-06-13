@@ -267,7 +267,7 @@ export default function VerificationsPage() {
             <div>
               <div className="font-semibold text-gray-900 text-sm">Auto-Approve Submissions</div>
               <div className="text-sm text-gray-500 mt-0.5">
-                Automatically verify accounts when they upload a school ID
+                Automatically verify accounts when they upload an ID document
               </div>
             </div>
             <button
@@ -458,7 +458,7 @@ export default function VerificationsPage() {
       <Modal
         isOpen={showImageModal}
         onClose={() => { setShowImageModal(false); setSelectedImageRequest(null) }}
-        title={selectedImageRequest ? `${selectedImageRequest.user_name}'s School ID` : ''}
+        title={selectedImageRequest ? `${selectedImageRequest.user_name}'s ID Document` : ''}
         size="xl"
       >
         {selectedImageRequest && (
@@ -520,7 +520,7 @@ export default function VerificationsPage() {
             ) : (
               <img
                 src={selectedImageRequest.id_image}
-                alt="Full size School ID"
+                alt="Full size ID document"
                 className="w-full rounded-lg object-contain border border-gray-200 max-h-[65vh]"
               />
             )}

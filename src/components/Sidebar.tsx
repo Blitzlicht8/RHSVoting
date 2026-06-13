@@ -167,7 +167,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             <path d="M9 9h6M9 12h6M9 15h4" />
             <path d="M7 9v6" strokeWidth="2" />
           </svg>
-          <span className="text-white font-bold text-lg">RHS E-Voting</span>
+          <span className="text-white font-bold text-lg">Community Hub</span>
         </div>
       </div>
 

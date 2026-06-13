@@ -26,7 +26,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const loggedIn = hasValidSession(token)
 
   const isAuthPage = ['/', '/register', '/verify-otp'].some((p) => pathname === p)
-  const isProtectedPage = ['/dashboard', '/elections', '/admin', '/verify-id', '/profile'].some(
+  const isProtectedPage = ['/dashboard', '/elections', '/admin', '/verify-id', '/profile', '/users', '/feed'].some(
     (p) => pathname.startsWith(p)
   )
 

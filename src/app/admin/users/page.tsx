@@ -158,6 +158,7 @@ export default function UsersPage() {
   const [userDocs, setUserDocs] = useState<{ id: number; file_path: string }[]>([])
   const [docsLoading, setDocsLoading] = useState(false)
   const [deletingDocId, setDeletingDocId] = useState<number | null>(null)
+  const [nameHistory, setNameHistory] = useState<{old_name:string;new_name:string;changed_at:string}[]>([])
 
   // Upload & verify
   const [uploadFiles, setUploadFiles] = useState<File[]>([])
@@ -257,15 +258,18 @@ export default function UsersPage() {
     fetch(url).then(r=>r.json()).then(j=>setEditSections(j.data??[]))
   }, [editForm.grade_level_id, editForm.subtype_id])
 
-  // Edit modal — load user documents
+  // Edit modal — load user documents + name history
   useEffect(() => {
-    if (!editUser) { setUserDocs([]); return }
+    if (!editUser) { setUserDocs([]); setNameHistory([]); return }
     setDocsLoading(true)
     fetch(`/api/users/${editUser.id}`, { credentials: 'include' })
       .then(r => r.json())
       .then(j => setUserDocs((j.data?.documents as { id: number; file_path: string }[]) ?? []))
       .catch(() => setUserDocs([]))
       .finally(() => setDocsLoading(false))
+    fetch(`/api/admin/users/${editUser.id}/name-history`, { credentials: 'include' })
+      .then(r => r.json()).then(j => setNameHistory(j.data ?? []))
+      .catch(() => {})
   }, [editUser])
 
   const openEditModal = (u: UserRow) => {
@@ -282,6 +286,7 @@ export default function UsersPage() {
     })
     setUploadFiles([])
     setUserDocs([])
+    setNameHistory([])
   }
 
   const handleSaveEdit = async () => {
@@ -477,7 +482,7 @@ export default function UsersPage() {
     )
   }
 
-  const assignableRoles = currentUser ? getAssignableRoles(currentUser.role) : []
+  const assignableRoles = currentUser ? getAssignableRoles(currentUser.role as Role) : []
   const canVerify = currentUser?.role === 'master_admin' || currentUser?.role === 'teacher_admin'
   const totalPages = data ? Math.ceil(data.total / 20) : 1
   const isStudentRole = createForm.role === 'student' || createForm.role === 'student_admin'
@@ -1069,6 +1074,21 @@ export default function UsersPage() {
                 <p className="text-xs text-gray-400 mt-1">Max 3 files, 5MB each. Images or PDF.</p>
               </div>
             )}
+          {nameHistory.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Name History</h4>
+              <div className="space-y-1.5">
+                {nameHistory.map((h, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs text-gray-600">
+                    <span className="text-gray-400 shrink-0">{new Date(h.changed_at).toLocaleDateString()}</span>
+                    <span className="font-medium">{h.old_name}</span>
+                    <span className="text-gray-400">→</span>
+                    <span className="font-medium">{h.new_name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           </div>
         )}
       </Modal>

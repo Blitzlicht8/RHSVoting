@@ -7,7 +7,7 @@ import { useAuth } from '@/components/providers/AuthProvider'
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/elections': 'Elections',
-  '/verify-id': 'Verify School ID',
+  '/verify-id': 'Verify ID',
   '/admin/verifications': 'Verifications',
   '/admin/users': 'Users',
   '/admin/elections': 'Manage Elections',

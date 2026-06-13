@@ -5,6 +5,7 @@ import Layout from '@/components/Layout'
 import Button from '@/components/ui/Button'
 import Spinner from '@/components/ui/Spinner'
 import Modal from '@/components/ui/Modal'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 
@@ -24,6 +25,7 @@ interface ProfileUser {
   email_verified: number | boolean
   id_verified: number | boolean
   avatar_url: string | null
+  bio: string | null
   grade_level_id: number | null
   subtype_id: number | null
   section_id: number | null
@@ -92,6 +94,14 @@ export default function ProfilePage() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [passwordSaving, setPasswordSaving] = useState(false)
 
+  // Bio state
+  const [editingBio, setEditingBio] = useState(false)
+  const [bioInput, setBioInput] = useState('')
+  const [bioSaving, setBioSaving] = useState(false)
+
+  // Settings (group labels)
+  const [settings, setSettings] = useState<{group_label_l1?:string;group_label_l2?:string;group_label_l3?:string}>({})
+
   // Achievement state
   const [showAddAchievement, setShowAddAchievement] = useState(false)
   const [achTitle, setAchTitle] = useState('')
@@ -121,6 +131,10 @@ export default function ProfilePage() {
   useEffect(() => {
     fetchProfile()
   }, [fetchProfile])
+
+  useEffect(() => {
+    fetch('/api/settings').then(r=>r.json()).then(j=>setSettings(j.data??{}))
+  }, [])
 
   // Load grade levels when modal opens; pre-populate selections from profile
   useEffect(() => {
@@ -160,6 +174,10 @@ export default function ProfilePage() {
 
   const isStudent = authUser?.role === 'student' || authUser?.role === 'student_admin'
 
+  const l1 = settings.group_label_l1 ?? 'Grade Level'
+  const l2 = settings.group_label_l2 ?? 'Track / Strand'
+  const l3 = settings.group_label_l3 ?? 'Section'
+
   const initials = profile
     ? profile.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
     : ''
@@ -185,6 +203,28 @@ export default function ProfilePage() {
       }
     } finally {
       setNameSaving(false)
+    }
+  }
+
+  // --- Bio save ---
+  async function saveBio() {
+    setBioSaving(true)
+    try {
+      const res = await fetch('/api/users/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bio: bioInput.trim() || null }),
+      })
+      if (res.ok) {
+        setProfile(p => p ? { ...p, bio: bioInput.trim() || null } : p)
+        setEditingBio(false)
+        addToast('Bio updated', 'success')
+      } else {
+        const j = await res.json()
+        addToast(j.error ?? 'Failed to update bio', 'error')
+      }
+    } finally {
+      setBioSaving(false)
     }
   }
 
@@ -481,14 +521,45 @@ export default function ProfilePage() {
               <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Role</label>
               <span className="text-sm text-gray-900 capitalize">{profile.role.replace(/_/g, ' ')}</span>
             </div>
+            {/* Bio */}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Bio</label>
+              {editingBio ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={bioInput}
+                    onChange={e => setBioInput(e.target.value.slice(0, 200))}
+                    rows={3}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]/30 focus:border-[#84050C] resize-none"
+                    placeholder="Tell the community about yourself…"
+                    autoFocus
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">{bioInput.length}/200</span>
+                    <div className="flex gap-2">
+                      <Button size="sm" loading={bioSaving} onClick={saveBio}>Save</Button>
+                      <Button size="sm" variant="secondary" onClick={() => setEditingBio(false)}>Cancel</Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-sm text-gray-900">{profile.bio ?? <span className="text-gray-400 italic">No bio yet</span>}</span>
+                  <button
+                    onClick={() => { setBioInput(profile.bio ?? ''); setEditingBio(true) }}
+                    className="text-xs text-[#84050C] hover:underline font-medium shrink-0"
+                  >Edit</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* ── 3. ACADEMIC INFO (students only) ── */}
+        {/* ── 3. GROUP INFO (students only) ── */}
         {isStudent && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-gray-800">Academic Info</h2>
+              <h2 className="text-base font-semibold text-gray-800">Group Info</h2>
               <Button size="sm" variant="secondary" onClick={() => setShowAcademicModal(true)}>
                 Request Change
               </Button>
@@ -506,20 +577,20 @@ export default function ProfilePage() {
               ) : null}
               {profile.section_name ? (
                 <span className="bg-blue-100 text-blue-800 text-xs font-medium px-3 py-1 rounded-full">
-                  Section {profile.section_name}
+                  {l3} {profile.section_name}
                 </span>
               ) : null}
               {!profile.grade_level_name && !profile.subtype_name && !profile.section_name && (
-                <span className="text-sm text-gray-400">No academic info set</span>
+                <span className="text-sm text-gray-400">No group info set</span>
               )}
             </div>
             {profile.id_verified ? (
               <p className="mt-3 text-xs text-green-600 flex items-center gap-1">
                 <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                School ID verified
+                ID verified
               </p>
             ) : (
-              <p className="mt-3 text-xs text-amber-600">School ID pending verification</p>
+              <p className="mt-3 text-xs text-amber-600">ID pending verification</p>
             )}
           </div>
         )}
@@ -687,7 +758,7 @@ export default function ProfilePage() {
       <Modal
         isOpen={showAcademicModal}
         onClose={() => setShowAcademicModal(false)}
-        title="Change Academic Info"
+        title="Change Group Info"
         size="sm"
         footer={
           <>
@@ -708,38 +779,38 @@ export default function ProfilePage() {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Grade Level</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">{l1}</label>
             <select
               value={selectedGrade}
               onChange={e => { setSelectedGrade(e.target.value ? Number(e.target.value) : ''); setSelectedSubtype(''); setSelectedSection('') }}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]/30 focus:border-[#84050C]"
             >
-              <option value="">Select grade level</option>
+              <option value="">Select {l1.toLowerCase()}</option>
               {gradeLevels.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
           </div>
           {filteredSubtypes.length > 0 && (
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Track / Strand</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">{l2}</label>
               <select
                 value={selectedSubtype}
                 onChange={e => { setSelectedSubtype(e.target.value ? Number(e.target.value) : ''); setSelectedSection('') }}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]/30 focus:border-[#84050C]"
               >
-                <option value="">Select track / strand</option>
+                <option value="">Select {l2.toLowerCase()}</option>
                 {filteredSubtypes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
           )}
           {filteredSections.length > 0 && (
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Section</label>
+              <label className="block text-xs font-medium text-gray-500 mb-1">{l3}</label>
               <select
                 value={selectedSection}
                 onChange={e => setSelectedSection(e.target.value ? Number(e.target.value) : '')}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]/30 focus:border-[#84050C]"
               >
-                <option value="">Select section</option>
+                <option value="">Select {l3.toLowerCase()}</option>
                 {filteredSections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
@@ -751,7 +822,7 @@ export default function ProfilePage() {
       <Modal
         isOpen={showAcademicWarning}
         onClose={() => setShowAcademicWarning(false)}
-        title="Confirm Academic Change"
+        title="Confirm Group Change"
         size="sm"
         footer={
           <>
@@ -768,30 +839,22 @@ export default function ProfilePage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <p className="text-sm text-amber-800">
-              Changing your academic info will <strong>reset your school ID verification</strong>. You will need to re-upload your documents and wait for re-approval before you can vote.
+              Changing your group info will <strong>reset your ID verification</strong>. You will need to re-upload your documents and wait for re-approval before you can vote.
             </p>
           </div>
           <p className="text-sm text-gray-600">Are you sure you want to proceed?</p>
         </div>
       </Modal>
 
-      {/* Delete achievement confirm modal */}
-      <Modal
-        isOpen={deletingAchId !== null}
-        onClose={() => setDeletingAchId(null)}
+      <ConfirmDialog
+        open={deletingAchId !== null}
         title="Delete Achievement"
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setDeletingAchId(null)}>Cancel</Button>
-            <Button variant="danger" onClick={() => deletingAchId !== null && deleteAchievement(deletingAchId)}>
-              Delete
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-gray-600">Are you sure you want to delete this achievement? This cannot be undone.</p>
-      </Modal>
+        message="Are you sure you want to delete this achievement? This cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => deletingAchId !== null && deleteAchievement(deletingAchId)}
+        onCancel={() => setDeletingAchId(null)}
+      />
     </Layout>
   )
 }

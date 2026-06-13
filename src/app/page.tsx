@@ -181,7 +181,7 @@ export default function LoginPage() {
         <div className="flex flex-col items-center gap-3 mb-8">
           <Logo />
           <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900">RHS E-Voting</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Community Hub</h1>
             <p className="text-sm text-gray-500 mt-1">
               {step === 'creds' ? 'Sign in to your account' : 'Two-factor authentication'}
             </p>

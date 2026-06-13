@@ -78,7 +78,7 @@ export default function Layout({ children }: LayoutProps) {
         {/* ID unverified banner */}
         {user.email_verified && !user.id_verified && !user.needs_academic_update && (
           <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-center gap-2 text-sm text-amber-700">
-            <span>📋 Your school ID is pending verification. You cannot vote until approved.</span>
+            <span>📋 Your ID is pending verification. You cannot vote until approved.</span>
             <Link href="/verify-id" className="underline font-medium ml-1">
               Upload ID →
             </Link>
