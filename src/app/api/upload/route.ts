@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
   const filename = `school-ids/${authUser.id}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}.${ext}`
   const buffer = Buffer.from(await file.arrayBuffer())
 
-  const blob = await put(filename, buffer, { access: 'public', contentType: mimeType })
+  const blob = await put(filename, buffer, { access: 'public', contentType: file.type })
   const imagePath = blob.url
 
   await db.execute({

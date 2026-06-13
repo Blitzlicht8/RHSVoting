@@ -78,7 +78,7 @@ function buildEligibility(
 ): EligibilityRule[] {
   const rules: EligibilityRule[] = []
 
-  for (const gradeId of checkedGradeIds) {
+  for (const gradeId of Array.from(checkedGradeIds)) {
     const sel = gradeSelections[gradeId]
     if (!sel) continue
     const gl = gradeLevels.find((g) => g.id === gradeId)
@@ -166,7 +166,7 @@ function GradeTargetingBuilder({
   const fetchSubtypes = async (gradeId: number) => {
     setGradeStates((prev) => ({
       ...prev,
-      [gradeId]: { subtypes: [], subtypesLoaded: false, sections: {}, sectionsLoaded: {}, ...prev[gradeId] },
+      [gradeId]: { ...prev[gradeId], subtypes: [], subtypesLoaded: false, sections: prev[gradeId]?.sections ?? {}, sectionsLoaded: prev[gradeId]?.sectionsLoaded ?? {} },
     }))
     try {
       const r = await fetch(`/api/academic/subtypes?gradeLevelId=${gradeId}`, { credentials: 'include' })

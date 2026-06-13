@@ -39,7 +39,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     })
     await db.execute({
       sql: `INSERT INTO verification_documents (verification_request_id, file_path, doc_type, created_at) VALUES (?,?,?,?)`,
-      args: [vrId, blob.url, 'school_id', now]
+      args: [Number(vrId), blob.url, 'school_id', now]
     })
   }
 
