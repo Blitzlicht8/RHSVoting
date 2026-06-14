@@ -8,7 +8,7 @@
 2026-06-14
 
 ## Version After This Session
-`0.7.3` — Collapsible positions/candidates, activate validation, vote now card fix
+`0.7.6` — Academic dropdown restore on reopen + validation bypass fix
 
 ---
 
@@ -92,11 +92,54 @@ Full redesign — breadcrumb, header card (avatar/initials, name, position, elec
 
 ---
 
+### v0.7.4 — Save Candidate button validation
+
+#### CandidateManager (`src/components/admin/elections/CandidateManager.tsx`)
+- Save Candidate always visible in manual mode (was hidden until name filled)
+- Disabled + inline hint until all required fields present: Name → `{l1}` → `{l2}` (if subtype_required) → `{l3}` (if section_required)
+- Computes `canSave = !missingName && !missingGroup && !missingSubgroup && !missingUnit`
+- Hint text uses dynamic labels from settings
+
+---
+
+### v0.7.4 — Save Candidate button validation
+
+#### CandidateManager (`src/components/admin/elections/CandidateManager.tsx`)
+- Save Candidate always visible in manual mode (was hidden until name filled)
+- Disabled + inline hint until all required fields present: Name → `{l1}` → `{l2}` (if subtype_required) → `{l3}` (if section_required)
+- Computes `canSave = !missingName && !missingGroup && !missingSubgroup && !missingUnit`
+- Hint text uses dynamic labels from settings
+
+---
+
+### v0.7.5 — Vote Now shows after voting fix
+
+#### Elections List API (`src/app/api/elections/route.ts`)
+- `voterIdArg` was only set for non-admin users — admins skipped the `hasVoted` LEFT JOIN entirely
+- `election.hasVoted = undefined` for admins → `!undefined = true` → Vote Now rendered even after voting
+- Fix: `voterIdArg = authUser.id` unconditionally (was inside `if (isEligibilityScoped)` block)
+- All users now get `hasVoted: 0|1` in the elections list response
+
+---
+
+### v0.7.6 — Academic dropdown restore on reopen + validation bypass fix
+
+#### CandidateManager (`src/components/admin/elections/CandidateManager.tsx`)
+- Added `restoredRef` to track which candidates have been restored
+- New `useEffect` fires when `globalGradeLevels` loads: finds manual candidates with `grade_level` string but no `grade_level_id`, looks up matching ID, then fetches subtypes/sections chain to restore `subtype_id`, `section_id`, `subtype_required`, `section_required`, and academic dropdown options
+- `restoredRef` prevents double-firing; `candidatesRef` reads current candidates without being a dep (avoids infinite loops)
+- `canSave`: changed to accept string fallback — `!grade_level_id && !grade_level.trim()` = truly missing; if either is present, group is satisfied. Same for subgroup/unit.
+
+#### handleSave validation (`src/app/admin/elections/page.tsx`)
+- Same string fallback: `!cand.grade_level_id && !cand.grade_level?.trim()` — prevents blocking save on candidates whose IDs haven't finished restoring yet
+
+---
+
 ## Current State
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.7.3`
+- Version: `0.7.6`
 
 ---
 
