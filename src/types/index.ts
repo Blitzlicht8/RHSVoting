@@ -58,6 +58,9 @@ export interface Candidate {
   name: string;
   bio: string | null;
   image: string | null;
+  photo_url?: string | null;
+  platform?: string | null;
+  qualifications?: string | null;
   user_id?: number | null;
 }
 

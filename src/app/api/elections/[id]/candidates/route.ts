@@ -65,7 +65,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 
   const body = await request.json()
-  const { position_id, name, bio } = body
+  const { position_id, name, bio, photo_url, platform, qualifications } = body
 
   if (!position_id || isNaN(parseInt(position_id, 10))) {
     return NextResponse.json({ error: 'position_id is required' }, { status: 400 })
@@ -83,8 +83,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 
   const insertResult = await db.execute({
-    sql: `INSERT INTO candidates (election_id, position_id, name, bio) VALUES (?, ?, ?, ?)`,
-    args: [electionId, parseInt(position_id, 10), name.trim(), bio ?? null],
+    sql: `INSERT INTO candidates (election_id, position_id, name, bio, photo_url, platform, qualifications) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [electionId, parseInt(position_id, 10), name.trim(), bio ?? null, photo_url ?? null, platform ?? null, qualifications ?? null],
   })
 
   const candidate = await db.execute({

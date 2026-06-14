@@ -83,7 +83,6 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     ? positionsWithResults.map((pos) => ({
         ...pos,
         candidates: pos.candidates.map(({ ...c }) => {
-          // Remove any field that would identify individual voters
           const { ...safe } = c as Record<string, unknown>
           delete safe.voter_id
           delete safe.voters
@@ -92,5 +91,52 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       }))
     : positionsWithResults
 
-  return NextResponse.json({ data: { election, positions: safePositions } })
+  // Participation stats
+  const totalVotersResult = await db.execute({
+    sql: `SELECT COUNT(DISTINCT voter_id) as total FROM votes WHERE election_id = ?`,
+    args: [electionId],
+  })
+  const totalVoters = Number(totalVotersResult.rows[0]?.total ?? 0)
+
+  let eligibleCount = 0
+  const electionRow = election as Record<string, unknown>
+  if (electionRow.is_global) {
+    const ec = await db.execute({ sql: `SELECT COUNT(*) as cnt FROM users WHERE id_verified = 1 AND active = 1`, args: [] })
+    eligibleCount = Number(ec.rows[0]?.cnt ?? 0)
+  } else {
+    const eligRules = await db.execute({ sql: `SELECT * FROM election_eligibility WHERE election_id = ? AND is_exclude = 0`, args: [electionId] })
+    if (eligRules.rows.length > 0) {
+      let allUsers = false
+      const conds: string[] = []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cargs: any[] = []
+      for (const r of eligRules.rows as Record<string, unknown>[]) {
+        if (r.is_all_grade) { allUsers = true; break }
+        let cond = `grade_level_id = ?`; cargs.push(r.grade_level_id)
+        if (!r.is_all_subtype && r.subtype_id) { cond += ` AND subtype_id = ?`; cargs.push(r.subtype_id) }
+        if (!r.is_all_section && r.section_id) { cond += ` AND section_id = ?`; cargs.push(r.section_id) }
+        conds.push(`(${cond})`)
+      }
+      const whereExtra = allUsers ? '' : ` AND (${conds.join(' OR ')})`
+      const ec = await db.execute({
+        sql: `SELECT COUNT(*) as cnt FROM users WHERE id_verified = 1 AND active = 1${whereExtra}`,
+        args: allUsers ? [] : cargs,
+      })
+      eligibleCount = Number(ec.rows[0]?.cnt ?? 0)
+    }
+  }
+
+  const participationRate = eligibleCount > 0
+    ? Math.round((totalVoters / eligibleCount) * 10000) / 100
+    : 0
+
+  return NextResponse.json({
+    data: {
+      election,
+      positions: safePositions,
+      total_voters: totalVoters,
+      eligible_count: eligibleCount,
+      participation_rate: participationRate,
+    },
+  })
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import Layout from '@/components/Layout'
@@ -323,20 +323,77 @@ function ResultsView({
   userVotes,
   myVoteCandidateIds,
   isStudentRole,
+  isAdmin,
 }: {
   election: Election
   userVotes: UserVote[]
   myVoteCandidateIds: number[]
   isStudentRole: boolean
+  isAdmin: boolean
 }) {
+  const electionId = String(election.id)
+  const [livePositions, setLivePositions] = useState(election.positions)
+  const [totalVoters, setTotalVoters] = useState<number | null>(null)
+  const [eligibleCount, setEligibleCount] = useState<number | null>(null)
+  const [participationRate, setParticipationRate] = useState<number | null>(null)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number>(0)
+  const [secondsAgo, setSecondsAgo] = useState(0)
+  const [exporting, setExporting] = useState(false)
+  const mountedRef = useRef(true)
+
+  const fetchResults = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/elections/${electionId}/results`, { credentials: 'include' })
+      if (!res.ok || !mountedRef.current) return
+      const json = await res.json()
+      if (json.data?.positions) setLivePositions(json.data.positions)
+      if (json.data?.total_voters != null) setTotalVoters(Number(json.data.total_voters))
+      if (json.data?.eligible_count != null) setEligibleCount(Number(json.data.eligible_count))
+      if (json.data?.participation_rate != null) setParticipationRate(Number(json.data.participation_rate))
+      setLastUpdatedAt(Date.now())
+    } catch { /* ignore */ }
+  }, [electionId])
+
+  useEffect(() => {
+    mountedRef.current = true
+    fetchResults()
+    return () => { mountedRef.current = false }
+  }, [fetchResults])
+
+  useEffect(() => {
+    if (!isAdmin || election.status !== 'active') return
+    const interval = setInterval(fetchResults, 30000)
+    return () => clearInterval(interval)
+  }, [isAdmin, election.status, fetchResults])
+
+  useEffect(() => {
+    if (!isAdmin || election.status !== 'active' || !lastUpdatedAt) return
+    const tick = setInterval(() => setSecondsAgo(Math.floor((Date.now() - lastUpdatedAt) / 1000)), 1000)
+    return () => clearInterval(tick)
+  }, [isAdmin, election.status, lastUpdatedAt])
+
   const userVoteMap: Record<number, number[]> = {}
   for (const v of userVotes) {
     if (!userVoteMap[v.position_id]) userVoteMap[v.position_id] = []
     userVoteMap[v.position_id].push(v.candidate_id)
   }
 
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const res = await fetch(`/api/elections/${electionId}/results/export`, { credentials: 'include' })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `election-${electionId}-results.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch { /* ignore */ } finally { setExporting(false) }
+  }
+
   if (election.status !== 'ended') {
-    // Build "Your Votes" summary from positions + myVoteCandidateIds
     const myVoteSet = new Set(myVoteCandidateIds.map(Number))
     const mySelections = election.positions.map((pos) => {
       const chosen = pos.candidates.filter((c) => myVoteSet.has(c.id))
@@ -378,25 +435,124 @@ function ResultsView({
             </div>
           </div>
         )}
+
+        {isAdmin && (
+          <ResultsPositionList
+            positions={livePositions}
+            userVoteMap={userVoteMap}
+            isEnded={false}
+            hideVoteCounts={false}
+            electionId={electionId}
+            isAdmin={isAdmin}
+            secondsAgo={secondsAgo}
+            lastUpdatedAt={lastUpdatedAt}
+            totalVoters={totalVoters}
+            eligibleCount={eligibleCount}
+            participationRate={participationRate}
+            onExport={handleExport}
+            exporting={exporting}
+          />
+        )}
       </div>
     )
   }
 
   return (
+    <ResultsPositionList
+      positions={livePositions}
+      userVoteMap={userVoteMap}
+      isEnded={true}
+      hideVoteCounts={isStudentRole && election.status !== 'ended'}
+      electionId={electionId}
+      isAdmin={isAdmin}
+      secondsAgo={secondsAgo}
+      lastUpdatedAt={lastUpdatedAt}
+      totalVoters={totalVoters}
+      eligibleCount={eligibleCount}
+      participationRate={participationRate}
+      onExport={handleExport}
+      exporting={exporting}
+    />
+  )
+}
+
+function ResultsPositionList({
+  positions,
+  userVoteMap,
+  isEnded,
+  hideVoteCounts,
+  electionId,
+  isAdmin,
+  secondsAgo,
+  lastUpdatedAt,
+  totalVoters,
+  eligibleCount,
+  participationRate,
+  onExport,
+  exporting,
+}: {
+  positions: Position[]
+  userVoteMap: Record<number, number[]>
+  isEnded: boolean
+  hideVoteCounts: boolean
+  electionId: string
+  isAdmin: boolean
+  secondsAgo: number
+  lastUpdatedAt: number
+  totalVoters: number | null
+  eligibleCount: number | null
+  participationRate: number | null
+  onExport: () => void
+  exporting: boolean
+}) {
+  return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <svg className="w-5 h-5 text-[#84050C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-        <h2 className="text-lg font-semibold text-gray-900">Election Results</h2>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-[#84050C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <h2 className="text-lg font-semibold text-gray-900">Election Results</h2>
+          {isAdmin && !isEnded && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              Live
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && !isEnded && lastUpdatedAt > 0 && (
+            <span className="text-xs text-gray-400">Updated {secondsAgo}s ago</span>
+          )}
+          {isAdmin && isEnded && (
+            <button
+              onClick={onExport}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-[#84050C] hover:bg-[#6B0409] rounded-lg transition-colors disabled:opacity-50"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              {exporting ? 'Exporting…' : 'Export CSV'}
+            </button>
+          )}
+        </div>
       </div>
 
-      {election.positions.map((position) => {
+      {isEnded && totalVoters !== null && eligibleCount !== null && (
+        <div className="bg-gray-50 rounded-xl border border-gray-200 px-5 py-3 text-sm text-gray-600">
+          <span className="font-semibold text-gray-900">{totalVoters}</span> of{' '}
+          <span className="font-semibold text-gray-900">{eligibleCount}</span> eligible members voted
+          {participationRate !== null && (
+            <span className="ml-1 text-gray-400">({participationRate}%)</span>
+          )}
+        </div>
+      )}
+
+      {positions.map((position) => {
         const total = position.candidates.reduce((sum, c) => sum + (c.vote_count ?? 0), 0)
         const sorted = [...position.candidates].sort((a, b) => (b.vote_count ?? 0) - (a.vote_count ?? 0))
         const winnerVotes = sorted[0]?.vote_count ?? 0
-        // Students never see vote counts — only show aggregates after election ends
-        const hideVoteCounts = isStudentRole && election.status !== 'ended'
 
         return (
           <div key={position.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -410,24 +566,23 @@ function ResultsView({
               {sorted.map((candidate, index) => {
                 const votes = candidate.vote_count ?? 0
                 const pct = candidate.percentage ?? (total > 0 ? Math.round((votes / total) * 10000) / 100 : 0)
-                const isWinner = !hideVoteCounts && votes === winnerVotes && winnerVotes > 0
+                const isWinner = !hideVoteCounts && isEnded && index === 0 && votes === winnerVotes && winnerVotes > 0
                 const userVotedFor = (userVoteMap[position.id] ?? []).includes(candidate.id)
 
                 return (
                   <div
                     key={candidate.id}
                     className={`rounded-lg p-4 ${
-                      isWinner && index === 0
+                      isWinner
                         ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border border-amber-200'
                         : 'bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2.5">
-                        {isWinner && index === 0 && (
-                          <span className="text-amber-500 text-base" title="Winner">👑</span>
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        {isWinner && (
+                          <span className="text-amber-500 text-base flex-shrink-0" title="Winner">👑</span>
                         )}
-                        {/* Avatar */}
                         <div className="w-9 h-9 rounded-full bg-[#FEE2E2] text-[#6B0409] flex items-center justify-center text-sm font-bold overflow-hidden flex-shrink-0">
                           {candidate.photo_url ? (
                             <img src={candidate.photo_url} alt={candidate.name} className="w-full h-full object-cover" />
@@ -435,15 +590,22 @@ function ResultsView({
                             candidate.name.charAt(0).toUpperCase()
                           )}
                         </div>
-                        <div>
-                          <span className="font-semibold text-sm text-gray-900">{candidate.name}</span>
-                          {userVotedFor && (
-                            <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
-                              Your vote
-                            </span>
-                          )}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-sm text-gray-900">{candidate.name}</span>
+                            {isWinner && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">
+                                WINNER
+                              </span>
+                            )}
+                            {userVotedFor && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                                Your vote
+                              </span>
+                            )}
+                          </div>
                           <Link
-                            href={`/elections/${election.id}/candidates/${candidate.id}`}
+                            href={`/elections/${electionId}/candidates/${candidate.id}`}
                             className="text-xs text-[#84050C] hover:underline mt-0.5 inline-block"
                           >
                             View Profile
@@ -451,7 +613,7 @@ function ResultsView({
                         </div>
                       </div>
                       {!hideVoteCounts && (
-                        <div className="text-right">
+                        <div className="text-right flex-shrink-0">
                           <span className="text-sm font-bold text-gray-900">{votes}</span>
                           <span className="text-xs text-gray-400 ml-1">({pct}%)</span>
                         </div>
@@ -763,6 +925,7 @@ export default function ElectionDetailPage() {
             userVotes={userVotes}
             myVoteCandidateIds={myVoteCandidateIds}
             isStudentRole={isStudentRole}
+            isAdmin={isAdmin}
           />
         )}
 

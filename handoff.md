@@ -8,42 +8,58 @@
 2026-06-14
 
 ## Version After This Session
-`0.6.1` — Multi-vote toggle + View Profile fix + duplicate candidate guard
+`0.7.0` — Candidate credentials + campaign posts + real-time results (Elections Part 3)
 
 ---
 
 ## What Was Done
 
-### v0.6.1 — Multi-vote per position
+### v0.7.0 — Candidate Profiles + Real-Time Results
 
-#### DB Migration (`src/lib/db.ts`)
-- `CREATE TABLE votes` updated: `UNIQUE(election_id, position_id, voter_id)` → `UNIQUE(election_id, position_id, voter_id, candidate_id)`
-- Idempotent migration runs at startup: checks `sqlite_master` for old constraint, recreates table if needed, copies data with `INSERT OR IGNORE`
+#### DB Migrations (`src/lib/db.ts`)
+- Added `candidate_achievements` table to the CREATE TABLE batch (id, candidate_id FK→candidates ON DELETE CASCADE, title, description, year, created_at)
+- Added to `newColumns` idempotent list: `platform TEXT`, `qualifications TEXT`, `achievements TEXT` on candidates table
 
-#### Vote API (`src/app/api/elections/[id]/vote/route.ts`)
-- Removed duplicate `position_id` rejection — same position can now appear multiple times in one submission
-- Added duplicate `(position_id, candidate_id)` rejection — same candidate twice still rejected
-- Added `max_votes` validation per position: fetches `positions.max_votes`, counts submissions per position, returns 400 if exceeded
-- `existingResult` check updated to use `DISTINCT position_id` + `uniquePositionIds` (deduped via `Array.from(new Set(...))`)
+#### Candidate Form (`src/components/admin/elections/CandidateManager.tsx`)
+- Added `platform` and `qualifications` fields to `CandidateForm` interface
+- Removed academic dropdowns (grade_level, section, subtype) from manual mode — school-specific, removed per spec
+- Added "Platform / Advocacy" textarea (4 rows) and "Qualifications" textarea (3 rows, one-per-line placeholder) after bio in manual mode
+- Removed now-unused `AcademicOptions` interface, academic state/handlers, grade-levels/settings fetch, `useEffect`, `useRef` imports
 
-#### Voting UI (`src/app/elections/[id]/page.tsx`)
-- `Position` interface: added `max_votes: number`
-- `selectedVotes` state: `Record<number, number>` → `Record<number, number[]>`
-- `toggleCandidate(positionId, candidateId, maxVotes)`: replaces for single-vote (maxVotes=1), appends/removes for multi, blocks at max
-- `allSelected`: every position has ≥ 1 selection (not just count of selected positions)
-- Position header: shows "Select up to N candidates · X/N selected" for multi-vote positions
-- Candidate cards: rounded checkbox indicator for multi-vote, radio circle for single; faded + `cursor-not-allowed` when at max
-- `ConfirmModal`: props changed to `Record<number, number[]>`, shows all candidates per position
-- `ResultsView`: `userVoteMap` → `Record<number, number[]>`, "Your Votes" summary handles multi-selection, "Your vote" badge checks `.includes()`
+#### Candidate API Enhancement
+- `elections/[id]/route.ts`: `CandidateInput` extended with `platform`, `qualifications`. `syncPositions` INSERT includes both. Candidates SELECT includes `platform`, `qualifications`.
+- `elections/[id]/candidates/route.ts` POST: extracts + inserts `photo_url`, `platform`, `qualifications`
+- `elections/[id]/candidates/[candidateId]/route.ts` GET: SELECT now returns `platform`, `qualifications`, `position_id`. Fetches `candidate_achievements` and appends to response as `achievements[]`
 
-#### PositionManager (`src/components/admin/elections/PositionManager.tsx`)
-- Replaced 3-mode pill tabs (Custom / By Candidates / Eligible Members) with a toggle: "Allow multiple selections per voter"
-- Toggle OFF: `max_votes = 1`, description "Voters pick exactly one candidate"
-- Toggle ON: indented panel with **Custom** (manual number input, min 2) or **Match candidates** (auto-syncs to candidate count)
-- Each mode has plain-English description below it
-- Removed "Eligible Members" mode (eligible count = total voters, meaningless as per-voter limit)
-- `electionId` prop kept in signature but no longer used internally (eligible count fetch removed)
-- `MaxVotesMode` type narrowed: `'custom' | 'candidates'` (removed `'eligible'`)
+#### Candidate Profile Page (`src/app/elections/[id]/candidates/[candidateId]/page.tsx`)
+Full redesign. Sections:
+1. Breadcrumb (Elections → election name → candidate name)
+2. Header card: large avatar (photo or initials fallback), name, position, election badge, Independent badge if no user_id, bio, Back link
+3. "Platform & Advocacy" — `border-l-4 border-[#84050C]` blockquote, hidden if empty
+4. "Qualifications" — newline-split into checkmark bullet list, hidden if empty
+5. "Achievements" — year badge + title + description timeline from `candidate_achievements`, shows "No achievements listed." if empty
+6. "Campaign Posts" — only shown if `user_id` is set; fetches `/api/posts?userId=&electionId=`; "Add Post" shortcut visible to own profile or admins; Skeleton loading state
+
+#### Results API (`src/app/api/elections/[id]/results/route.ts`)
+- Added participation stats: `total_voters` (COUNT DISTINCT voter_id), `eligible_count` (reuses eligibility rule logic from eligible-count route), `participation_rate` (percentage, 2 decimal places)
+- All three added to response
+
+#### Results Export (`src/app/api/elections/[id]/results/export/route.ts`) — NEW
+- `GET /api/elections/[id]/results/export`
+- master_admin only (403 for all others)
+- Returns CSV: `Candidate,Position,Votes,Percentage` rows
+- `Content-Disposition: attachment` header
+
+#### Election Detail Page (`src/app/elections/[id]/page.tsx`)
+- `ResultsView` now accepts `isAdmin` prop
+- Added `useRef` for cleanup on unmount
+- Live polling: admin + active election → `setInterval(fetchResults, 30000)` re-fetches `/api/elections/[id]/results`
+- Pulsing green "Live" badge next to heading when admin + active
+- "Updated Xs ago" counter (1s tick) when admin + active
+- WINNER green pill badge alongside 👑 crown for top vote-getter when election ended
+- Participation stats row below heading for ended elections
+- "Export CSV" button visible to admins; API enforces master_admin only
+- Extracted `ResultsPositionList` sub-component shared between admin-active and ended views
 
 ---
 
@@ -51,22 +67,23 @@
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.6.1`
+- Version: `0.7.0`
 
 ---
 
 ## Key Architectural Notes
 
-- `max_votes_mode` is UI-only state in `PositionForm`. Not persisted to DB. Defaults to `'custom'` on load.
-- Multi-vote submission format: multiple `{ position_id, candidate_id }` entries with the same `position_id` in the `votes` array — same as single-vote, just repeated.
-- Once voter submits any vote for a position, they cannot add more later (whole submission is atomic).
-- DB migration is safe to run multiple times — idempotent check on `sqlite_master` SQL string.
+- `candidate_achievements` is a structured table; `achievements TEXT` column also added to candidates (unused by UI — reserved for future flat JSON use)
+- Live polling replaces `livePositions` state in-place. Stale state on unmount prevented via `mountedRef`
+- Export button visible to all `isAdmin` users; API enforces `master_admin` → 403 for non-master admins
+- `ResultsPositionList` is rendered both in the "you've voted" admin view and as the primary ended-election view
+- Qualifications: newline-separated plain text stored in DB, split client-side
 
 ---
 
 ## What's Left / Ideas for Next Session
 
-- Public results page (non-admin view after election ends)
+- Admin UI for `candidate_achievements` (table exists, no form yet)
 - Verification resubmission: allow users to resubmit after rejection
 - Profile page: audit for remaining school-specific copy
 - Centralize `ROLE_LEVEL` map in `auth.ts`
@@ -78,11 +95,15 @@
 ## Key Files Changed This Session
 
 ```
-src/lib/db.ts                                       +votes UNIQUE constraint migration
-src/app/api/elections/[id]/vote/route.ts            +multi-vote support + max_votes validation
-src/app/elections/[id]/page.tsx                     +checkbox UI, multi-state, updated confirm/results
-                                                    +View Profile block→inline-block (all 3 views)
-src/components/admin/elections/PositionManager.tsx  +toggle + descriptions, removed eligible mode
-src/components/admin/elections/CandidateManager.tsx +duplicate student_user_id guard per position
-package.json                                        0.6.0 → 0.6.1
+src/lib/db.ts                                                 +candidate_achievements table, +platform/qualifications/achievements columns
+src/types/index.ts                                            +photo_url, platform, qualifications on Candidate interface
+src/components/admin/elections/CandidateManager.tsx           +platform/qualifications fields, -academic dropdowns
+src/app/api/elections/[id]/route.ts                           +platform/qualifications to CandidateInput, syncPositions, SELECT
+src/app/api/elections/[id]/candidates/route.ts                +photo_url/platform/qualifications to POST INSERT
+src/app/api/elections/[id]/candidates/[candidateId]/route.ts  +platform/qualifications/position_id, +achievements join
+src/app/elections/[id]/candidates/[candidateId]/page.tsx      full redesign
+src/app/api/elections/[id]/results/route.ts                   +total_voters/eligible_count/participation_rate
+src/app/api/elections/[id]/results/export/route.ts            NEW — CSV export, master_admin only
+src/app/elections/[id]/page.tsx                               +live polling, WINNER badge, participation, export button
+package.json                                                  0.6.1 → 0.7.0
 ```

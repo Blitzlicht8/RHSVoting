@@ -9,10 +9,10 @@ export async function GET(_: NextRequest, { params }: { params: { id: string; ca
   if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const result = await db.execute({
-    sql: `SELECT c.id, c.name, c.bio,
+    sql: `SELECT c.id, c.name, c.bio, c.platform, c.qualifications,
                  COALESCE(u.avatar_url, c.photo_url) AS photo_url,
                  COALESCE(c.student_user_id, c.user_id) AS user_id,
-                 p.name as position_name, e.title as election_name
+                 p.id as position_id, p.name as position_name, e.title as election_name
           FROM candidates c
           JOIN positions p ON p.id = c.position_id
           JOIN elections e ON e.id = p.election_id
@@ -22,5 +22,11 @@ export async function GET(_: NextRequest, { params }: { params: { id: string; ca
   })
 
   if (!result.rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json({ data: result.rows[0] })
+
+  const achievementsResult = await db.execute({
+    sql: `SELECT id, title, description, year FROM candidate_achievements WHERE candidate_id = ? ORDER BY year DESC, id DESC`,
+    args: [parseInt(params.candidateId)],
+  })
+
+  return NextResponse.json({ data: { ...result.rows[0], achievements: achievementsResult.rows } })
 }

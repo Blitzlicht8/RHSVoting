@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 
 export interface StudentResult {
   id: number
@@ -17,6 +17,8 @@ export interface CandidateForm {
   id?: number
   name: string
   bio: string
+  platform?: string
+  qualifications?: string
   grade_level?: string
   section?: string
   grade_level_id?: number | null
@@ -25,15 +27,6 @@ export interface CandidateForm {
   student_user_id?: number | null
   photo_url?: string | null
   mode: 'manual' | 'existing'
-}
-
-interface AcademicOption { id: number; name: string }
-interface AcademicOptions {
-  gradeLevels: AcademicOption[]
-  subtypes: AcademicOption[]
-  sections: AcademicOption[]
-  gradeLevelId: number | null
-  subtypeId: number | null
 }
 
 interface CandidateManagerProps {
@@ -47,8 +40,6 @@ interface CandidateManagerProps {
   onSearchStudents: (key: string, q: string) => void
   onClearStudentSearch: (key: string) => void
 }
-
-const emptyAcademic: AcademicOptions = { gradeLevels: [], subtypes: [], sections: [], gradeLevelId: null, subtypeId: null }
 
 function Avatar({ url, name, size = 8 }: { url?: string | null; name: string; size?: number }) {
   const cls = `w-${size} h-${size} rounded-full overflow-hidden bg-[#FEE2E2] flex items-center justify-center flex-shrink-0`
@@ -76,74 +67,10 @@ export default function CandidateManager({
   onSearchStudents,
   onClearStudentSearch,
 }: CandidateManagerProps) {
-  const [academicOptions, setAcademicOptions] = useState<Record<string, AcademicOptions>>({})
-  const fetchedRef = useRef(false)
-  const [globalGradeLevels, setGlobalGradeLevels] = useState<AcademicOption[]>([])
-  const [labels, setLabels] = useState({ l1: 'Group', l2: 'Subgroup', l3: 'Unit' })
   const [uploadingPhoto, setUploadingPhoto] = useState<Record<string, boolean>>({})
   const [slotErrors, setSlotErrors] = useState<Record<number, string>>({})
 
-  useEffect(() => {
-    if (fetchedRef.current) return
-    fetchedRef.current = true
-    Promise.all([
-      fetch('/api/academic/grade-levels', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
-      fetch('/api/settings', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
-    ]).then(([gradesJson, settingsJson]) => {
-      const levels: AcademicOption[] = gradesJson.data?.gradeLevels ?? gradesJson.data?.grade_levels ?? gradesJson.data ?? []
-      setGlobalGradeLevels(Array.isArray(levels) ? levels : [])
-      const s: Record<string, string> = settingsJson.data ?? {}
-      setLabels({
-        l1: s.group_label_l1 ?? 'Group',
-        l2: s.group_label_l2 ?? 'Subgroup',
-        l3: s.group_label_l3 ?? 'Unit',
-      })
-    })
-  }, [])
-
   const getKey = (ci: number) => `${pi}_${ci}`
-
-  const getAcademic = (ci: number): AcademicOptions =>
-    academicOptions[getKey(ci)] ?? { ...emptyAcademic, gradeLevels: globalGradeLevels }
-
-  const setAcademic = (ci: number, patch: Partial<AcademicOptions>) =>
-    setAcademicOptions((prev) => ({
-      ...prev,
-      [getKey(ci)]: { ...(prev[getKey(ci)] ?? { ...emptyAcademic, gradeLevels: globalGradeLevels }), ...patch },
-    }))
-
-  const handleGradeLevelChange = async (ci: number, glId: number, glName: string) => {
-    setAcademic(ci, { gradeLevelId: glId, subtypeId: null, subtypes: [], sections: [] })
-    onUpdateCandidate(pi, ci, { grade_level: glName, grade_level_id: glId, subtype_id: null, section_id: null, section: '' })
-    try {
-      const r = await fetch(`/api/academic/subtypes?gradeLevelId=${glId}`, { credentials: 'include' })
-      const json = await r.json()
-      const subtypes: AcademicOption[] = json.data?.subtypes ?? json.data ?? []
-      if (subtypes.length === 0) {
-        const rs = await fetch(`/api/academic/sections?gradeLevelId=${glId}`, { credentials: 'include' })
-        const jsons = await rs.json()
-        const sections: AcademicOption[] = jsons.data?.sections ?? jsons.data ?? []
-        setAcademic(ci, { subtypes: [], sections, gradeLevelId: glId })
-      } else {
-        setAcademic(ci, { subtypes, sections: [], gradeLevelId: glId })
-      }
-    } catch {}
-  }
-
-  const handleSubtypeChange = async (ci: number, stId: number, glId: number) => {
-    setAcademic(ci, { subtypeId: stId, sections: [] })
-    onUpdateCandidate(pi, ci, { subtype_id: stId, section_id: null, section: '' })
-    try {
-      const r = await fetch(`/api/academic/sections?gradeLevelId=${glId}&subtypeId=${stId}`, { credentials: 'include' })
-      const json = await r.json()
-      const sections: AcademicOption[] = json.data?.sections ?? json.data ?? []
-      setAcademic(ci, { sections })
-    } catch {}
-  }
-
-  const handleSectionChange = (ci: number, secId: number, secName: string) => {
-    onUpdateCandidate(pi, ci, { section: secName, section_id: secId })
-  }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, ci: number) => {
     const file = e.target.files?.[0]
@@ -330,66 +257,20 @@ export default function CandidateManager({
                   rows={1}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] resize-none"
                 />
-
-                {(() => {
-                  const acad = getAcademic(ci)
-                  const selectClass = 'w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white'
-                  return (
-                    <div className="space-y-2">
-                      <select
-                        value={acad.gradeLevelId ?? ''}
-                        onChange={(e) => {
-                          const id = Number(e.target.value)
-                          const list = acad.gradeLevels.length ? acad.gradeLevels : globalGradeLevels
-                          const name = list.find((g) => g.id === id)?.name ?? ''
-                          if (id) handleGradeLevelChange(ci, id, name)
-                          else onUpdateCandidate(pi, ci, { grade_level: '', grade_level_id: null, subtype_id: null, section_id: null, section: '' })
-                        }}
-                        className={selectClass}
-                      >
-                        <option value="">{labels.l1} *</option>
-                        {(acad.gradeLevels.length ? acad.gradeLevels : globalGradeLevels).map((gl) => (
-                          <option key={gl.id} value={gl.id}>{gl.name}</option>
-                        ))}
-                      </select>
-
-                      {acad.subtypes.length > 0 && (
-                        <select
-                          value={acad.subtypeId ?? ''}
-                          onChange={(e) => {
-                            const id = Number(e.target.value)
-                            if (id && acad.gradeLevelId) handleSubtypeChange(ci, id, acad.gradeLevelId)
-                            else { setAcademic(ci, { subtypeId: null, sections: [] }); onUpdateCandidate(pi, ci, { subtype_id: null, section_id: null, section: '' }) }
-                          }}
-                          className={selectClass}
-                        >
-                          <option value="">{labels.l2} *</option>
-                          {acad.subtypes.map((st) => (
-                            <option key={st.id} value={st.id}>{st.name}</option>
-                          ))}
-                        </select>
-                      )}
-
-                      {acad.sections.length > 0 && (
-                        <select
-                          value={cand.section_id ?? ''}
-                          onChange={(e) => {
-                            const id = Number(e.target.value)
-                            const name = acad.sections.find((s) => s.id === id)?.name ?? ''
-                            if (id) handleSectionChange(ci, id, name)
-                            else onUpdateCandidate(pi, ci, { section: '', section_id: null })
-                          }}
-                          className={selectClass}
-                        >
-                          <option value="">{labels.l3} *</option>
-                          {acad.sections.map((sec) => (
-                            <option key={sec.id} value={sec.id}>{sec.name}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-                  )
-                })()}
+                <textarea
+                  value={cand.platform ?? ''}
+                  onChange={(e) => onUpdateCandidate(pi, ci, { platform: e.target.value })}
+                  placeholder="Platform / Advocacy (optional)"
+                  rows={4}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] resize-none"
+                />
+                <textarea
+                  value={cand.qualifications ?? ''}
+                  onChange={(e) => onUpdateCandidate(pi, ci, { qualifications: e.target.value })}
+                  placeholder="Qualifications — one per line e.g. BS Computer Science, 3 years leadership..."
+                  rows={3}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] resize-none"
+                />
               </div>
             )}
           </div>

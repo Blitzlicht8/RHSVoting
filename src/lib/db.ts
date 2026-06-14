@@ -304,6 +304,17 @@ async function _init(): Promise<void> {
         args: [],
       },
       {
+        sql: `CREATE TABLE IF NOT EXISTS candidate_achievements (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          candidate_id INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+          title TEXT NOT NULL,
+          description TEXT,
+          year INTEGER,
+          created_at TEXT DEFAULT (datetime('now'))
+        )`,
+        args: [],
+      },
+      {
         sql: `CREATE TABLE IF NOT EXISTS comment_reports (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           comment_id INTEGER NOT NULL,
@@ -439,6 +450,9 @@ async function _init(): Promise<void> {
     `ALTER TABLE candidates ADD COLUMN photo_url TEXT`,
     `ALTER TABLE elections ADD COLUMN thumbnail_url TEXT`,
     `ALTER TABLE elections ADD COLUMN share_token TEXT`,
+    `ALTER TABLE candidates ADD COLUMN platform TEXT`,
+    `ALTER TABLE candidates ADD COLUMN qualifications TEXT`,
+    `ALTER TABLE candidates ADD COLUMN achievements TEXT`,
   ]
   for (const sql of newColumns) {
     await db.execute({ sql, args: [] }).catch(() => {})

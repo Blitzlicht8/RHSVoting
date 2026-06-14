@@ -8,6 +8,8 @@ import { InValue } from '@libsql/client'
 interface CandidateInput {
   name?: string
   bio?: string
+  platform?: string | null
+  qualifications?: string | null
   grade_level?: string
   section?: string
   student_user_id?: number | null
@@ -35,8 +37,8 @@ async function syncPositions(electionId: number, positions: PositionInput[]) {
       const candName = (cand.name ?? '').trim()
       if (!candName) continue
       await db.execute({
-        sql: `INSERT INTO candidates (election_id, position_id, name, bio, grade_level, section, student_user_id, user_id, photo_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [electionId, posId, candName, cand.bio ?? null, cand.grade_level ?? null, cand.section ?? null, cand.student_user_id ?? null, cand.student_user_id ?? null, cand.photo_url ?? null],
+        sql: `INSERT INTO candidates (election_id, position_id, name, bio, platform, qualifications, grade_level, section, student_user_id, user_id, photo_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [electionId, posId, candName, cand.bio ?? null, cand.platform ?? null, cand.qualifications ?? null, cand.grade_level ?? null, cand.section ?? null, cand.student_user_id ?? null, cand.student_user_id ?? null, cand.photo_url ?? null],
       })
     }
   }
@@ -83,7 +85,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   const positions = positionsResult.rows as unknown as Position[]
 
   const candidatesResult = await db.execute({
-    sql: `SELECT c.id, c.position_id, c.election_id, c.name, c.bio,
+    sql: `SELECT c.id, c.position_id, c.election_id, c.name, c.bio, c.platform, c.qualifications,
                  c.grade_level, c.section, c.student_user_id, c.user_id,
                  COALESCE(u.avatar_url, c.photo_url) AS photo_url
           FROM candidates c
