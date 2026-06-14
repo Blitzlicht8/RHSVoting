@@ -8,7 +8,7 @@
 2026-06-14
 
 ## Version After This Session
-`0.6.1` — FIX/MINOR: Multi-vote per position — toggle, max_votes enforcement, checkbox UI
+`0.6.1` — Multi-vote toggle + View Profile fix + duplicate candidate guard
 
 ---
 
@@ -78,9 +78,11 @@
 ## Key Files Changed This Session
 
 ```
-src/lib/db.ts                                   +votes UNIQUE constraint migration
-src/app/api/elections/[id]/vote/route.ts        +multi-vote support + max_votes validation
-src/app/elections/[id]/page.tsx                 +checkbox UI, multi-state, updated confirm/results
+src/lib/db.ts                                       +votes UNIQUE constraint migration
+src/app/api/elections/[id]/vote/route.ts            +multi-vote support + max_votes validation
+src/app/elections/[id]/page.tsx                     +checkbox UI, multi-state, updated confirm/results
+                                                    +View Profile block→inline-block (all 3 views)
 src/components/admin/elections/PositionManager.tsx  +toggle + descriptions, removed eligible mode
-package.json                                    0.6.0 → 0.6.1
+src/components/admin/elections/CandidateManager.tsx +duplicate student_user_id guard per position
+package.json                                        0.6.0 → 0.6.1
 ```
