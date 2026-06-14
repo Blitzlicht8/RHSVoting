@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   let whereClause = admin ? '' : `WHERE e.status IN ('active', 'ended')`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const queryArgs: any[] = []
-  let voterIdArg: number | null = null
+  let voterIdArg: number | null = authUser.id as number
 
   if (isEligibilityScoped) {
     const userResult = await db.execute({
