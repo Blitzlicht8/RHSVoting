@@ -199,15 +199,15 @@ export default function ElectionsPage() {
           addToast('Please select a member for all "From Member Account" candidates, or switch to manual entry.', 'error')
           return
         }
-        if (cand.mode === 'manual' && !cand.grade_level_id) {
+        if (cand.mode === 'manual' && !cand.grade_level_id && !cand.grade_level?.trim()) {
           addToast('All manual candidates require a group level.', 'error')
           return
         }
-        if (cand.mode === 'manual' && cand.subtype_required && !cand.subtype_id) {
+        if (cand.mode === 'manual' && cand.subtype_required && !cand.subtype_id && !cand.subtype?.trim()) {
           addToast('All manual candidates require a subgroup selection.', 'error')
           return
         }
-        if (cand.mode === 'manual' && cand.section_required && !cand.section_id) {
+        if (cand.mode === 'manual' && cand.section_required && !cand.section_id && !cand.section?.trim()) {
           addToast('All manual candidates require a unit selection.', 'error')
           return
         }

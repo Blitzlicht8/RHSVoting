@@ -88,6 +88,7 @@ export default function CandidateManager({
   const [uploadingPhoto, setUploadingPhoto] = useState<Record<string, boolean>>({})
   const [slotErrors, setSlotErrors] = useState<Record<number, string>>({})
   const [collapsedCandidates, setCollapsedCandidates] = useState<Set<number>>(new Set())
+  const restoredRef = useRef<Set<string>>(new Set())
 
   const toggleCandidateCollapse = (ci: number) =>
     setCollapsedCandidates((prev) => {
@@ -109,6 +110,65 @@ export default function CandidateManager({
       setLabels({ l1: s.group_label_l1 ?? 'Group', l2: s.group_label_l2 ?? 'Subgroup', l3: s.group_label_l3 ?? 'Unit' })
     })
   }, [])
+
+  // When grade-levels load, restore IDs for candidates that have name strings but missing IDs (edit/reopen flow)
+  const candidatesRef = useRef(candidates)
+  candidatesRef.current = candidates
+  useEffect(() => {
+    if (globalGradeLevels.length === 0) return
+    const cands = candidatesRef.current
+    cands.forEach((cand, ci) => {
+      const key = `${pi}-${ci}`
+      if (cand.mode !== 'manual') return
+      if (!cand.grade_level?.trim()) return
+      if (cand.grade_level_id) return
+      if (restoredRef.current.has(key)) return
+      restoredRef.current.add(key)
+
+      const gl = globalGradeLevels.find((g) => g.name === cand.grade_level)
+      if (!gl) return
+
+      onUpdateCandidate(pi, ci, { grade_level_id: gl.id })
+      setAcademic(ci, { gradeLevelId: gl.id })
+
+      fetch(`/api/academic/subtypes?gradeLevelId=${gl.id}`, { credentials: 'include' })
+        .then((r) => r.json())
+        .then((json) => {
+          const subtypes: AcademicOption[] = json.data?.subtypes ?? json.data ?? []
+          if (subtypes.length === 0) {
+            fetch(`/api/academic/sections?gradeLevelId=${gl.id}`, { credentials: 'include' })
+              .then((r) => r.json())
+              .then((json2) => {
+                const sections: AcademicOption[] = json2.data?.sections ?? json2.data ?? []
+                setAcademic(ci, { subtypes: [], sections, gradeLevelId: gl.id })
+                onUpdateCandidate(pi, ci, { subtype_required: false, section_required: sections.length > 0 })
+                const sec = sections.find((s) => s.name === cand.section)
+                if (sec) onUpdateCandidate(pi, ci, { section_id: sec.id })
+              })
+              .catch(() => {})
+          } else {
+            setAcademic(ci, { subtypes, sections: [], gradeLevelId: gl.id })
+            onUpdateCandidate(pi, ci, { subtype_required: true, section_required: false })
+            const st = subtypes.find((s) => s.name === cand.subtype)
+            if (st) {
+              onUpdateCandidate(pi, ci, { subtype_id: st.id })
+              setAcademic(ci, { subtypeId: st.id })
+              fetch(`/api/academic/sections?gradeLevelId=${gl.id}&subtypeId=${st.id}`, { credentials: 'include' })
+                .then((r) => r.json())
+                .then((json2) => {
+                  const sections: AcademicOption[] = json2.data?.sections ?? json2.data ?? []
+                  setAcademic(ci, { sections })
+                  onUpdateCandidate(pi, ci, { section_required: sections.length > 0 })
+                  const sec = sections.find((s) => s.name === cand.section)
+                  if (sec) onUpdateCandidate(pi, ci, { section_id: sec.id })
+                })
+                .catch(() => {})
+            }
+          }
+        })
+        .catch(() => {})
+    })
+  }, [globalGradeLevels.length, pi])
 
   const getKey = (ci: number) => `${pi}_${ci}`
 
@@ -466,9 +526,9 @@ export default function CandidateManager({
                 {/* Save manual candidate */}
                 {(() => {
                   const missingName = !cand.name.trim()
-                  const missingGroup = !cand.grade_level_id
-                  const missingSubgroup = !!cand.subtype_required && !cand.subtype_id
-                  const missingUnit = !!cand.section_required && !cand.section_id
+                  const missingGroup = !cand.grade_level_id && !cand.grade_level?.trim()
+                  const missingSubgroup = !!cand.subtype_required && !cand.subtype_id && !cand.subtype?.trim()
+                  const missingUnit = !!cand.section_required && !cand.section_id && !cand.section?.trim()
                   const canSave = !missingName && !missingGroup && !missingSubgroup && !missingUnit
                   const hint = missingName ? 'Name required'
                     : missingGroup ? `${labels.l1} required`
