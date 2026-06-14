@@ -155,10 +155,13 @@ export async function POST(request: NextRequest) {
   const validStatuses = ['draft', 'active', 'ended']
   const status = validStatuses.includes(body.status) ? body.status : 'draft'
 
+  const shareToken = crypto.randomUUID()
+  const thumbnailUrl = typeof body.thumbnail_url === 'string' ? body.thumbnail_url : null
+
   const insertResult = await db.execute({
-    sql: `INSERT INTO elections (title, description, start_date, end_date, status, created_by)
-          VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [title.trim(), description ?? null, start_date, end_date, status, authUser.id],
+    sql: `INSERT INTO elections (title, description, start_date, end_date, status, created_by, share_token, thumbnail_url)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [title.trim(), description ?? null, start_date, end_date, status, authUser.id, shareToken, thumbnailUrl],
   })
 
   const electionId = Number(insertResult.lastInsertRowid)

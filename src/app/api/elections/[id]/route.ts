@@ -196,6 +196,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     values.push(body.allow_teacher_vote ? 1 : 0)
   }
 
+  if (body.thumbnail_url !== undefined) {
+    setClauses.push('thumbnail_url = ?')
+    values.push(typeof body.thumbnail_url === 'string' ? body.thumbnail_url : null)
+  }
+
   const hasPositions = Array.isArray(body.positions)
   const hasEligibility = Array.isArray(body.eligibility)
 

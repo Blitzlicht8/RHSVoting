@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
+import Spinner from '@/components/ui/Spinner'
 import PositionManager, { PositionForm } from './PositionManager'
 import { CandidateForm, StudentResult } from './CandidateManager'
 
@@ -35,6 +36,7 @@ export interface ElectionForm {
   is_global: boolean
   allow_teacher_vote: boolean
   eligibility: EligibilityRule[]
+  thumbnail_url?: string | null
 }
 
 export interface Election {
@@ -48,6 +50,8 @@ export interface Election {
   candidate_count: number
   vote_count: number
   created_at: string
+  thumbnail_url?: string | null
+  share_token?: string | null
 }
 
 // ── GradeTargetingBuilder ────────────────────────────────────────────────────
@@ -460,10 +464,30 @@ export default function ElectionFormModal({
   onClearStudentSearch,
 }: ElectionFormModalProps) {
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const [thumbnailUploading, setThumbnailUploading] = useState(false)
 
   useEffect(() => {
     if (!open) setConfirmDiscard(false)
   }, [open])
+
+  const handleThumbnailUpload = async (file: File) => {
+    setThumbnailUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/elections/upload-thumbnail', {
+        method: 'POST',
+        credentials: 'include',
+        body: fd,
+      })
+      const json = await res.json()
+      if (res.ok && json.url) {
+        onFormChange({ thumbnail_url: json.url })
+      }
+    } finally {
+      setThumbnailUploading(false)
+    }
+  }
 
   return (
     <Modal
@@ -515,6 +539,56 @@ export default function ElectionFormModal({
             Basic Information
           </h3>
           <div className="space-y-4">
+            {/* Cover Image */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cover Image</label>
+              <p className="text-xs text-gray-400 mb-2">Recommended: 1200×630px</p>
+              {formData.thumbnail_url ? (
+                <div className="relative rounded-xl overflow-hidden border border-gray-200">
+                  <img
+                    src={formData.thumbnail_url}
+                    alt="Cover"
+                    className="w-full h-32 object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onFormChange({ thumbnail_url: null })}
+                    className="absolute top-2 right-2 bg-white/90 hover:bg-white text-gray-700 rounded-full p-1.5 shadow-sm transition-colors"
+                    title="Remove image"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${thumbnailUploading ? 'bg-gray-50 border-gray-200 cursor-not-allowed' : 'border-gray-300 hover:border-[#84050C] hover:bg-[#FEE2E2]/20'}`}>
+                  {thumbnailUploading ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    <>
+                      <svg className="w-7 h-7 text-gray-300 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span className="text-xs text-gray-400">Click to upload cover image</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    disabled={thumbnailUploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) handleThumbnailUpload(file)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Title <span className="text-red-500">*</span>
@@ -606,6 +680,7 @@ export default function ElectionFormModal({
         {/* Positions */}
         <PositionManager
           positions={formData.positions}
+          electionId={election?.id}
           studentSearches={studentSearches}
           studentDropdowns={studentDropdowns}
           onAddPosition={onAddPosition}

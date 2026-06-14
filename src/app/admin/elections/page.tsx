@@ -127,6 +127,7 @@ export default function ElectionsPage() {
             is_all_section: !!r.is_all_section,
             is_exclude: !!r.is_exclude,
           })),
+          thumbnail_url: full.thumbnail_url ?? null,
           positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; grade_level?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
             id: p.id,
             name: p.name,
@@ -215,6 +216,7 @@ export default function ElectionsPage() {
         is_global: formData.is_global,
         allow_teacher_vote: formData.allow_teacher_vote,
         eligibility: formData.is_global ? [] : formData.eligibility,
+        thumbnail_url: formData.thumbnail_url ?? null,
         positions: formData.positions.map((p) => ({
           ...p,
           candidates: p.candidates.map((c) => ({

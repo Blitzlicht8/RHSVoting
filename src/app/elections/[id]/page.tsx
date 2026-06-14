@@ -36,6 +36,8 @@ interface Election {
   end_date: string
   positions: Position[]
   hasVoted: boolean
+  thumbnail_url?: string | null
+  share_token?: string | null
 }
 
 interface UserVote {
@@ -495,6 +497,46 @@ function UpcomingView({ election }: { election: Election }) {
   )
 }
 
+/* ─── Share Button ───────────────────────────────────────────── */
+function ShareButton({ token }: { token: string }) {
+  const toast = useToast()
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = () => {
+    const url = `${window.location.origin}/elections/join/${token}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      toast?.addToast('Link copied!', 'success')
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title="Copy share link"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:text-[#84050C] hover:border-[#E2A8A4] transition-colors text-sm"
+    >
+      {copied ? (
+        <>
+          <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <span className="hidden sm:inline text-green-600 font-medium">Copied!</span>
+        </>
+      ) : (
+        <>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+          <span className="hidden sm:inline">Share</span>
+        </>
+      )}
+    </button>
+  )
+}
+
 /* ─── Main Page ──────────────────────────────────────────────── */
 export default function ElectionDetailPage() {
   const params = useParams()
@@ -601,37 +643,52 @@ export default function ElectionDetailPage() {
         </nav>
 
         {/* Header */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold text-gray-900">{election.title}</h1>
-              {election.description && (
-                <p className="text-gray-500 mt-2 text-sm">{election.description}</p>
-              )}
-            </div>
-            <StatusBadge status={election.status} />
-          </div>
-
-          <div className="flex items-center gap-2 mt-4 text-sm text-gray-500">
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            {new Date(election.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            {' – '}
-            {new Date(election.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </div>
-
-          {/* Admin actions */}
-          {isAdmin && election.status === 'draft' && (
-            <div className="mt-4 flex gap-2">
-              <Link
-                href={`/admin/elections/${election.id}/edit`}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#84050C] border border-[#E2A8A4] hover:border-[#84050C]/50 px-3 py-1.5 rounded-lg transition-colors"
-              >
-                Edit Election
-              </Link>
-            </div>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          {election.thumbnail_url && (
+            <img
+              src={election.thumbnail_url}
+              alt=""
+              className="w-full max-h-48 object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+            />
           )}
+          <div className="p-6">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl font-bold text-gray-900">{election.title}</h1>
+                {election.description && (
+                  <p className="text-gray-500 mt-2 text-sm">{election.description}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <StatusBadge status={election.status} />
+                {election.share_token && (isAdmin || election.status === 'active') && (
+                  <ShareButton token={election.share_token} />
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 mt-4 text-sm text-gray-500">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {new Date(election.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              {' – '}
+              {new Date(election.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </div>
+
+            {/* Admin actions */}
+            {isAdmin && election.status === 'draft' && (
+              <div className="mt-4 flex gap-2">
+                <Link
+                  href={`/admin/elections/${election.id}/edit`}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-[#84050C] border border-[#E2A8A4] hover:border-[#84050C]/50 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Edit Election
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ID not verified warning */}

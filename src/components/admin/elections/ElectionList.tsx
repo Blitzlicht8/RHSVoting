@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Badge from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 
@@ -16,6 +17,8 @@ export interface Election {
   candidate_count: number
   vote_count: number
   created_at: string
+  thumbnail_url?: string | null
+  share_token?: string | null
 }
 
 const STATUS_BADGE: Record<ElectionStatus, 'warning' | 'success' | 'default'> = {
@@ -47,6 +50,17 @@ export default function ElectionList({
   onConfirmStatus,
   onConfirmDelete,
 }: ElectionListProps) {
+  const [copiedId, setCopiedId] = useState<number | null>(null)
+
+  const copyShareLink = (el: Election) => {
+    if (!el.share_token) return
+    const url = `${window.location.origin}/elections/join/${el.share_token}`
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(el.id)
+      setTimeout(() => setCopiedId(null), 2000)
+    })
+  }
+
   const canDelete = (el: Election): boolean => {
     if (el.status === 'draft') return ['master_admin', 'admin', 'moderator'].includes(userRole)
     if (el.status === 'active') return ['master_admin', 'admin'].includes(userRole)
@@ -104,6 +118,25 @@ export default function ElectionList({
                   >
                     Edit
                   </Button>
+
+                  {el.share_token && (
+                    <button
+                      type="button"
+                      onClick={() => copyShareLink(el)}
+                      title="Copy share link"
+                      className="p-1.5 rounded text-gray-400 hover:text-[#84050C] hover:bg-[#FEE2E2] transition-colors relative"
+                    >
+                      {copiedId === el.id ? (
+                        <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
 
                   {el.status === 'draft' && (
                     <Button

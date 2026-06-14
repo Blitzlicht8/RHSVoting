@@ -17,6 +17,8 @@ interface Election {
   candidate_count: number
   vote_count: number
   hasVoted?: boolean
+  thumbnail_url?: string | null
+  share_token?: string | null
 }
 
 type FilterTab = 'all' | 'active' | 'upcoming' | 'ended'
@@ -60,6 +62,14 @@ function ElectionCard({
       href={`/elections/${election.id}`}
       className="block bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden group"
     >
+      {election.thumbnail_url && (
+        <img
+          src={election.thumbnail_url}
+          alt=""
+          className="w-full h-32 object-cover rounded-t-xl"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+        />
+      )}
       <div className="p-5 flex flex-col h-full">
         <div className="flex items-start justify-between gap-2 mb-2">
           <h3 className="font-semibold text-gray-900 text-lg truncate group-hover:text-[#84050C] transition-colors">
@@ -181,20 +191,7 @@ export default function ElectionsPage() {
         const json = await res.json()
         const raw: Election[] = json.data?.elections ?? []
 
-        // Check voted status for active elections
-        const activeOnes = raw.filter((e) => e.status === 'active')
-        const voteChecks = await Promise.all(
-          activeOnes.map((e) =>
-            fetch(`/api/elections/${e.id}/vote`)
-              .then((r) => r.json())
-              .then((j) => ({ id: e.id, hasVoted: j.data?.hasVoted ?? false }))
-              .catch(() => ({ id: e.id, hasVoted: false }))
-          )
-        )
-        const voteMap: Record<number, boolean> = {}
-        for (const v of voteChecks) voteMap[v.id] = v.hasVoted
-
-        setElections(raw.map((e) => ({ ...e, hasVoted: voteMap[e.id] ?? false })))
+        setElections(raw)
       } finally {
         setLoading(false)
       }
