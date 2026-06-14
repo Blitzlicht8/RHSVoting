@@ -464,17 +464,33 @@ export default function CandidateManager({
                 })()}
 
                 {/* Save manual candidate */}
-                {cand.name.trim() && (
-                  <div className="flex justify-end pt-1">
-                    <button
-                      type="button"
-                      onClick={() => toggleCandidateCollapse(ci)}
-                      className="text-xs font-medium text-white bg-[#84050C] hover:bg-[#6B0409] px-3 py-1.5 rounded-md transition-colors"
-                    >
-                      Save Candidate
-                    </button>
-                  </div>
-                )}
+                {(() => {
+                  const missingName = !cand.name.trim()
+                  const missingGroup = !cand.grade_level_id
+                  const missingSubgroup = !!cand.subtype_required && !cand.subtype_id
+                  const missingUnit = !!cand.section_required && !cand.section_id
+                  const canSave = !missingName && !missingGroup && !missingSubgroup && !missingUnit
+                  const hint = missingName ? 'Name required'
+                    : missingGroup ? `${labels.l1} required`
+                    : missingSubgroup ? `${labels.l2} required`
+                    : missingUnit ? `${labels.l3} required`
+                    : ''
+                  return (
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      {!canSave && hint && (
+                        <span className="text-xs text-gray-400">{hint}</span>
+                      )}
+                      <button
+                        type="button"
+                        disabled={!canSave}
+                        onClick={() => { if (canSave) toggleCandidateCollapse(ci) }}
+                        className="text-xs font-medium text-white bg-[#84050C] hover:bg-[#6B0409] disabled:bg-gray-300 disabled:cursor-not-allowed px-3 py-1.5 rounded-md transition-colors"
+                      >
+                        Save Candidate
+                      </button>
+                    </div>
+                  )
+                })()}
               </div>
             )}
           </div>
