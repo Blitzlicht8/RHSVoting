@@ -8,7 +8,7 @@
 2026-06-14
 
 ## Version After This Session
-`0.7.1` — Restore group/subgroup/unit dropdowns on candidate form + show on voter profile
+`0.7.3` — Collapsible positions/candidates, activate validation, vote now card fix
 
 ---
 
@@ -22,63 +22,73 @@
 
 #### Candidate Form (`src/components/admin/elections/CandidateManager.tsx`)
 - Added `platform` and `qualifications` fields to `CandidateForm` interface
-- Removed academic dropdowns (grade_level, section, subtype) from manual mode — school-specific, removed per spec
-- Added "Platform / Advocacy" textarea (4 rows) and "Qualifications" textarea (3 rows, one-per-line placeholder) after bio in manual mode
-- Removed now-unused `AcademicOptions` interface, academic state/handlers, grade-levels/settings fetch, `useEffect`, `useRef` imports
+- Added "Platform / Advocacy" textarea (4 rows) and "Qualifications" textarea (3 rows) after bio in manual mode
 
 #### Candidate API Enhancement
 - `elections/[id]/route.ts`: `CandidateInput` extended with `platform`, `qualifications`. `syncPositions` INSERT includes both. Candidates SELECT includes `platform`, `qualifications`.
 - `elections/[id]/candidates/route.ts` POST: extracts + inserts `photo_url`, `platform`, `qualifications`
-- `elections/[id]/candidates/[candidateId]/route.ts` GET: SELECT now returns `platform`, `qualifications`, `position_id`. Fetches `candidate_achievements` and appends to response as `achievements[]`
+- `elections/[id]/candidates/[candidateId]/route.ts` GET: SELECT returns `platform`, `qualifications`, `position_id`. Fetches `candidate_achievements` and appends as `achievements[]`
 
 #### Candidate Profile Page (`src/app/elections/[id]/candidates/[candidateId]/page.tsx`)
-Full redesign. Sections:
-1. Breadcrumb (Elections → election name → candidate name)
-2. Header card: large avatar (photo or initials fallback), name, position, election badge, Independent badge if no user_id, bio, Back link
-3. "Platform & Advocacy" — `border-l-4 border-[#84050C]` blockquote, hidden if empty
-4. "Qualifications" — newline-split into checkmark bullet list, hidden if empty
-5. "Achievements" — year badge + title + description timeline from `candidate_achievements`, shows "No achievements listed." if empty
-6. "Campaign Posts" — only shown if `user_id` is set; fetches `/api/posts?userId=&electionId=`; "Add Post" shortcut visible to own profile or admins; Skeleton loading state
+Full redesign — breadcrumb, header card (avatar/initials, name, position, election badge, Independent badge), Platform blockquote, Qualifications checkmark bullets, Achievements timeline, Campaign Posts section.
 
-#### Results API (`src/app/api/elections/[id]/results/route.ts`)
-- Added participation stats: `total_voters` (COUNT DISTINCT voter_id), `eligible_count` (reuses eligibility rule logic from eligible-count route), `participation_rate` (percentage, 2 decimal places)
-- All three added to response
-
-#### Results Export (`src/app/api/elections/[id]/results/export/route.ts`) — NEW
-- `GET /api/elections/[id]/results/export`
-- master_admin only (403 for all others)
-- Returns CSV: `Candidate,Position,Votes,Percentage` rows
-- `Content-Disposition: attachment` header
-
-#### Election Detail Page (`src/app/elections/[id]/page.tsx`)
-- `ResultsView` now accepts `isAdmin` prop
-- Added `useRef` for cleanup on unmount
-- Live polling: admin + active election → `setInterval(fetchResults, 30000)` re-fetches `/api/elections/[id]/results`
-- Pulsing green "Live" badge next to heading when admin + active
-- "Updated Xs ago" counter (1s tick) when admin + active
-- WINNER green pill badge alongside 👑 crown for top vote-getter when election ended
-- Participation stats row below heading for ended elections
-- "Export CSV" button visible to admins; API enforces master_admin only
-- Extracted `ResultsPositionList` sub-component shared between admin-active and ended views
+#### Results API + Export + Election Detail
+- Participation stats: `total_voters`, `eligible_count`, `participation_rate`
+- `results/export/route.ts` — CSV export, master_admin only
+- Election detail page: live polling (30s), pulsing Live badge, WINNER pill, participation row, Export CSV button
 
 ---
 
-## v0.7.1 — Group/Unit Dropdowns Restored
+### v0.7.1 — Group/Subgroup/Unit Dropdowns Restored
+
+- `CandidateManager`: Re-added three-level academic dropdowns with dynamic l1/l2/l3 labels from settings (was incorrectly removed in v0.7.0)
+- Dropdowns marked optional (changed to required in v0.7.2)
+- Candidate single-GET now returns `grade_level`, `section`
+- Profile page shows `{labels.l1}: grade_level · {labels.l3}: section`
+
+---
+
+### v0.7.2 — Subgroup stored + required field validation
+
+#### DB
+- `ALTER TABLE candidates ADD COLUMN subtype TEXT` (idempotent newColumns entry)
 
 #### CandidateManager (`src/components/admin/elections/CandidateManager.tsx`)
-- Re-added `AcademicOptions` interface + `emptyAcademic` state
-- Re-added grade-levels + settings fetch (l1/l2/l3 labels)
-- Re-added `handleGradeLevelChange`, `handleSubtypeChange`, `handleSectionChange` handlers
-- Re-added three-level dropdowns (Group / Subgroup / Unit) after qualifications textarea, all marked `(optional)`
-- Dropdowns use dynamic `labels.l1`/`labels.l2`/`labels.l3` from settings — no hardcoded school terms
+- `CandidateForm`: added `subtype?: string`, `subtype_required?: boolean`, `section_required?: boolean`
+- `handleGradeLevelChange`: sets `subtype_required: true` when subtypes exist, `section_required: true` when sections load (no subtypes path)
+- `handleSubtypeChange`: stores subtype name, sets `section_required` after sections load
+- Group Level placeholder: "Select {labels.l1}" (required). Subgroup: "Select {labels.l2}". Unit: "Select {labels.l3}"
 
-#### Candidate API (`src/app/api/elections/[id]/candidates/[candidateId]/route.ts`)
-- Added `c.grade_level, c.section` to single-candidate GET SELECT
+#### Admin Save Validation (`src/app/admin/elections/page.tsx`)
+- Blocks save if `subtype_required && !subtype_id` or `section_required && !section_id`
+- `subtype` name included in save payload
 
-#### Candidate Profile Page (`src/app/elections/[id]/candidates/[candidateId]/page.tsx`)
-- Added `grade_level`, `section` to `CandidateProfile` interface
-- Fetches `/api/settings` in parallel with candidate data
-- Displays `{labels.l1}: {grade_level}` · `{labels.l3}: {section}` below badges in header card (hidden if both empty)
+#### APIs
+- `elections/[id]/route.ts`: `subtype` in CandidateInput, INSERT, SELECT
+- `elections/[id]/candidates/[candidateId]/route.ts`: `c.subtype` in SELECT
+
+#### Profile Page
+- Shows `{labels.l1} · {labels.l2} · {labels.l3}` — all three levels when present
+
+---
+
+### v0.7.3 — Collapsible positions/candidates, activate validation, vote now fix
+
+#### Vote Now bug fix (`src/app/elections/page.tsx`)
+- ElectionCard: `block` → `flex flex-col`, content div `h-full` → `flex-1`
+- Fixes Vote Now button being clipped by `overflow-hidden` when cover photo present
+
+#### Collapsible Positions (`src/components/admin/elections/PositionManager.tsx`)
+- "Save Position" button collapses position to compact summary row (name + candidate count)
+- "Edit" button re-expands; disabled if position has no name
+
+#### Collapsible Candidates (`src/components/admin/elections/CandidateManager.tsx`)
+- "Save Candidate" appears once name is filled (manual) or member selected (existing)
+- Collapses to avatar + name row with "Edit" button
+
+#### Activate Validation
+- `admin/elections/page.tsx`: blocks activate if `position_count === 0` or `candidate_count === 0`
+- `api/elections/[id]/route.ts` PATCH: server-side 400 guard — queries positions and candidates counts before allowing `draft → active` transition
 
 ---
 
@@ -86,17 +96,18 @@ Full redesign. Sections:
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.7.1`
+- Version: `0.7.3`
 
 ---
 
 ## Key Architectural Notes
 
-- `candidate_achievements` is a structured table; `achievements TEXT` column also added to candidates (unused by UI — reserved for future flat JSON use)
-- Live polling replaces `livePositions` state in-place. Stale state on unmount prevented via `mountedRef`
-- Export button visible to all `isAdmin` users; API enforces `master_admin` → 403 for non-master admins
-- `ResultsPositionList` is rendered both in the "you've voted" admin view and as the primary ended-election view
-- Qualifications: newline-separated plain text stored in DB, split client-side
+- `candidate_achievements` structured table; `achievements TEXT` column on candidates reserved for future use
+- Live polling uses `mountedRef` to prevent state updates after unmount
+- Export CSV button visible to all `isAdmin`; API enforces `master_admin` only
+- `qualifications` stored as newline-separated text, split client-side
+- `subtype_required` / `section_required` flags carried in `CandidateForm` state — set dynamically after async API calls resolve; parent reads them at save time
+- Collapse state in PositionManager and CandidateManager is local component state — resets if modal is closed and reopened (acceptable UX)
 
 ---
 
@@ -104,25 +115,21 @@ Full redesign. Sections:
 
 - Admin UI for `candidate_achievements` (table exists, no form yet)
 - Verification resubmission: allow users to resubmit after rejection
-- Profile page: audit for remaining school-specific copy
-- Centralize `ROLE_LEVEL` map in `auth.ts`
-- `grade_level_id`/`subtype_id`/`section_id` not restored in `openEdit` — dropdowns show but won't pre-select existing values on edit (low priority)
+- `grade_level_id`/`subtype_id`/`section_id` not restored in `openEdit` — dropdowns won't pre-select existing values on edit
 - `max_votes_mode` not persisted to DB — if desired, add column to positions table
+- Per-position candidate-count validation on activate (current check is total across election, not per-position)
 
 ---
 
 ## Key Files Changed This Session
 
 ```
-src/lib/db.ts                                                 +candidate_achievements table, +platform/qualifications/achievements columns
-src/types/index.ts                                            +photo_url, platform, qualifications on Candidate interface
-src/components/admin/elections/CandidateManager.tsx           +platform/qualifications fields, +academic dropdowns (generalized l1/l2/l3 labels)
-src/app/api/elections/[id]/route.ts                           +platform/qualifications to CandidateInput, syncPositions, SELECT
-src/app/api/elections/[id]/candidates/route.ts                +photo_url/platform/qualifications to POST INSERT
-src/app/api/elections/[id]/candidates/[candidateId]/route.ts  +platform/qualifications/position_id, +achievements join
-src/app/elections/[id]/candidates/[candidateId]/page.tsx      full redesign
-src/app/api/elections/[id]/results/route.ts                   +total_voters/eligible_count/participation_rate
-src/app/api/elections/[id]/results/export/route.ts            NEW — CSV export, master_admin only
-src/app/elections/[id]/page.tsx                               +live polling, WINNER badge, participation, export button
-package.json                                                  0.6.1 → 0.7.0
+src/lib/db.ts                                                 +subtype TEXT column on candidates
+src/components/admin/elections/CandidateManager.tsx           +subtype storage, required flags, Save Candidate collapse
+src/components/admin/elections/PositionManager.tsx            +Save Position collapse
+src/app/admin/elections/page.tsx                              +subtype_required/section_required validation, activate guard
+src/app/api/elections/[id]/route.ts                           +subtype to CandidateInput/INSERT/SELECT, activate server guard
+src/app/api/elections/[id]/candidates/[candidateId]/route.ts  +c.subtype to SELECT
+src/app/elections/[id]/candidates/[candidateId]/page.tsx      +subtype display (l1·l2·l3)
+src/app/elections/page.tsx                                    ElectionCard flex-col fix
 ```
