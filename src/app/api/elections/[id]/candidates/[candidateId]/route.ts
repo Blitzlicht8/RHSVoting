@@ -9,7 +9,7 @@ export async function GET(_: NextRequest, { params }: { params: { id: string; ca
   if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const result = await db.execute({
-    sql: `SELECT c.id, c.name, c.bio, c.platform, c.qualifications,
+    sql: `SELECT c.id, c.name, c.bio, c.platform, c.qualifications, c.grade_level, c.section,
                  COALESCE(u.avatar_url, c.photo_url) AS photo_url,
                  COALESCE(c.student_user_id, c.user_id) AS user_id,
                  p.id as position_id, p.name as position_name, e.title as election_name

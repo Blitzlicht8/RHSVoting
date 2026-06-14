@@ -37,6 +37,8 @@ interface CandidateProfile {
   photo_url: string | null
   platform: string | null
   qualifications: string | null
+  grade_level: string | null
+  section: string | null
   user_id: number | null
   position_id: number
   position_name: string
@@ -59,16 +61,22 @@ export default function CandidateProfilePage() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [postsLoading, setPostsLoading] = useState(false)
+  const [labels, setLabels] = useState({ l1: 'Group', l3: 'Unit' })
 
   const isAdmin = user ? ['master_admin', 'admin', 'moderator'].includes(user.role) : false
   const isOwnProfile = !!user && !!candidate?.user_id && user.id === candidate.user_id
 
   useEffect(() => {
     async function load() {
-      const res = await fetch(`/api/elections/${electionId}/candidates/${candidateId}`, { credentials: 'include' })
+      const [res, settingsRes] = await Promise.all([
+        fetch(`/api/elections/${electionId}/candidates/${candidateId}`, { credentials: 'include' }),
+        fetch('/api/settings', { credentials: 'include' }),
+      ])
       if (!res.ok) { router.replace(`/elections/${electionId}`); return }
       const json = await res.json()
       setCandidate(json.data ?? null)
+      const s = (await settingsRes.json().catch(() => ({}))).data ?? {}
+      setLabels({ l1: s.group_label_l1 ?? 'Group', l3: s.group_label_l3 ?? 'Unit' })
       setLoading(false)
     }
     load()
@@ -146,6 +154,21 @@ export default function CandidateProfilePage() {
                   </span>
                 )}
               </div>
+              {(candidate.grade_level || candidate.section) && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  {candidate.grade_level && (
+                    <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                      <span className="font-medium text-gray-700">{labels.l1}:</span> {candidate.grade_level}
+                    </span>
+                  )}
+                  {candidate.grade_level && candidate.section && <span className="text-gray-300">·</span>}
+                  {candidate.section && (
+                    <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                      <span className="font-medium text-gray-700">{labels.l3}:</span> {candidate.section}
+                    </span>
+                  )}
+                </div>
+              )}
               {candidate.bio && (
                 <p className="text-sm text-gray-600 mt-3 leading-relaxed">{candidate.bio}</p>
               )}
