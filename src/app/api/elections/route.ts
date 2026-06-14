@@ -57,15 +57,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // For student roles, LEFT JOIN votes to return hasVoted in one query (eliminates N+1).
-  // The JOIN ? must be the first arg since it appears before the WHERE ? args in SQL.
-  const hasVotedJoin = voterIdArg !== null
-    ? `LEFT JOIN votes vhv ON vhv.election_id = e.id AND vhv.voter_id = ?`
-    : ''
+  // Use a scalar subquery for hasVoted — LEFT JOIN caused N duplicate rows per election
+  // when a voter had cast N votes (one per position). Subquery returns one row per election always.
   const hasVotedSelect = voterIdArg !== null
-    ? `, CASE WHEN vhv.id IS NOT NULL THEN 1 ELSE 0 END AS hasVoted`
+    ? `, EXISTS(SELECT 1 FROM votes vhv WHERE vhv.election_id = e.id AND vhv.voter_id = ?) AS hasVoted`
     : ''
-  // Prepend voterIdArg so it lines up with the JOIN placeholder that precedes WHERE placeholders
   const finalArgs = voterIdArg !== null ? [voterIdArg, ...queryArgs] : queryArgs
 
   const result = await db.execute({
@@ -76,7 +72,6 @@ export async function GET(request: NextRequest) {
             (SELECT COUNT(*) FROM votes v WHERE v.election_id = e.id) AS vote_count
             ${hasVotedSelect}
           FROM elections e
-          ${hasVotedJoin}
           ${whereClause}
           ORDER BY e.created_at DESC`,
     args: finalArgs,
