@@ -8,7 +8,7 @@
 2026-06-14
 
 ## Version After This Session
-`0.7.0` — Candidate credentials + campaign posts + real-time results (Elections Part 3)
+`0.7.1` — Restore group/subgroup/unit dropdowns on candidate form + show on voter profile
 
 ---
 
@@ -63,11 +63,30 @@ Full redesign. Sections:
 
 ---
 
+## v0.7.1 — Group/Unit Dropdowns Restored
+
+#### CandidateManager (`src/components/admin/elections/CandidateManager.tsx`)
+- Re-added `AcademicOptions` interface + `emptyAcademic` state
+- Re-added grade-levels + settings fetch (l1/l2/l3 labels)
+- Re-added `handleGradeLevelChange`, `handleSubtypeChange`, `handleSectionChange` handlers
+- Re-added three-level dropdowns (Group / Subgroup / Unit) after qualifications textarea, all marked `(optional)`
+- Dropdowns use dynamic `labels.l1`/`labels.l2`/`labels.l3` from settings — no hardcoded school terms
+
+#### Candidate API (`src/app/api/elections/[id]/candidates/[candidateId]/route.ts`)
+- Added `c.grade_level, c.section` to single-candidate GET SELECT
+
+#### Candidate Profile Page (`src/app/elections/[id]/candidates/[candidateId]/page.tsx`)
+- Added `grade_level`, `section` to `CandidateProfile` interface
+- Fetches `/api/settings` in parallel with candidate data
+- Displays `{labels.l1}: {grade_level}` · `{labels.l3}: {section}` below badges in header card (hidden if both empty)
+
+---
+
 ## Current State
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.7.0`
+- Version: `0.7.1`
 
 ---
 
@@ -87,7 +106,7 @@ Full redesign. Sections:
 - Verification resubmission: allow users to resubmit after rejection
 - Profile page: audit for remaining school-specific copy
 - Centralize `ROLE_LEVEL` map in `auth.ts`
-- `grade_level_id`/`subtype_id`/`section_id` not restored in `openEdit` (academic dropdowns won't pre-select on edit) — low priority
+- `grade_level_id`/`subtype_id`/`section_id` not restored in `openEdit` — dropdowns show but won't pre-select existing values on edit (low priority)
 - `max_votes_mode` not persisted to DB — if desired, add column to positions table
 
 ---
@@ -97,7 +116,7 @@ Full redesign. Sections:
 ```
 src/lib/db.ts                                                 +candidate_achievements table, +platform/qualifications/achievements columns
 src/types/index.ts                                            +photo_url, platform, qualifications on Candidate interface
-src/components/admin/elections/CandidateManager.tsx           +platform/qualifications fields, -academic dropdowns
+src/components/admin/elections/CandidateManager.tsx           +platform/qualifications fields, +academic dropdowns (generalized l1/l2/l3 labels)
 src/app/api/elections/[id]/route.ts                           +platform/qualifications to CandidateInput, syncPositions, SELECT
 src/app/api/elections/[id]/candidates/route.ts                +photo_url/platform/qualifications to POST INSERT
 src/app/api/elections/[id]/candidates/[candidateId]/route.ts  +platform/qualifications/position_id, +achievements join
