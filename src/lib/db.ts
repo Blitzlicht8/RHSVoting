@@ -111,7 +111,7 @@ async function _init(): Promise<void> {
           candidate_id INTEGER NOT NULL,
           voter_id INTEGER NOT NULL,
           created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          UNIQUE(election_id, position_id, voter_id),
+          UNIQUE(election_id, position_id, voter_id, candidate_id),
           FOREIGN KEY (election_id) REFERENCES elections(id),
           FOREIGN KEY (candidate_id) REFERENCES candidates(id),
           FOREIGN KEY (voter_id) REFERENCES users(id)
@@ -442,6 +442,39 @@ async function _init(): Promise<void> {
   ]
   for (const sql of newColumns) {
     await db.execute({ sql, args: [] }).catch(() => {})
+  }
+
+  // Migrate votes UNIQUE constraint: old=(election_id, position_id, voter_id) blocks multi-vote.
+  // New=(election_id, position_id, voter_id, candidate_id) allows multiple candidates per position per voter.
+  const votesMeta = await db.execute({
+    sql: `SELECT sql FROM sqlite_master WHERE type='table' AND name='votes'`,
+    args: [],
+  })
+  const votesTableSql = (votesMeta.rows[0]?.sql as string) ?? ''
+  if (votesTableSql && !votesTableSql.includes('voter_id, candidate_id')) {
+    await db.execute({ sql: `DROP TABLE IF EXISTS votes_mv`, args: [] })
+    await db.execute({
+      sql: `CREATE TABLE votes_mv (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        election_id INTEGER NOT NULL,
+        position_id INTEGER NOT NULL,
+        candidate_id INTEGER NOT NULL,
+        voter_id INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(election_id, position_id, voter_id, candidate_id),
+        FOREIGN KEY (election_id) REFERENCES elections(id),
+        FOREIGN KEY (candidate_id) REFERENCES candidates(id),
+        FOREIGN KEY (voter_id) REFERENCES users(id)
+      )`,
+      args: [],
+    })
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO votes_mv (id, election_id, position_id, candidate_id, voter_id, created_at)
+            SELECT id, election_id, position_id, candidate_id, voter_id, created_at FROM votes`,
+      args: [],
+    })
+    await db.execute({ sql: `DROP TABLE votes`, args: [] })
+    await db.execute({ sql: `ALTER TABLE votes_mv RENAME TO votes`, args: [] })
   }
 
   // Seed default admin@localhost.local if missing

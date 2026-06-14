@@ -105,10 +105,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
   }
 
-  const positionIds: number[] = votes.map((v: { position_id: number }) => v.position_id)
-  if (new Set(positionIds).size !== positionIds.length) {
-    return NextResponse.json({ error: 'Duplicate position_id in votes' }, { status: 400 })
+  // Reject duplicate (position_id, candidate_id) pairs — same candidate twice is invalid
+  const voteKeys = votes.map((v: { position_id: number; candidate_id: number }) => `${v.position_id}_${v.candidate_id}`)
+  if (new Set(voteKeys).size !== voteKeys.length) {
+    return NextResponse.json({ error: 'Duplicate candidate selection' }, { status: 400 })
   }
+
+  const uniquePositionIds = Array.from(new Set(votes.map((v: { position_id: number }) => v.position_id) as number[]))
 
   for (const vote of votes) {
     const candidateResult = await db.execute({
@@ -123,10 +126,35 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
   }
 
-  const placeholders = positionIds.map(() => '?').join(', ')
+  // Validate votes per position do not exceed max_votes
+  const posPlaceholders = uniquePositionIds.map(() => '?').join(', ')
+  const positionResult = await db.execute({
+    sql: `SELECT id, max_votes FROM positions WHERE election_id = ? AND id IN (${posPlaceholders})`,
+    args: [electionId, ...uniquePositionIds] as InValue[],
+  })
+  const positionMaxVotes: Record<number, number> = {}
+  for (const row of positionResult.rows) {
+    positionMaxVotes[Number(row.id)] = Number(row.max_votes ?? 1)
+  }
+  const votesPerPosition: Record<number, number> = {}
+  for (const vote of votes) {
+    votesPerPosition[vote.position_id] = (votesPerPosition[vote.position_id] ?? 0) + 1
+  }
+  for (const [posIdStr, count] of Object.entries(votesPerPosition)) {
+    const maxAllowed = positionMaxVotes[Number(posIdStr)] ?? 1
+    if (count > maxAllowed) {
+      return NextResponse.json(
+        { error: `Too many candidates selected for a position. Maximum allowed: ${maxAllowed}` },
+        { status: 400 }
+      )
+    }
+  }
+
+  // Reject if voter already submitted any vote for these positions
+  const existingPlaceholders = uniquePositionIds.map(() => '?').join(', ')
   const existingResult = await db.execute({
-    sql: `SELECT position_id FROM votes WHERE election_id = ? AND voter_id = ? AND position_id IN (${placeholders})`,
-    args: [electionId, authUser.id, ...positionIds] as InValue[],
+    sql: `SELECT DISTINCT position_id FROM votes WHERE election_id = ? AND voter_id = ? AND position_id IN (${existingPlaceholders})`,
+    args: [electionId, authUser.id, ...uniquePositionIds] as InValue[],
   })
 
   if (existingResult.rows.length > 0) {

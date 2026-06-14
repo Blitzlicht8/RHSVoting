@@ -24,6 +24,7 @@ interface Position {
   id: number
   name: string
   order_index: number
+  max_votes: number
   candidates: Candidate[]
 }
 
@@ -75,7 +76,7 @@ function ConfirmModal({
   submitting,
 }: {
   positions: Position[]
-  selectedVotes: Record<number, number>
+  selectedVotes: Record<number, number[]>
   onConfirm: () => void
   onCancel: () => void
   submitting: boolean
@@ -89,12 +90,16 @@ function ConfirmModal({
         </div>
         <div className="p-6 space-y-3 max-h-72 overflow-y-auto">
           {positions.map((pos) => {
-            const candidateId = selectedVotes[pos.id]
-            const candidate = pos.candidates.find((c) => c.id === candidateId)
+            const candidateIds = selectedVotes[pos.id] ?? []
+            const candidateNames = candidateIds.map((id) => pos.candidates.find((c) => c.id === id)?.name ?? '?')
             return (
-              <div key={pos.id} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
-                <span className="text-sm text-gray-500">{pos.name}</span>
-                <span className="text-sm font-semibold text-gray-900">{candidate?.name ?? '—'}</span>
+              <div key={pos.id} className="flex justify-between items-start py-2 border-b border-gray-50 last:border-0 gap-4">
+                <span className="text-sm text-gray-500 flex-shrink-0">{pos.name}</span>
+                <div className="text-right">
+                  {candidateNames.length > 0 ? candidateNames.map((name, i) => (
+                    <p key={i} className="text-sm font-semibold text-gray-900">{name}</p>
+                  )) : <p className="text-sm text-gray-400">—</p>}
+                </div>
               </div>
             )
           })}
@@ -130,26 +135,39 @@ function VotingView({
   onVoteSuccess: () => void
 }) {
   const toast = useToast()
-  const [selectedVotes, setSelectedVotes] = useState<Record<number, number>>({})
+  // Record<position_id, candidate_id[]> — multi-vote positions hold multiple IDs
+  const [selectedVotes, setSelectedVotes] = useState<Record<number, number[]>>({})
   const [showConfirm, setShowConfirm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const positions = election.positions
   const totalPositions = positions.length
-  const selectedCount = Object.keys(selectedVotes).length
-  const allSelected = selectedCount === totalPositions
+  const selectedCount = positions.filter((p) => (selectedVotes[p.id] ?? []).length > 0).length
+  const allSelected = positions.every((p) => (selectedVotes[p.id] ?? []).length > 0)
 
-  function selectCandidate(positionId: number, candidateId: number) {
-    setSelectedVotes((prev) => ({ ...prev, [positionId]: candidateId }))
+  function toggleCandidate(positionId: number, candidateId: number, maxVotes: number) {
+    setSelectedVotes((prev) => {
+      const current = prev[positionId] ?? []
+      if (current.includes(candidateId)) {
+        return { ...prev, [positionId]: current.filter((id) => id !== candidateId) }
+      }
+      if (maxVotes === 1) {
+        return { ...prev, [positionId]: [candidateId] }
+      }
+      if (current.length >= maxVotes) return prev
+      return { ...prev, [positionId]: [...current, candidateId] }
+    })
   }
 
   async function handleConfirm() {
     setSubmitting(true)
     try {
-      const votes = Object.entries(selectedVotes).map(([posId, canId]) => ({
-        position_id: Number(posId),
-        candidate_id: canId,
-      }))
+      const votes = positions.flatMap((pos) =>
+        (selectedVotes[pos.id] ?? []).map((candidateId) => ({
+          position_id: pos.id,
+          candidate_id: candidateId,
+        }))
+      )
       const res = await fetch(`/api/elections/${election.id}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -184,70 +202,92 @@ function VotingView({
           </h2>
         </div>
 
-        {positions.map((position) => (
-          <div key={position.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
-              <h3 className="font-semibold text-gray-900">{position.name}</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Select one candidate</p>
-            </div>
-            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {position.candidates.map((candidate) => {
-                const isSelected = selectedVotes[position.id] === candidate.id
-                return (
-                  <button
-                    key={candidate.id}
-                    type="button"
-                    onClick={() => selectCandidate(position.id, candidate.id)}
-                    className={`relative text-left rounded-xl border-2 p-4 transition-all focus:outline-none ${
-                      isSelected
-                        ? 'border-[#84050C] bg-[#FEE2E2] ring-2 ring-[#84050C] ring-offset-1'
-                        : 'border-gray-200 hover:border-[#84050C]/50 hover:bg-[#FEE2E2]/50'
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name={`position-${position.id}`}
-                      value={candidate.id}
-                      checked={isSelected}
-                      onChange={() => selectCandidate(position.id, candidate.id)}
-                      className="sr-only"
-                    />
-                    <div className="flex items-start gap-3">
-                      {/* Avatar */}
-                      <div className="w-14 h-14 rounded-full bg-[#FEE2E2] text-[#6B0409] flex items-center justify-center flex-shrink-0 text-xl font-bold overflow-hidden">
-                        {candidate.photo_url ? (
-                          <img src={candidate.photo_url} alt={candidate.name} className="w-full h-full object-cover" />
-                        ) : (
-                          candidate.name.charAt(0).toUpperCase()
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900 truncate">{candidate.name}</p>
-                        {candidate.bio && (
-                          <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{candidate.bio}</p>
-                        )}
-                        <Link
-                          href={`/elections/${election.id}/candidates/${candidate.id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-xs text-[#84050C] hover:underline mt-0.5 block"
-                        >
-                          View Profile
-                        </Link>
-                      </div>
-                      {isSelected && (
-                        <div className="w-5 h-5 bg-[#84050C] rounded-full flex items-center justify-center flex-shrink-0 ml-1">
-                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
+        {positions.map((position) => {
+          const isMultiVote = position.max_votes > 1
+          const selectedForPos = selectedVotes[position.id] ?? []
+          const atMax = isMultiVote && selectedForPos.length >= position.max_votes
+
+          return (
+            <div key={position.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
+                <h3 className="font-semibold text-gray-900">{position.name}</h3>
+                {isMultiVote ? (
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Select up to {position.max_votes} candidates
+                    <span className="ml-1.5 font-medium text-gray-500">
+                      {selectedForPos.length}/{position.max_votes} selected
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-0.5">Select one candidate</p>
+                )}
+              </div>
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {position.candidates.map((candidate) => {
+                  const isSelected = selectedForPos.includes(candidate.id)
+                  const isDisabled = isMultiVote && atMax && !isSelected
+                  return (
+                    <button
+                      key={candidate.id}
+                      type="button"
+                      onClick={() => toggleCandidate(position.id, candidate.id, position.max_votes)}
+                      disabled={isDisabled}
+                      className={`relative text-left rounded-xl border-2 p-4 transition-all focus:outline-none ${
+                        isSelected
+                          ? 'border-[#84050C] bg-[#FEE2E2] ring-2 ring-[#84050C] ring-offset-1'
+                          : isDisabled
+                          ? 'border-gray-200 bg-gray-50 opacity-40 cursor-not-allowed'
+                          : 'border-gray-200 hover:border-[#84050C]/50 hover:bg-[#FEE2E2]/50'
+                      }`}
+                    >
+                      {isMultiVote ? (
+                        <input type="checkbox" checked={isSelected} onChange={() => {}} className="sr-only" />
+                      ) : (
+                        <input
+                          type="radio"
+                          name={`position-${position.id}`}
+                          value={candidate.id}
+                          checked={isSelected}
+                          onChange={() => toggleCandidate(position.id, candidate.id, 1)}
+                          className="sr-only"
+                        />
                       )}
-                    </div>
-                  </button>
-                )
-              })}
+                      <div className="flex items-start gap-3">
+                        <div className="w-14 h-14 rounded-full bg-[#FEE2E2] text-[#6B0409] flex items-center justify-center flex-shrink-0 text-xl font-bold overflow-hidden">
+                          {candidate.photo_url ? (
+                            <img src={candidate.photo_url} alt={candidate.name} className="w-full h-full object-cover" />
+                          ) : (
+                            candidate.name.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 truncate">{candidate.name}</p>
+                          {candidate.bio && (
+                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{candidate.bio}</p>
+                          )}
+                          <Link
+                            href={`/elections/${election.id}/candidates/${candidate.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs text-[#84050C] hover:underline mt-0.5 block"
+                          >
+                            View Profile
+                          </Link>
+                        </div>
+                        {isSelected && (
+                          <div className={`w-5 h-5 bg-[#84050C] flex items-center justify-center flex-shrink-0 ml-1 ${isMultiVote ? 'rounded' : 'rounded-full'}`}>
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Sticky Bottom Bar */}
@@ -289,15 +329,18 @@ function ResultsView({
   myVoteCandidateIds: number[]
   isStudentRole: boolean
 }) {
-  const userVoteMap: Record<number, number> = {}
-  for (const v of userVotes) userVoteMap[v.position_id] = v.candidate_id
+  const userVoteMap: Record<number, number[]> = {}
+  for (const v of userVotes) {
+    if (!userVoteMap[v.position_id]) userVoteMap[v.position_id] = []
+    userVoteMap[v.position_id].push(v.candidate_id)
+  }
 
   if (election.status !== 'ended') {
     // Build "Your Votes" summary from positions + myVoteCandidateIds
     const myVoteSet = new Set(myVoteCandidateIds.map(Number))
     const mySelections = election.positions.map((pos) => {
-      const chosen = pos.candidates.find((c) => myVoteSet.has(c.id))
-      return { position: pos.name, candidate: chosen?.name ?? '—' }
+      const chosen = pos.candidates.filter((c) => myVoteSet.has(c.id))
+      return { position: pos.name, candidates: chosen.length > 0 ? chosen.map((c) => c.name) : ['—'] }
     })
 
     return (
@@ -322,10 +365,14 @@ function ResultsView({
               <p className="text-xs text-gray-400 mt-0.5">A summary of your selections</p>
             </div>
             <div className="p-4 space-y-2">
-              {mySelections.map(({ position, candidate }) => (
-                <div key={position} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
-                  <span className="text-sm text-gray-500">{position}</span>
-                  <span className="text-sm font-semibold text-gray-900">{candidate}</span>
+              {mySelections.map(({ position, candidates }) => (
+                <div key={position} className="flex justify-between items-start py-2 border-b border-gray-50 last:border-0 gap-4">
+                  <span className="text-sm text-gray-500 flex-shrink-0">{position}</span>
+                  <div className="text-right">
+                    {candidates.map((name, i) => (
+                      <p key={i} className="text-sm font-semibold text-gray-900">{name}</p>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -364,7 +411,7 @@ function ResultsView({
                 const votes = candidate.vote_count ?? 0
                 const pct = candidate.percentage ?? (total > 0 ? Math.round((votes / total) * 10000) / 100 : 0)
                 const isWinner = !hideVoteCounts && votes === winnerVotes && winnerVotes > 0
-                const userVotedFor = userVoteMap[position.id] === candidate.id
+                const userVotedFor = (userVoteMap[position.id] ?? []).includes(candidate.id)
 
                 return (
                   <div

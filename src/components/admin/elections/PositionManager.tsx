@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import Button from '@/components/ui/Button'
 import CandidateManager, { CandidateForm, StudentResult } from './CandidateManager'
 
@@ -8,11 +8,11 @@ export interface PositionForm {
   id?: number
   name: string
   max_votes: number
-  max_votes_mode?: 'custom' | 'candidates' | 'eligible'
+  max_votes_mode?: 'custom' | 'candidates'
   candidates: CandidateForm[]
 }
 
-type MaxVotesMode = 'custom' | 'candidates' | 'eligible'
+type MaxVotesMode = 'custom' | 'candidates'
 
 interface PositionManagerProps {
   positions: PositionForm[]
@@ -31,7 +31,6 @@ interface PositionManagerProps {
 
 export default function PositionManager({
   positions,
-  electionId,
   studentSearches,
   studentDropdowns,
   onAddPosition,
@@ -43,14 +42,12 @@ export default function PositionManager({
   onSearchStudents,
   onClearStudentSearch,
 }: PositionManagerProps) {
-  const [eligibleCounts, setEligibleCounts] = useState<Record<number, number | 'loading' | 'error'>>({})
-
   // Auto-sync max_votes for 'candidates' mode when candidate count changes
   const candidateLengths = positions.map((p) => p.candidates.length).join(',')
   useEffect(() => {
     positions.forEach((pos, pi) => {
       if (pos.max_votes_mode === 'candidates') {
-        const newMax = Math.max(1, pos.candidates.length)
+        const newMax = Math.max(2, pos.candidates.length)
         if (pos.max_votes !== newMax) {
           onUpdatePosition(pi, { max_votes: newMax })
         }
@@ -59,27 +56,10 @@ export default function PositionManager({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateLengths])
 
-  const fetchEligibleCount = async (pi: number) => {
-    if (!electionId) return
-    setEligibleCounts((prev) => ({ ...prev, [pi]: 'loading' }))
-    try {
-      const res = await fetch(`/api/elections/eligible-count?electionId=${electionId}`, { credentials: 'include' })
-      const json = await res.json()
-      const count: number = json.data?.count ?? 0
-      setEligibleCounts((prev) => ({ ...prev, [pi]: count }))
-      onUpdatePosition(pi, { max_votes: Math.max(1, count) })
-    } catch {
-      setEligibleCounts((prev) => ({ ...prev, [pi]: 'error' }))
-    }
-  }
-
   const handleModeChange = (pi: number, mode: MaxVotesMode) => {
     const pos = positions[pi]
     if (mode === 'candidates') {
-      onUpdatePosition(pi, { max_votes_mode: mode, max_votes: Math.max(1, pos.candidates.length) })
-    } else if (mode === 'eligible') {
-      onUpdatePosition(pi, { max_votes_mode: mode })
-      if (electionId) fetchEligibleCount(pi)
+      onUpdatePosition(pi, { max_votes_mode: mode, max_votes: Math.max(2, pos.candidates.length) })
     } else {
       onUpdatePosition(pi, { max_votes_mode: mode })
     }
@@ -103,8 +83,8 @@ export default function PositionManager({
 
       <div className="space-y-4">
         {positions.map((pos, pi) => {
-          const mode: MaxVotesMode = pos.max_votes_mode ?? 'custom'
-          const eligibleCount = eligibleCounts[pi]
+          const mode: MaxVotesMode = (pos.max_votes_mode === 'candidates' ? 'candidates' : 'custom') as MaxVotesMode
+          const isMultiVote = pos.max_votes > 1
 
           return (
             <div key={pi} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
@@ -130,94 +110,86 @@ export default function PositionManager({
                 </button>
               </div>
 
-              {/* Max votes section */}
+              {/* Multi-vote toggle */}
               <div className="mb-3">
-                <p className="text-xs text-gray-500 mb-1.5 font-medium">Max votes</p>
-                {/* Mode pill tabs */}
-                <div className="flex gap-0.5 bg-gray-200 rounded-md p-0.5 w-fit mb-2">
-                  {(['custom', 'candidates', 'eligible'] as MaxVotesMode[]).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => handleModeChange(pi, m)}
-                      className={`px-2.5 py-1 rounded text-xs font-medium transition-all whitespace-nowrap ${
-                        mode === m
-                          ? 'bg-white text-gray-900 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      {m === 'custom' ? 'Custom' : m === 'candidates' ? 'By Candidates' : 'Eligible Members'}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Custom: plain number input */}
-                {mode === 'custom' && (
+                <div className="flex items-center gap-2 mb-1">
                   <input
-                    type="number"
-                    min={1}
-                    value={pos.max_votes}
-                    onChange={(e) => onUpdatePosition(pi, { max_votes: Math.max(1, parseInt(e.target.value) || 1) })}
-                    className="w-24 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+                    type="checkbox"
+                    id={`multi-${pi}`}
+                    checked={isMultiVote}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        onUpdatePosition(pi, { max_votes_mode: 'custom', max_votes: 2 })
+                      } else {
+                        onUpdatePosition(pi, { max_votes_mode: 'custom', max_votes: 1 })
+                      }
+                    }}
+                    className="w-4 h-4 accent-[#84050C] cursor-pointer"
                   />
-                )}
+                  <label htmlFor={`multi-${pi}`} className="text-xs font-medium text-gray-700 cursor-pointer select-none">
+                    Allow multiple selections per voter
+                  </label>
+                </div>
+                <p className="text-xs text-gray-400 ml-6">
+                  {isMultiVote
+                    ? `Voters can pick up to ${pos.max_votes} candidate${pos.max_votes !== 1 ? 's' : ''} for this position.`
+                    : 'Voters pick exactly one candidate for this position.'}
+                </p>
+              </div>
 
-                {/* By Candidates: read-only, shows count */}
-                {mode === 'candidates' && (
-                  <div className="flex items-center gap-2 h-8">
-                    <span className="text-sm font-semibold text-gray-800">{pos.max_votes}</span>
-                    <span className="text-xs text-gray-400">
-                      (= {pos.candidates.length} candidate{pos.candidates.length !== 1 ? 's' : ''})
-                    </span>
+              {/* Max per voter — only visible when multi-vote is on */}
+              {isMultiVote && (
+                <div className="ml-6 mb-3 p-3 bg-white border border-gray-200 rounded-lg space-y-2">
+                  <p className="text-xs font-medium text-gray-700">Max candidates per voter</p>
+
+                  {/* Mode tabs */}
+                  <div className="flex gap-0.5 bg-gray-100 rounded-md p-0.5 w-fit">
+                    {(['custom', 'candidates'] as MaxVotesMode[]).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => handleModeChange(pi, m)}
+                        className={`px-2.5 py-1 rounded text-xs font-medium transition-all whitespace-nowrap ${
+                          mode === m
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        {m === 'custom' ? 'Custom' : 'Match candidates'}
+                      </button>
+                    ))}
                   </div>
-                )}
 
-                {/* Eligible Members: fetch + display */}
-                {mode === 'eligible' && (
-                  <div className="flex items-center gap-2 h-8">
-                    {!electionId ? (
-                      <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded">
-                        Save election first to use auto-count
-                      </span>
-                    ) : eligibleCount === 'loading' ? (
-                      <span className="text-xs text-gray-400 italic">Fetching...</span>
-                    ) : eligibleCount === 'error' ? (
-                      <>
-                        <span className="text-xs text-red-500">Failed to fetch</span>
-                        <button
-                          type="button"
-                          onClick={() => fetchEligibleCount(pi)}
-                          className="text-xs text-[#84050C] hover:underline"
-                        >
-                          Retry
-                        </button>
-                      </>
-                    ) : typeof eligibleCount === 'number' ? (
-                      <>
+                  {mode === 'custom' && (
+                    <>
+                      <input
+                        type="number"
+                        min={2}
+                        value={pos.max_votes}
+                        onChange={(e) => onUpdatePosition(pi, { max_votes: Math.max(2, parseInt(e.target.value) || 2) })}
+                        className="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+                      />
+                      <p className="text-xs text-gray-400">
+                        You set the limit. Each voter can pick up to this many candidates.
+                      </p>
+                    </>
+                  )}
+
+                  {mode === 'candidates' && (
+                    <>
+                      <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-gray-800">{pos.max_votes}</span>
                         <span className="text-xs text-gray-400">
-                          (= {eligibleCount} eligible member{eligibleCount !== 1 ? 's' : ''})
+                          (matches {pos.candidates.length} candidate{pos.candidates.length !== 1 ? 's' : ''})
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => fetchEligibleCount(pi)}
-                          className="text-xs text-[#84050C] hover:underline"
-                        >
-                          Refresh
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => fetchEligibleCount(pi)}
-                        className="text-xs text-[#84050C] hover:underline"
-                      >
-                        Fetch count
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                      </div>
+                      <p className="text-xs text-gray-400">
+                        Automatically matches the number of candidates. Voters can pick every candidate — useful for approval voting.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
 
               <CandidateManager
                 positionIndex={pi}
