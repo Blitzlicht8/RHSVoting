@@ -81,6 +81,7 @@ export default function CandidateManager({
   const [globalGradeLevels, setGlobalGradeLevels] = useState<AcademicOption[]>([])
   const [labels, setLabels] = useState({ l1: 'Group', l2: 'Subgroup', l3: 'Unit' })
   const [uploadingPhoto, setUploadingPhoto] = useState<Record<string, boolean>>({})
+  const [slotErrors, setSlotErrors] = useState<Record<number, string>>({})
 
   useEffect(() => {
     if (fetchedRef.current) return
@@ -251,10 +252,13 @@ export default function CandidateManager({
                     <input
                       type="text"
                       value={searchQuery}
-                      onChange={(e) => onSearchStudents(searchKey, e.target.value)}
+                      onChange={(e) => { onSearchStudents(searchKey, e.target.value); setSlotErrors((p) => { const n = { ...p }; delete n[ci]; return n }) }}
                       placeholder="Search member by name or email…"
                       className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
                     />
+                    {slotErrors[ci] && (
+                      <p className="text-xs text-red-500 mt-1">{slotErrors[ci]}</p>
+                    )}
                     {dropdownResults.length > 0 && (
                       <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
                         {dropdownResults.map((member) => (
@@ -262,6 +266,15 @@ export default function CandidateManager({
                             key={member.id}
                             type="button"
                             onClick={() => {
+                              const alreadyAdded = candidates.some(
+                                (c, idx) => idx !== ci && c.student_user_id === member.id
+                              )
+                              if (alreadyAdded) {
+                                setSlotErrors((prev) => ({ ...prev, [ci]: `${member.name} is already added to this position.` }))
+                                setTimeout(() => setSlotErrors((prev) => { const n = { ...prev }; delete n[ci]; return n }), 3000)
+                                onClearStudentSearch(searchKey)
+                                return
+                              }
                               onUpdateCandidate(pi, ci, {
                                 name: member.name,
                                 student_user_id: member.id,

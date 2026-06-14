@@ -268,7 +268,7 @@ function VotingView({
                           <Link
                             href={`/elections/${election.id}/candidates/${candidate.id}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="text-xs text-[#84050C] hover:underline mt-0.5 block"
+                            className="text-xs text-[#84050C] hover:underline mt-0.5 inline-block"
                           >
                             View Profile
                           </Link>
@@ -444,7 +444,7 @@ function ResultsView({
                           )}
                           <Link
                             href={`/elections/${election.id}/candidates/${candidate.id}`}
-                            className="text-xs text-[#84050C] hover:underline mt-0.5 block"
+                            className="text-xs text-[#84050C] hover:underline mt-0.5 inline-block"
                           >
                             View Profile
                           </Link>
@@ -524,7 +524,7 @@ function UpcomingView({ election }: { election: Election }) {
                         )}
                         <Link
                           href={`/elections/${election.id}/candidates/${candidate.id}`}
-                          className="text-xs text-[#84050C] hover:underline mt-0.5 block"
+                          className="text-xs text-[#84050C] hover:underline mt-0.5 inline-block"
                         >
                           View Profile
                         </Link>
