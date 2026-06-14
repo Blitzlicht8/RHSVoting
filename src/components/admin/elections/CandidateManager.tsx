@@ -87,6 +87,14 @@ export default function CandidateManager({
   const [labels, setLabels] = useState({ l1: 'Group', l2: 'Subgroup', l3: 'Unit' })
   const [uploadingPhoto, setUploadingPhoto] = useState<Record<string, boolean>>({})
   const [slotErrors, setSlotErrors] = useState<Record<number, string>>({})
+  const [collapsedCandidates, setCollapsedCandidates] = useState<Set<number>>(new Set())
+
+  const toggleCandidateCollapse = (ci: number) =>
+    setCollapsedCandidates((prev) => {
+      const next = new Set(prev)
+      next.has(ci) ? next.delete(ci) : next.add(ci)
+      return next
+    })
 
   useEffect(() => {
     if (fetchedRef.current) return
@@ -192,6 +200,40 @@ export default function CandidateManager({
         const searchKey = `${pi}_${ci}`
         const dropdownResults = studentDropdowns[searchKey] || []
         const searchQuery = studentSearches[searchKey] ?? ''
+        const isCandCollapsed = collapsedCandidates.has(ci)
+
+        if (isCandCollapsed) {
+          return (
+            <div key={ci} className="flex items-center justify-between bg-white rounded-lg border border-gray-200 px-3 py-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Avatar url={cand.photo_url} name={cand.name || '?'} size={7} />
+                <span className="text-sm font-medium text-gray-900 truncate">{cand.name || 'Unnamed candidate'}</span>
+                {cand.mode === 'existing' && (
+                  <span className="text-xs text-gray-400 flex-shrink-0">Member</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => toggleCandidateCollapse(ci)}
+                  className="text-xs font-medium text-[#84050C] hover:text-[#6B0409] px-2 py-1 border border-[#E2A8A4] rounded transition-colors"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onRemoveCandidate(pi, ci); setCollapsedCandidates((prev) => { const n = new Set(prev); n.delete(ci); return n }) }}
+                  className="text-red-400 hover:text-red-600 p-1 rounded transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )
+        }
+
         return (
           <div key={ci} className="bg-white rounded-lg border border-gray-200 p-3 space-y-2">
             {/* Mode toggle */}
@@ -303,6 +345,19 @@ export default function CandidateManager({
               </div>
             )}
 
+            {/* Existing mode save button */}
+            {cand.mode === 'existing' && cand.student_user_id && (
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => toggleCandidateCollapse(ci)}
+                  className="text-xs font-medium text-white bg-[#84050C] hover:bg-[#6B0409] px-3 py-1.5 rounded-md transition-colors"
+                >
+                  Save Candidate
+                </button>
+              </div>
+            )}
+
             {/* Manual mode */}
             {cand.mode === 'manual' && (
               <div className="space-y-2">
@@ -407,6 +462,19 @@ export default function CandidateManager({
                     </div>
                   )
                 })()}
+
+                {/* Save manual candidate */}
+                {cand.name.trim() && (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleCandidateCollapse(ci)}
+                      className="text-xs font-medium text-white bg-[#84050C] hover:bg-[#6B0409] px-3 py-1.5 rounded-md transition-colors"
+                    >
+                      Save Candidate
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

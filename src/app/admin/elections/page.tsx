@@ -277,6 +277,16 @@ export default function ElectionsPage() {
     if (!confirmStatus) return
     const { election, nextStatus } = confirmStatus
     setConfirmStatus(null)
+    if (nextStatus === 'active') {
+      if ((election.position_count ?? 0) === 0) {
+        addToast('Cannot start — election has no positions.', 'error')
+        return
+      }
+      if ((election.candidate_count ?? 0) === 0) {
+        addToast('Cannot start — no candidates have been added.', 'error')
+        return
+      }
+    }
     try {
       const res = await fetch(`/api/elections/${election.id}`, {
         method: 'PATCH',

@@ -185,6 +185,16 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         { status: 400 }
       )
     }
+    if (body.status === 'active') {
+      const posCheck = await db.execute({ sql: `SELECT COUNT(*) AS cnt FROM positions WHERE election_id = ?`, args: [electionId] })
+      if (Number((posCheck.rows[0] as unknown as { cnt: number }).cnt) === 0) {
+        return NextResponse.json({ error: 'Cannot start — election has no positions.' }, { status: 400 })
+      }
+      const candCheck = await db.execute({ sql: `SELECT COUNT(*) AS cnt FROM candidates WHERE election_id = ?`, args: [electionId] })
+      if (Number((candCheck.rows[0] as unknown as { cnt: number }).cnt) === 0) {
+        return NextResponse.json({ error: 'Cannot start — no candidates have been added.' }, { status: 400 })
+      }
+    }
     setClauses.push('status = ?')
     values.push(body.status)
   }

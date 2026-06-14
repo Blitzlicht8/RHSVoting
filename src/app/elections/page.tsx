@@ -60,17 +60,17 @@ function ElectionCard({
   return (
     <Link
       href={`/elections/${election.id}`}
-      className="block bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden group"
+      className="flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden group"
     >
       {election.thumbnail_url && (
         <img
           src={election.thumbnail_url}
           alt=""
-          className="w-full h-32 object-cover rounded-t-xl"
+          className="w-full h-32 object-cover"
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
         />
       )}
-      <div className="p-5 flex flex-col h-full">
+      <div className="p-5 flex flex-col flex-1">
         <div className="flex items-start justify-between gap-2 mb-2">
           <h3 className="font-semibold text-gray-900 text-lg truncate group-hover:text-[#84050C] transition-colors">
             {election.title}
