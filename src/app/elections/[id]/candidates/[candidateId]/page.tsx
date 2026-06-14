@@ -38,6 +38,7 @@ interface CandidateProfile {
   platform: string | null
   qualifications: string | null
   grade_level: string | null
+  subtype: string | null
   section: string | null
   user_id: number | null
   position_id: number
@@ -61,7 +62,7 @@ export default function CandidateProfilePage() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [postsLoading, setPostsLoading] = useState(false)
-  const [labels, setLabels] = useState({ l1: 'Group', l3: 'Unit' })
+  const [labels, setLabels] = useState({ l1: 'Group', l2: 'Subgroup', l3: 'Unit' })
 
   const isAdmin = user ? ['master_admin', 'admin', 'moderator'].includes(user.role) : false
   const isOwnProfile = !!user && !!candidate?.user_id && user.id === candidate.user_id
@@ -76,7 +77,7 @@ export default function CandidateProfilePage() {
       const json = await res.json()
       setCandidate(json.data ?? null)
       const s = (await settingsRes.json().catch(() => ({}))).data ?? {}
-      setLabels({ l1: s.group_label_l1 ?? 'Group', l3: s.group_label_l3 ?? 'Unit' })
+      setLabels({ l1: s.group_label_l1 ?? 'Group', l2: s.group_label_l2 ?? 'Subgroup', l3: s.group_label_l3 ?? 'Unit' })
       setLoading(false)
     }
     load()
@@ -154,14 +155,20 @@ export default function CandidateProfilePage() {
                   </span>
                 )}
               </div>
-              {(candidate.grade_level || candidate.section) && (
+              {(candidate.grade_level || candidate.subtype || candidate.section) && (
                 <div className="flex flex-wrap items-center gap-1.5 mt-2">
                   {candidate.grade_level && (
                     <span className="inline-flex items-center gap-1 text-xs text-gray-500">
                       <span className="font-medium text-gray-700">{labels.l1}:</span> {candidate.grade_level}
                     </span>
                   )}
-                  {candidate.grade_level && candidate.section && <span className="text-gray-300">·</span>}
+                  {candidate.grade_level && candidate.subtype && <span className="text-gray-300">·</span>}
+                  {candidate.subtype && (
+                    <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                      <span className="font-medium text-gray-700">{labels.l2}:</span> {candidate.subtype}
+                    </span>
+                  )}
+                  {(candidate.grade_level || candidate.subtype) && candidate.section && <span className="text-gray-300">·</span>}
                   {candidate.section && (
                     <span className="inline-flex items-center gap-1 text-xs text-gray-500">
                       <span className="font-medium text-gray-700">{labels.l3}:</span> {candidate.section}

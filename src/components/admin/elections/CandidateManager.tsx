@@ -20,10 +20,13 @@ export interface CandidateForm {
   platform?: string
   qualifications?: string
   grade_level?: string
+  subtype?: string
   section?: string
   grade_level_id?: number | null
   subtype_id?: number | null
   section_id?: number | null
+  subtype_required?: boolean
+  section_required?: boolean
   student_user_id?: number | null
   photo_url?: string | null
   mode: 'manual' | 'existing'
@@ -112,7 +115,7 @@ export default function CandidateManager({
 
   const handleGradeLevelChange = async (ci: number, glId: number, glName: string) => {
     setAcademic(ci, { gradeLevelId: glId, subtypeId: null, subtypes: [], sections: [] })
-    onUpdateCandidate(pi, ci, { grade_level: glName, grade_level_id: glId, subtype_id: null, section_id: null, section: '' })
+    onUpdateCandidate(pi, ci, { grade_level: glName, grade_level_id: glId, subtype_id: null, subtype: '', section_id: null, section: '', subtype_required: false, section_required: false })
     try {
       const r = await fetch(`/api/academic/subtypes?gradeLevelId=${glId}`, { credentials: 'include' })
       const json = await r.json()
@@ -122,20 +125,24 @@ export default function CandidateManager({
         const jsons = await rs.json()
         const sections: AcademicOption[] = jsons.data?.sections ?? jsons.data ?? []
         setAcademic(ci, { subtypes: [], sections, gradeLevelId: glId })
+        onUpdateCandidate(pi, ci, { subtype_required: false, section_required: sections.length > 0 })
       } else {
         setAcademic(ci, { subtypes, sections: [], gradeLevelId: glId })
+        onUpdateCandidate(pi, ci, { subtype_required: true, section_required: false })
       }
     } catch {}
   }
 
   const handleSubtypeChange = async (ci: number, stId: number, glId: number) => {
+    const subtypeName = getAcademic(ci).subtypes.find((s) => s.id === stId)?.name ?? ''
     setAcademic(ci, { subtypeId: stId, sections: [] })
-    onUpdateCandidate(pi, ci, { subtype_id: stId, section_id: null, section: '' })
+    onUpdateCandidate(pi, ci, { subtype_id: stId, subtype: subtypeName, section_id: null, section: '' })
     try {
       const r = await fetch(`/api/academic/sections?gradeLevelId=${glId}&subtypeId=${stId}`, { credentials: 'include' })
       const json = await r.json()
       const sections: AcademicOption[] = json.data?.sections ?? json.data ?? []
       setAcademic(ci, { sections })
+      onUpdateCandidate(pi, ci, { section_required: sections.length > 0 })
     } catch {}
   }
 
@@ -359,7 +366,7 @@ export default function CandidateManager({
                         }}
                         className={selectClass}
                       >
-                        <option value="">{labels.l1} (optional)</option>
+                        <option value="">Select {labels.l1}</option>
                         {(acad.gradeLevels.length ? acad.gradeLevels : globalGradeLevels).map((gl) => (
                           <option key={gl.id} value={gl.id}>{gl.name}</option>
                         ))}
@@ -374,7 +381,7 @@ export default function CandidateManager({
                           }}
                           className={selectClass}
                         >
-                          <option value="">{labels.l2} (optional)</option>
+                          <option value="">Select {labels.l2}</option>
                           {acad.subtypes.map((st) => (
                             <option key={st.id} value={st.id}>{st.name}</option>
                           ))}
@@ -391,7 +398,7 @@ export default function CandidateManager({
                           }}
                           className={selectClass}
                         >
-                          <option value="">{labels.l3} (optional)</option>
+                          <option value="">Select {labels.l3}</option>
                           {acad.sections.map((sec) => (
                             <option key={sec.id} value={sec.id}>{sec.name}</option>
                           ))}

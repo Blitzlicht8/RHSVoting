@@ -128,15 +128,16 @@ export default function ElectionsPage() {
             is_exclude: !!r.is_exclude,
           })),
           thumbnail_url: full.thumbnail_url ?? null,
-          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; grade_level?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
+          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
             id: p.id,
             name: p.name,
             max_votes: p.max_votes ?? 1,
-            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; grade_level?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }) => ({
+            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }) => ({
               id: c.id,
               name: c.name,
               bio: c.bio || '',
               grade_level: c.grade_level ?? '',
+              subtype: c.subtype ?? '',
               section: c.section ?? '',
               student_user_id: c.student_user_id ?? null,
               photo_url: c.photo_url ?? null,
@@ -202,6 +203,14 @@ export default function ElectionsPage() {
           addToast('All manual candidates require a group level.', 'error')
           return
         }
+        if (cand.mode === 'manual' && cand.subtype_required && !cand.subtype_id) {
+          addToast('All manual candidates require a subgroup selection.', 'error')
+          return
+        }
+        if (cand.mode === 'manual' && cand.section_required && !cand.section_id) {
+          addToast('All manual candidates require a unit selection.', 'error')
+          return
+        }
       }
     }
 
@@ -224,6 +233,7 @@ export default function ElectionsPage() {
             name: c.name,
             bio: c.bio,
             grade_level: c.grade_level || null,
+            subtype: c.subtype || null,
             section: c.section || null,
             student_user_id: c.student_user_id ?? null,
             photo_url: c.photo_url ?? null,
