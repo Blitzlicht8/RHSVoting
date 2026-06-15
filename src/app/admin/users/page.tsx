@@ -11,7 +11,7 @@ import LightboxModal from '@/components/ui/LightboxModal'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 
-type Role = 'master_admin' | 'admin' | 'moderator' | 'staff' | 'member'
+type Role = 'master_admin' | 'admin' | 'moderator' | 'staff' | 'member' | 'unverified'
 
 interface UserRow {
   id: number
@@ -53,6 +53,7 @@ const ROLE_LABELS: Record<string, string> = {
   moderator: 'Moderator',
   staff: 'Staff',
   member: 'Member',
+  unverified: 'Unverified',
 }
 
 const ROLE_BADGE: Record<string, 'danger' | 'warning' | 'purple' | 'info' | 'default'> = {
@@ -61,12 +62,13 @@ const ROLE_BADGE: Record<string, 'danger' | 'warning' | 'purple' | 'info' | 'def
   moderator: 'purple',
   staff: 'info',
   member: 'default',
+  unverified: 'default',
 }
 
-const ALL_ROLES: Role[] = ['master_admin', 'admin', 'moderator', 'staff', 'member']
+const ALL_ROLES: Role[] = ['master_admin', 'admin', 'moderator', 'staff', 'member', 'unverified']
 
 const ROLE_LEVEL: Record<string, number> = {
-  member: 0, staff: 1, moderator: 2, admin: 3, master_admin: 4,
+  unverified: -1, member: 0, staff: 1, moderator: 2, admin: 3, master_admin: 4,
 }
 
 function getAssignableRoles(currentUserRole: Role): Role[] {
@@ -1215,14 +1217,19 @@ export default function UsersPage() {
               Role <span className="text-red-500">*</span>
             </label>
             <select
-              value={createForm.role}
+              value={createForm.id_verified ? createForm.role : 'unverified'}
               onChange={(e) => setCreateForm(f => ({ ...f, role: e.target.value as Role, grade_level_id: '', subtype_id: '', section_id: '' }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+              disabled={!createForm.id_verified}
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white ${!createForm.id_verified ? 'border-gray-200 text-gray-400 cursor-not-allowed' : 'border-gray-300'}`}
             >
+              {!createForm.id_verified && <option value="unverified">Unverified</option>}
               {assignableRoles.map((r) => (
                 <option key={r} value={r}>{ROLE_LABELS[r]}</option>
               ))}
             </select>
+            {!createForm.id_verified && (
+              <p className="mt-1 text-xs text-gray-500">Role locked to Unverified — check &quot;ID Verified&quot; to assign a role now.</p>
+            )}
           </div>
 
           {/* Academic fields for member / moderator */}

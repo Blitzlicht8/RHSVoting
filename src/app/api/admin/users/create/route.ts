@@ -22,6 +22,9 @@ export async function POST(request: NextRequest) {
   if (authUser.role === 'admin' && ['master_admin', 'admin', 'moderator'].includes(role))
     return NextResponse.json({ error: 'Insufficient permissions to assign this role' }, { status: 403 })
 
+  // unverified at creation unless admin explicitly verifies the account
+  const effectiveRole = id_verified ? role : 'unverified'
+
   const existing = await db.execute({ sql: `SELECT id FROM users WHERE email = ?`, args: [email.trim()] })
   if (existing.rows.length > 0)
     return NextResponse.json({ error: 'Email already in use' }, { status: 409 })
@@ -31,7 +34,7 @@ export async function POST(request: NextRequest) {
     sql: `INSERT INTO users (email, password_hash, name, role, email_verified, id_verified, grade_level_id, subtype_id, section_id, active)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1) RETURNING id`,
     args: [
-      email.trim(), hashedPassword, name.trim(), role,
+      email.trim(), hashedPassword, name.trim(), effectiveRole,
       email_verified ? 1 : 0,
       id_verified ? 1 : 0,
       grade_level_id ?? null,
@@ -42,7 +45,7 @@ export async function POST(request: NextRequest) {
   const userId = Number(result.rows[0].id)
 
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
-  await logActivity(authUser.id, 'user_created', `Admin created user ${email.trim()} with role ${role}`, ip)
+  await logActivity(authUser.id, 'user_created', `Admin created user ${email.trim()} with role ${effectiveRole}`, ip)
 
   return NextResponse.json({ data: { userId } }, { status: 201 })
 }
