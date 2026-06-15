@@ -176,7 +176,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     values.push(body.end_date)
   }
 
-  if (body.status !== undefined) {
+  if (body.status !== undefined && body.status !== existing.status) {
     const currentStatus = existing.status as ElectionStatus
     const allowedNext = VALID_TRANSITIONS[currentStatus]
     if (body.status !== allowedNext) {

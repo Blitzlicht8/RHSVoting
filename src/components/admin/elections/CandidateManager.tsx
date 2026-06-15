@@ -27,6 +27,7 @@ export interface CandidateForm {
   section_id?: number | null
   subtype_required?: boolean
   section_required?: boolean
+  academic_loading?: boolean
   collapsed?: boolean
   student_user_id?: number | null
   photo_url?: string | null
@@ -185,7 +186,7 @@ export default function CandidateManager({
 
   const handleGradeLevelChange = async (ci: number, glId: number, glName: string) => {
     setAcademic(ci, { gradeLevelId: glId, subtypeId: null, subtypes: [], sections: [] })
-    onUpdateCandidate(pi, ci, { grade_level: glName, grade_level_id: glId, subtype_id: null, subtype: '', section_id: null, section: '', subtype_required: false, section_required: false })
+    onUpdateCandidate(pi, ci, { grade_level: glName, grade_level_id: glId, subtype_id: null, subtype: '', section_id: null, section: '', subtype_required: false, section_required: false, academic_loading: true })
     try {
       const r = await fetch(`/api/academic/subtypes?gradeLevelId=${glId}`, { credentials: 'include' })
       const json = await r.json()
@@ -195,25 +196,29 @@ export default function CandidateManager({
         const jsons = await rs.json()
         const sections: AcademicOption[] = jsons.data?.sections ?? jsons.data ?? []
         setAcademic(ci, { subtypes: [], sections, gradeLevelId: glId })
-        onUpdateCandidate(pi, ci, { subtype_required: false, section_required: sections.length > 0 })
+        onUpdateCandidate(pi, ci, { subtype_required: false, section_required: sections.length > 0, academic_loading: false })
       } else {
         setAcademic(ci, { subtypes, sections: [], gradeLevelId: glId })
-        onUpdateCandidate(pi, ci, { subtype_required: true, section_required: false })
+        onUpdateCandidate(pi, ci, { subtype_required: true, section_required: false, academic_loading: false })
       }
-    } catch {}
+    } catch {
+      onUpdateCandidate(pi, ci, { academic_loading: false })
+    }
   }
 
   const handleSubtypeChange = async (ci: number, stId: number, glId: number) => {
     const subtypeName = getAcademic(ci).subtypes.find((s) => s.id === stId)?.name ?? ''
     setAcademic(ci, { subtypeId: stId, sections: [] })
-    onUpdateCandidate(pi, ci, { subtype_id: stId, subtype: subtypeName, section_id: null, section: '' })
+    onUpdateCandidate(pi, ci, { subtype_id: stId, subtype: subtypeName, section_id: null, section: '', academic_loading: true })
     try {
       const r = await fetch(`/api/academic/sections?gradeLevelId=${glId}&subtypeId=${stId}`, { credentials: 'include' })
       const json = await r.json()
       const sections: AcademicOption[] = json.data?.sections ?? json.data ?? []
       setAcademic(ci, { sections })
-      onUpdateCandidate(pi, ci, { section_required: sections.length > 0 })
-    } catch {}
+      onUpdateCandidate(pi, ci, { section_required: sections.length > 0, academic_loading: false })
+    } catch {
+      onUpdateCandidate(pi, ci, { academic_loading: false })
+    }
   }
 
   const handleSectionChange = (ci: number, secId: number, secName: string) => {
@@ -531,8 +536,9 @@ export default function CandidateManager({
                   const missingGroup = !cand.grade_level_id && !cand.grade_level?.trim()
                   const missingSubgroup = !!cand.subtype_required && !cand.subtype_id && !cand.subtype?.trim()
                   const missingUnit = !!cand.section_required && !cand.section_id && !cand.section?.trim()
-                  const canSave = !missingName && !missingGroup && !missingSubgroup && !missingUnit
-                  const hint = missingName ? 'Name required'
+                  const canSave = !missingName && !missingGroup && !missingSubgroup && !missingUnit && !cand.academic_loading
+                  const hint = cand.academic_loading ? 'Loading…'
+                    : missingName ? 'Name required'
                     : missingGroup ? `${labels.l1} required`
                     : missingSubgroup ? `${labels.l2} required`
                     : missingUnit ? `${labels.l3} required`
@@ -546,8 +552,14 @@ export default function CandidateManager({
                         type="button"
                         disabled={!canSave}
                         onClick={() => { if (canSave) onUpdateCandidate(pi, ci, { collapsed: true }) }}
-                        className="text-xs font-medium text-white bg-[#84050C] hover:bg-[#6B0409] disabled:bg-gray-300 disabled:cursor-not-allowed px-3 py-1.5 rounded-md transition-colors"
+                        className="text-xs font-medium text-white bg-[#84050C] hover:bg-[#6B0409] disabled:bg-gray-300 disabled:cursor-not-allowed px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
                       >
+                        {cand.academic_loading && (
+                          <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        )}
                         Save Candidate
                       </button>
                     </div>

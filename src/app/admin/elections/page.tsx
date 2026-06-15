@@ -128,14 +128,16 @@ export default function ElectionsPage() {
             is_exclude: !!r.is_exclude,
           })),
           thumbnail_url: full.thumbnail_url ?? null,
-          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
+          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
             id: p.id,
             name: p.name,
             max_votes: p.max_votes ?? 1,
-            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }) => ({
+            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }) => ({
               id: c.id,
               name: c.name,
               bio: c.bio || '',
+              platform: c.platform ?? '',
+              qualifications: c.qualifications ?? '',
               grade_level: c.grade_level ?? '',
               subtype: c.subtype ?? '',
               section: c.section ?? '',
@@ -221,7 +223,6 @@ export default function ElectionsPage() {
         description: formData.description.trim(),
         start_date: new Date(formData.start_date).toISOString(),
         end_date: new Date(formData.end_date).toISOString(),
-        status: formData.status,
         is_global: formData.is_global,
         allow_teacher_vote: formData.allow_teacher_vote,
         eligibility: formData.is_global ? [] : formData.eligibility,
@@ -232,6 +233,8 @@ export default function ElectionsPage() {
             id: c.id,
             name: c.name,
             bio: c.bio,
+            platform: c.platform ?? null,
+            qualifications: c.qualifications ?? null,
             grade_level: c.grade_level || null,
             subtype: c.subtype || null,
             section: c.section || null,

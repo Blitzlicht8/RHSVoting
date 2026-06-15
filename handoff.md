@@ -5,10 +5,10 @@
 ---
 
 ## Session Date
-2026-06-14
+2026-06-15
 
 ## Version After This Session
-`0.7.6` — Academic dropdown restore on reopen + validation bypass fix
+`0.7.8` — Bug fixes: status transition, platform/qualifications save, academic_loading guard
 
 ---
 
@@ -102,16 +102,6 @@ Full redesign — breadcrumb, header card (avatar/initials, name, position, elec
 
 ---
 
-### v0.7.4 — Save Candidate button validation
-
-#### CandidateManager (`src/components/admin/elections/CandidateManager.tsx`)
-- Save Candidate always visible in manual mode (was hidden until name filled)
-- Disabled + inline hint until all required fields present: Name → `{l1}` → `{l2}` (if subtype_required) → `{l3}` (if section_required)
-- Computes `canSave = !missingName && !missingGroup && !missingSubgroup && !missingUnit`
-- Hint text uses dynamic labels from settings
-
----
-
 ### v0.7.5 — Vote Now shows after voting fix
 
 #### Elections List API (`src/app/api/elections/route.ts`)
@@ -135,11 +125,58 @@ Full redesign — breadcrumb, header card (avatar/initials, name, position, elec
 
 ---
 
+### v0.7.7 — Academic dropdowns + collapse state fully persistent on modal reopen
+
+#### Root cause of v0.7.6 failure
+- Restoration effect had `if (cand.grade_level_id) return` — skipped when IDs were already in newDraft, so `academicOptions` (the dropdown option lists) were never re-populated after remount.
+- `collapsed: Set<number>` was local component state in PositionManager + CandidateManager — reset to empty on every remount.
+
+#### CandidateManager (`src/components/admin/elections/CandidateManager.tsx`)
+- Added `collapsed?: boolean` to `CandidateForm` interface
+- Removed local `collapsedCandidates: Set<number>` state and `toggleCandidateCollapse` function
+- Collapse state now stored in `cand.collapsed` (part of formData → persists via newDraft)
+- Restoration effect: removed `if (cand.grade_level_id) return` guard — effect now ALWAYS runs when grade_level is set, populating `academicOptions` even when IDs are already present from newDraft
+- Restoration: uses `cand.grade_level_id` directly if present, falls back to name lookup; only writes IDs back when missing
+
+#### PositionManager (`src/components/admin/elections/PositionManager.tsx`)
+- Added `collapsed?: boolean` to `PositionForm` interface
+- Removed local `collapsed: Set<number>` state and `toggleCollapse` function
+- Collapse state now stored in `pos.collapsed` (part of formData → persists via newDraft)
+- Removed unused `useState` import
+
+---
+
+### v0.7.8 — Bug fixes: status transition, platform/qualifications, academic_loading
+
+#### Bug 1 — "Invalid status transition: draft → draft" (`src/app/api/elections/[id]/route.ts`)
+- PATCH handler wrapped VALID_TRANSITIONS check with `body.status !== existing.status` guard
+- No-op saves (same status) now skip the transition check entirely
+- `src/app/admin/elections/page.tsx` handleSave: removed `status:` from payload — status transitions go through `confirmStatus` flow only, never through handleSave
+
+#### Bug 2 — platform/qualifications not saved (`src/app/admin/elections/page.tsx`)
+- handleSave payload now maps `platform: c.platform ?? null` and `qualifications: c.qualifications ?? null` for each candidate
+- openEdit mapping: added `platform` and `qualifications` to candidates type annotation and mapped object, so form pre-populates on edit
+
+#### Bug 3+5 — Candidate profile SQL crash (already fixed in v0.7.x)
+- `elections/[id]/candidates/[candidateId]/route.ts` already had correct `LEFT JOIN users u`
+
+#### Bug 4 — photo_url column (already in newColumns from v0.7.x)
+- `ALTER TABLE candidates ADD COLUMN photo_url TEXT` was already in idempotent list
+
+#### Bug 6 — Save Candidate validation bypass (`src/components/admin/elections/CandidateManager.tsx`)
+- Added `academic_loading?: boolean` to `CandidateForm` interface
+- `handleGradeLevelChange`: sets `academic_loading: true` on start, `academic_loading: false` after subtypes+sections resolve (or on error)
+- `handleSubtypeChange`: same — `academic_loading: true` on start, `false` after sections resolve
+- `canSave` now includes `&& !cand.academic_loading` — button stays disabled while fetch is in flight
+- Save Candidate button shows spinner SVG when `cand.academic_loading` is true
+
+---
+
 ## Current State
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.7.6`
+- Version: `0.7.8`
 
 ---
 
@@ -150,7 +187,8 @@ Full redesign — breadcrumb, header card (avatar/initials, name, position, elec
 - Export CSV button visible to all `isAdmin`; API enforces `master_admin` only
 - `qualifications` stored as newline-separated text, split client-side
 - `subtype_required` / `section_required` flags carried in `CandidateForm` state — set dynamically after async API calls resolve; parent reads them at save time
-- Collapse state in PositionManager and CandidateManager is local component state — resets if modal is closed and reopened (acceptable UX)
+- Collapse state stored in `pos.collapsed` / `cand.collapsed` fields — persists via newDraft across modal close/reopen
+- `academic_loading` flag prevents Save Candidate from firing during async dropdown fetch window
 
 ---
 
@@ -167,12 +205,7 @@ Full redesign — breadcrumb, header card (avatar/initials, name, position, elec
 ## Key Files Changed This Session
 
 ```
-src/lib/db.ts                                                 +subtype TEXT column on candidates
-src/components/admin/elections/CandidateManager.tsx           +subtype storage, required flags, Save Candidate collapse
-src/components/admin/elections/PositionManager.tsx            +Save Position collapse
-src/app/admin/elections/page.tsx                              +subtype_required/section_required validation, activate guard
-src/app/api/elections/[id]/route.ts                           +subtype to CandidateInput/INSERT/SELECT, activate server guard
-src/app/api/elections/[id]/candidates/[candidateId]/route.ts  +c.subtype to SELECT
-src/app/elections/[id]/candidates/[candidateId]/page.tsx      +subtype display (l1·l2·l3)
-src/app/elections/page.tsx                                    ElectionCard flex-col fix
+src/app/api/elections/[id]/route.ts                  Bug 1: status no-op guard (body.status !== existing.status)
+src/app/admin/elections/page.tsx                      Bug 1: remove status from payload; Bug 2: add platform/qualifications to save + openEdit
+src/components/admin/elections/CandidateManager.tsx   Bug 6: academic_loading flag + spinner
 ```
