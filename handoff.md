@@ -8,11 +8,17 @@
 2026-06-15
 
 ## Version After This Session
-`0.14.0` — feat: position max_votes_mode — custom / match candidates / auto (eligible voters)
+`0.14.1` — fix: eligible_auto count includes subtype_id matching in election activation
 
 ---
 
 ## What Was Done
+
+### v0.14.1 — Fix eligible_auto subtype matching
+
+#### `src/app/api/elections/[id]/route.ts`
+- PATCH `status → active` eligible count query for scoped elections: added `AND (ee.is_all_subtype = 1 OR u.subtype_id = ee.subtype_id)` to the WHERE clause
+- Previously the query only matched grade and section; subtype constraint was silently ignored, causing over-counting for elections scoped to a specific subtype
 
 ### v0.14.0 — Position max_votes_mode: eligible_auto
 
@@ -57,7 +63,7 @@
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.14.0`
+- Version: `0.14.1`
 
 ---
 
@@ -90,4 +96,3 @@
 - Per-position candidate-count validation on activate
 - Achievements editor for new candidates
 - Admin UI for user-level achievements
-- `eligible_auto` eligible count query is simplified (no subtype matching) — may under/over-count for complex eligibility rules
