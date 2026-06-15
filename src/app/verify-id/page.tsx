@@ -603,6 +603,16 @@ export default function VerifyIdPage() {
             >
               {uploading ? 'Submitting…' : 'Submit for Verification'}
             </Button>
+
+            <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard')}
+                className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                ← Back to Dashboard
+              </button>
+            </div>
           </div>
         )}
 

@@ -26,13 +26,19 @@ interface VerifRequest {
   user_role: string
   user_avatar_url: string | null
   id_image: string
+  image_path: string
   status: VerifStatus
   notes: string | null
   created_at: string
   updated_at: string
-  intended_role: string | null
   grade_level: string | null
   section: string | null
+  grade_level_id: number | null
+  subtype_id: number | null
+  section_id: number | null
+  grade_level_name: string | null
+  subtype_name: string | null
+  section_name: string | null
   doc_type: string | null
   documents: VerifDocument[]
 }
@@ -179,27 +185,58 @@ export default function VerificationsPage() {
     }
   }
 
-  const openApproveModal = (req: VerifRequest) => {
+  const openApproveModal = async (req: VerifRequest) => {
     setSelectedApproveRequest(req)
-    setApproveForm({ grade_level_id: '', subtype_id: '', section_id: '' })
     setApproveSubtypes([])
     setApproveSections([])
-    fetch('/api/academic/grade-levels', { credentials: 'include' })
-      .then(r => r.json()).then(j => setApproveGradeLevels(j.data ?? []))
+
+    // Pre-populate with values user submitted
+    const preGl  = req.grade_level_id ? String(req.grade_level_id) : ''
+    const preSt  = req.subtype_id     ? String(req.subtype_id)     : ''
+    const preSec = req.section_id     ? String(req.section_id)     : ''
+    setApproveForm({ grade_level_id: preGl, subtype_id: preSt, section_id: preSec })
+
+    const glRes = await fetch('/api/academic/grade-levels', { credentials: 'include' })
+    const glJson = await glRes.json()
+    setApproveGradeLevels(glJson.data ?? [])
+
+    // Pre-fetch cascades for submitted values
+    if (preGl) {
+      const stRes = await fetch(`/api/academic/subtypes?gradeLevelId=${preGl}`, { credentials: 'include' })
+      const stJson = await stRes.json()
+      setApproveSubtypes(stJson.data ?? [])
+
+      const secUrl = `/api/academic/sections?gradeLevelId=${preGl}${preSt ? `&subtypeId=${preSt}` : ''}`
+      const secRes = await fetch(secUrl, { credentials: 'include' })
+      const secJson = await secRes.json()
+      setApproveSections(secJson.data ?? [])
+    }
+
     setShowApproveModal(true)
   }
 
-  useEffect(() => {
-    if (!approveForm.grade_level_id) { setApproveSubtypes([]); setApproveSections([]); return }
-    fetch(`/api/academic/subtypes?gradeLevelId=${approveForm.grade_level_id}`, { credentials: 'include' })
-      .then(r => r.json()).then(j => setApproveSubtypes(j.data ?? []))
-  }, [approveForm.grade_level_id])
+  // Manual cascade handlers — avoid useEffect wiping pre-populated values
+  const onApproveL1Change = async (val: string) => {
+    setApproveForm(f => ({ ...f, grade_level_id: val, subtype_id: '', section_id: '' }))
+    setApproveSubtypes([])
+    setApproveSections([])
+    if (!val) return
+    const stRes = await fetch(`/api/academic/subtypes?gradeLevelId=${val}`, { credentials: 'include' })
+    const stJson = await stRes.json()
+    setApproveSubtypes(stJson.data ?? [])
+    const secRes = await fetch(`/api/academic/sections?gradeLevelId=${val}`, { credentials: 'include' })
+    const secJson = await secRes.json()
+    setApproveSections(secJson.data ?? [])
+  }
 
-  useEffect(() => {
-    if (!approveForm.grade_level_id) { setApproveSections([]); return }
-    const url = `/api/academic/sections?gradeLevelId=${approveForm.grade_level_id}${approveForm.subtype_id ? `&subtypeId=${approveForm.subtype_id}` : ''}`
-    fetch(url, { credentials: 'include' }).then(r => r.json()).then(j => setApproveSections(j.data ?? []))
-  }, [approveForm.grade_level_id, approveForm.subtype_id])
+  const onApproveL2Change = async (val: string) => {
+    const gl = approveForm.grade_level_id
+    setApproveForm(f => ({ ...f, subtype_id: val, section_id: '' }))
+    if (!gl) return
+    const secRes = await fetch(`/api/academic/sections?gradeLevelId=${gl}${val ? `&subtypeId=${val}` : ''}`, { credentials: 'include' })
+    const secJson = await secRes.json()
+    setApproveSections(secJson.data ?? [])
+  }
 
   const handleApprove = async () => {
     if (!selectedApproveRequest) return
@@ -397,40 +434,40 @@ export default function VerificationsPage() {
                       <Badge variant="info" size="sm">
                         {ROLE_LABELS[req.user_role] || req.user_role}
                       </Badge>
-                      {req.intended_role === 'member' && (
-                        <>
-                          <Badge variant="default" size="sm">Member</Badge>
-                          {(req as any).grade_level_name ? (
-                            <span className="text-xs text-gray-500">
-                              {(req as any).grade_level_name}{(req as any).section_name ? ` · ${(req as any).section_name}` : ''}
-                            </span>
-                          ) : req.grade_level ? (
-                            <>
-                              <span className="text-xs text-gray-500">Grade {req.grade_level}</span>
-                              {req.section && (
-                                <span className="text-xs text-gray-500">&middot; {req.section}</span>
-                              )}
-                            </>
-                          ) : null}
-                        </>
-                      )}
-                      {req.intended_role === 'staff' && (
-                        <Badge variant="default" size="sm">Staff</Badge>
-                      )}
                       {req.doc_type && (
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-[#FEE2E2]/60 text-[#6B0409] border border-[#FEE2E2]">
                           {req.doc_type}
                         </span>
                       )}
                     </div>
+                    {/* Group / subgroup / unit submitted by user */}
+                    {req.grade_level_name && (
+                      <div className="flex flex-wrap items-center gap-1 mt-1">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                          {req.grade_level_name}
+                        </span>
+                        {req.subtype_name && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                            {req.subtype_name}
+                          </span>
+                        )}
+                        {req.section_name && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                            {req.section_name}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Document thumbnails */}
                 {(() => {
                   const photoUrls = req.documents?.length > 0
-                    ? req.documents.map((d: VerifDocument) => d.file_path)
-                    : req.id_image ? [req.id_image] : []
+                    ? req.documents.map((d: VerifDocument) => d.file_path).filter(p => p && p !== 'none')
+                    : (req.id_image && req.id_image !== 'none') ? [req.id_image]
+                    : (req.image_path && req.image_path !== 'none') ? [req.image_path]
+                    : []
                   if (photoUrls.length === 0) return null
                   return (
                     <div className="px-4 pb-3 flex flex-wrap gap-2">
@@ -522,20 +559,15 @@ export default function VerificationsPage() {
               <div>
                 <div className="font-medium text-gray-900 text-sm">{selectedImageRequest.user_name}</div>
                 <div className="text-xs text-gray-500">{selectedImageRequest.user_email}</div>
-                {selectedImageRequest.intended_role === 'student' && (
-                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                    <Badge variant="default" size="sm">Member</Badge>
-                    {selectedImageRequest.grade_level && (
-                      <span className="text-xs text-gray-500">Grade {selectedImageRequest.grade_level}</span>
+                {selectedImageRequest.grade_level_name && (
+                  <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                    <span className="text-xs text-gray-500">{selectedImageRequest.grade_level_name}</span>
+                    {selectedImageRequest.subtype_name && (
+                      <span className="text-xs text-gray-500">&middot; {selectedImageRequest.subtype_name}</span>
                     )}
-                    {selectedImageRequest.section && (
-                      <span className="text-xs text-gray-500">&middot; {selectedImageRequest.section}</span>
+                    {selectedImageRequest.section_name && (
+                      <span className="text-xs text-gray-500">&middot; {selectedImageRequest.section_name}</span>
                     )}
-                  </div>
-                )}
-                {selectedImageRequest.intended_role === 'teacher' && (
-                  <div className="mt-0.5">
-                    <Badge variant="default" size="sm">Staff</Badge>
                   </div>
                 )}
               </div>
@@ -605,7 +637,8 @@ export default function VerificationsPage() {
         <div className="space-y-3">
           {selectedApproveRequest && (
             <p className="text-sm text-gray-600">
-              Approving ID verification for <strong>{selectedApproveRequest.user_name}</strong>.
+              Approving verification for <strong>{selectedApproveRequest.user_name}</strong>.
+              Pre-filled from their submission — adjust if needed.
             </p>
           )}
           <div>
@@ -614,7 +647,7 @@ export default function VerificationsPage() {
             </label>
             <select
               value={approveForm.grade_level_id}
-              onChange={(e) => setApproveForm(f => ({ ...f, grade_level_id: e.target.value, subtype_id: '', section_id: '' }))}
+              onChange={(e) => onApproveL1Change(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
             >
               <option value="">— Select {settings['group_label_l1']?.toLowerCase() || 'group'} —</option>
@@ -626,7 +659,7 @@ export default function VerificationsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">{settings['group_label_l2'] || 'Subgroup'}</label>
               <select
                 value={approveForm.subtype_id}
-                onChange={(e) => setApproveForm(f => ({ ...f, subtype_id: e.target.value, section_id: '' }))}
+                onChange={(e) => onApproveL2Change(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
               >
                 <option value="">— Select {settings['group_label_l2']?.toLowerCase() || 'subgroup'} —</option>

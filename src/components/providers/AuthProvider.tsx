@@ -16,6 +16,7 @@ export interface User {
   needs_academic_update?: boolean | number
   avatar_url?: string | null
   bio?: string | null
+  verification_status?: 'pending' | 'rejected' | null
 }
 
 interface AuthContextValue {
