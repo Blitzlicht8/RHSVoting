@@ -132,12 +132,12 @@ export default function ElectionsPage() {
           thumbnail_url: full.thumbnail_url ?? null,
           auto_start: !!full.auto_start,
           auto_end: !!full.auto_end,
-          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
+          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; grade_level?: string; subtype?: string; section?: string; grade_level_id?: number | null; subtype_id?: number | null; section_id?: number | null; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
             id: p.id,
             name: p.name,
             max_votes: p.max_votes ?? 1,
             collapsed: true,
-            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }) => ({
+            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; grade_level?: string; subtype?: string; section?: string; grade_level_id?: number | null; subtype_id?: number | null; section_id?: number | null; student_user_id?: number | null; photo_url?: string | null }) => ({
               id: c.id,
               name: c.name,
               bio: c.bio || '',
@@ -147,6 +147,9 @@ export default function ElectionsPage() {
               grade_level: c.grade_level ?? '',
               subtype: c.subtype ?? '',
               section: c.section ?? '',
+              grade_level_id: c.grade_level_id ?? null,
+              subtype_id: c.subtype_id ?? null,
+              section_id: c.section_id ?? null,
               student_user_id: c.student_user_id ?? null,
               photo_url: c.photo_url ?? null,
               mode: c.student_user_id ? 'existing' as const : 'manual' as const,
@@ -248,6 +251,9 @@ export default function ElectionsPage() {
             grade_level: c.grade_level || null,
             subtype: c.subtype || null,
             section: c.section || null,
+            grade_level_id: c.grade_level_id ?? null,
+            subtype_id: c.subtype_id ?? null,
+            section_id: c.section_id ?? null,
             student_user_id: c.student_user_id ?? null,
             photo_url: c.photo_url ?? null,
           })),

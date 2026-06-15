@@ -21,6 +21,9 @@ interface CandidateInput {
   grade_level?: string
   subtype?: string | null
   section?: string
+  grade_level_id?: number | null
+  subtype_id?: number | null
+  section_id?: number | null
   student_user_id?: number | null
   photo_url?: string | null
 }
@@ -46,8 +49,8 @@ async function syncPositions(electionId: number, positions: PositionInput[]) {
       const candName = (cand.name ?? '').trim()
       if (!candName) continue
       const candResult = await db.execute({
-        sql: `INSERT INTO candidates (election_id, position_id, name, bio, platform, qualifications, grade_level, subtype, section, student_user_id, user_id, photo_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [electionId, posId, candName, cand.bio ?? null, cand.platform ?? null, cand.qualifications ?? null, cand.grade_level ?? null, cand.subtype ?? null, cand.section ?? null, cand.student_user_id ?? null, cand.student_user_id ?? null, cand.photo_url ?? null],
+        sql: `INSERT INTO candidates (election_id, position_id, name, bio, platform, qualifications, grade_level, subtype, section, grade_level_id, subtype_id, section_id, student_user_id, user_id, photo_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [electionId, posId, candName, cand.bio ?? null, cand.platform ?? null, cand.qualifications ?? null, cand.grade_level ?? null, cand.subtype ?? null, cand.section ?? null, cand.grade_level_id ?? null, cand.subtype_id ?? null, cand.section_id ?? null, cand.student_user_id ?? null, cand.student_user_id ?? null, cand.photo_url ?? null],
       })
       const candId = Number(candResult.lastInsertRowid)
       if (Array.isArray(cand.achievements) && cand.achievements.length > 0) {
@@ -109,7 +112,9 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
   const candidatesResult = await db.execute({
     sql: `SELECT c.id, c.position_id, c.election_id, c.name, c.bio, c.platform, c.qualifications,
-                 c.grade_level, c.subtype, c.section, c.student_user_id, c.user_id,
+                 c.grade_level, c.subtype, c.section,
+                 c.grade_level_id, c.subtype_id, c.section_id,
+                 c.student_user_id, c.user_id,
                  COALESCE(u.avatar_url, c.photo_url) AS photo_url
           FROM candidates c
           LEFT JOIN users u ON u.id = COALESCE(c.student_user_id, c.user_id)

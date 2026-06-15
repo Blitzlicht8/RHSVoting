@@ -8,49 +8,47 @@
 2026-06-15
 
 ## Version After This Session
-`0.13.0` — UX polish: rejection notes mandatory, navbar unverified indicator, verify-id UIState confirmed
+`0.13.2` — fix: candidate group ID columns stored + returned for dropdown pre-selection
 
 ---
 
 ## What Was Done
 
-### v0.13.0 — UX Polish: Rejection Notes + Navbar Indicator + Status Sync
+### v0.13.2 — Candidate group ID persistence
 
-#### `src/app/admin/verifications/page.tsx`
-- Added `rejectNotesError` state
-- `openRejectModal`: resets `rejectNotesError` to `''` on open
-- `handleReject`: validates `rejectNotes.trim()` before closing modal — returns early with inline error if empty; API call blocked
-- Reject modal label now shows red asterisk: `Reason / Notes *`
-- Textarea `onChange` clears `rejectNotesError` on keystroke
-- Inline error `<p>` renders below textarea when `rejectNotesError` is set
-- Textarea border turns red (`border-red-400`) when error is active
-- Shows existing `selectedRejectRequest.notes` in an amber context box above textarea (for re-review context)
+#### `src/lib/db.ts`
+- Added 3 idempotent `ALTER TABLE` migrations to `newColumns`:
+  - `ALTER TABLE candidates ADD COLUMN grade_level_id INTEGER`
+  - `ALTER TABLE candidates ADD COLUMN subtype_id INTEGER`
+  - `ALTER TABLE candidates ADD COLUMN section_id INTEGER`
 
-#### `src/components/Navbar.tsx`
-- Avatar button: adds `title="Verify your identity"` when `user.role === 'unverified'`
-- Amber dot badge (`w-2 h-2 bg-amber-400 rounded-full absolute top-0 right-0 pointer-events-none`) rendered as sibling to avatar button inside the `relative` wrapper — visible outside button's `overflow-hidden`
+#### `src/app/api/elections/[id]/route.ts`
+- `CandidateInput` interface: added `grade_level_id`, `subtype_id`, `section_id` optional fields
+- `syncPositions` INSERT: expanded from 12 to 15 columns, now stores the ID columns alongside text names
+- GET candidates SELECT: added `c.grade_level_id, c.subtype_id, c.section_id` to the query
 
-#### `src/app/verify-id/page.tsx`
-- **No changes needed** — `deriveUiState` already implements correct priority (verified → pending → rejected → upload), and `handleSubmit` already calls `fetchUser() + refetchAuth()` after successful POST, triggering UIState → `'pending'` without reload. Confirmed correct as-is.
+#### `src/app/admin/elections/page.tsx`
+- `handleSave` payload: added `grade_level_id`, `subtype_id`, `section_id` to candidate mapping
+- `openEdit` candidate mapping + type annotation: added `grade_level_id`, `subtype_id`, `section_id` — dropdowns in CandidateManager now pre-select correctly on re-open
+
+Note: CandidateManager dropdowns already used IDs as `value` (`acad.gradeLevelId`, `acad.subtypeId`, `cand.section_id`) and the restore effect already prioritized IDs — no changes needed there.
 
 ---
 
 ## Previous Sessions
 
+### v0.13.1 — Revoke verification bugfixes
+- PATCH revoke: sets `verification_status = 'rejected'` (banner now shows)
+- POST /api/verifications: DELETE prior rows unconditionally before insert (fixed UNIQUE crash on resubmit)
+
+### v0.13.0 — UX Polish: Rejection Notes + Navbar Indicator + Status Sync
+- Mandatory rejection notes in admin verifications UI
+- Amber dot badge on Navbar avatar for unverified users
+
 ### v0.12.0 — Unverified role guards + visual indicators
-- `api/users/route.ts`: SELECT includes `verification_status`; GET supports `?verification_status=pending` filter
-- `api/users/[id]/route.ts`: PATCH guards — `unverified` role → 403; `master_admin` role → 403 unless actor is `master_admin`
-- `admin/users/page.tsx`: pending filter chip, ⚠ indicator for unverified users, `unverified` removed from role selects, disabled "Unverified (auto)" shown as current value
-
 ### v0.11.2 — master_admin permissions all show checked
-- `admin/roles/page.tsx`: permissions display forces `checked={true}` for `fullyLocked` roles
-
 ### v0.11.1 — member delete button showing incorrectly
-- `admin/roles/page.tsx`: `isCustom` guards by name in addition to `is_system === 0`
-
 ### v0.11.0 — Roles system overhaul
-- Roles page, API guards, lock rules, new permission keys, UI improvements
-
 ### v0.10.1 — Rejected banner stuck after resubmit
 ### v0.10.0 — Auto-upgrade unverified → member on approval
 ### v0.9.0–0.9.5 — Verify-ID overhaul, group dropdowns, etc.
@@ -61,7 +59,7 @@
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.13.0`
+- Version: `0.13.2`
 
 ---
 
@@ -73,15 +71,17 @@
 - DELETE /api/verifications checks `users.verification_status = 'pending'`, not the request row
 - Approve (both paths) sets `verification_status = 'approved'` + promotes `unverified → member`
 - Reject sets `verification_status = 'rejected'` + `verification_notes` on users
+- **Revoke** (admin users page `id_verified=false`) sets `id_verified=0`, `role='unverified'`, `verification_status='rejected'`
 - `/api/auth/me` returns `verification_status`, `needs_academic_update`, `bio`
 - `'none'` is the `image_path` placeholder in verification_requests when no files uploaded
 - `verify-id/page.tsx` calls both local `fetchUser()` AND `refetchAuth()` on submit
 - `deriveUiState` priority: id_verified → pending → rejected → upload
+- POST /api/verifications deletes ALL prior rows for user before insert (pending guard runs first)
 - Roles page is `master_admin`-only — redirects others to `/admin`
 - `member` role: `is_system = 0` in DB — guarded by name checks in UI and API, not is_system flag
-- `member` role: name-editable only. Permissions blocked at API + UI level.
 - `master_admin` role: fully locked. Permissions display forced all-true (DB stores `{}`).
-- Rejection reason is now mandatory in admin verifications UI — validated client-side before API call
+- Rejection reason is mandatory in admin verifications UI — validated client-side before API call
+- Candidates store `grade_level_id`, `subtype_id`, `section_id` alongside text names — dropdowns pre-select on edit
 
 ---
 
