@@ -137,7 +137,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (body.id_verified !== undefined && canVerify) {
     setClauses.push('id_verified = ?')
     values.push(body.id_verified ? 1 : 0)
-    if (!body.id_verified) {
+    if (body.id_verified) {
+      setClauses.push(`verification_status = 'approved'`)
+    } else {
       // Revoking verification auto-reverts role to unverified (master_admin protected)
       setClauses.push(`role = CASE WHEN role = 'master_admin' THEN role ELSE 'unverified' END`)
     }
@@ -210,6 +212,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       await db.execute({
         sql: `UPDATE verification_requests SET status = 'approved', reviewed_by = ?, reviewed_at = datetime('now') WHERE user_id = ? AND status = 'pending'`,
         args: [authUser.id, targetId],
+      })
+      // Promote unverified → member on manual approve
+      await db.execute({
+        sql: `UPDATE users SET role = 'member', verification_status = 'approved' WHERE id = ? AND role = 'unverified'`,
+        args: [targetId],
       })
     }
     await logActivity(authUser.id, 'id_verified_admin',

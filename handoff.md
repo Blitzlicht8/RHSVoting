@@ -8,32 +8,35 @@
 2026-06-15
 
 ## Version After This Session
-`0.9.4` — fix stuck pending verification state from pre-0.9.3 reject
+`0.10.0` — auto-upgrade unverified → member on verification approval
 
 ---
 
 ## What Was Done
 
-### v0.9.4 — Stuck verification state fix
+### v0.10.0 — Auto-upgrade unverified → member on approval
 
-**Root cause:** Old reject handler (pre-v0.9.3) wrote `verification_requests.status = 'rejected'` but never updated `users.verification_status`. Users rejected before v0.9.3 have `users.verification_status = 'pending'` with no pending `verification_requests` row.
+**Feature:** When a verification request is approved (via admin verifications page or inline id_verified toggle), users with role `unverified` are automatically promoted to `member`. `verification_status` is also synced on approval/rejection.
 
-#### `src/app/api/verifications/route.ts` — DELETE handler
-- Changed check from "does a pending request row exist" to "is users.verification_status = 'pending'"
-- Batch: DELETE pending request rows (no-op if none) + reset users.verification_status = NULL
-- Returns 409 if status isn't 'pending' (nothing to cancel)
-- Handles stale state from pre-0.9.3 without needing a manual DB fix
+#### `src/app/api/verifications/[id]/route.ts` — approve batch (already had this from prior session)
+- `UPDATE users SET id_verified = 1, verification_status = 'approved'` 
+- `UPDATE users SET role = 'member' WHERE id = ? AND role = 'unverified'`
+- Reject: `UPDATE users SET id_verified = 0, verification_status = 'rejected', verification_notes = ?`
 
-#### `src/app/verify-id/page.tsx` — cancel button
-- `fetchUser()` now called regardless of cancel success/failure — self-heals stale UI state
+#### `src/app/api/users/[id]/route.ts` — inline id_verified toggle (PATCH)
+- When `id_verified = true` via admin users page: added `verification_status = 'approved'` to dynamic SET clauses
+- Added post-UPDATE query: `UPDATE users SET role = 'member', verification_status = 'approved' WHERE id = ? AND role = 'unverified'`
+- Role promotion is conditional — only fires when current role is `unverified` (preserves higher roles)
 
 ---
 
-## Previous Session Work (0.9.0–0.9.3)
+## Previous Session Work (0.9.0–0.9.5)
 - v0.9.0: Verify-ID overhaul — single-form flow, no role picker, rejected state with Try Again
 - v0.9.1: Restore group/subgroup/unit dropdowns; doc upload driven by doc_type_labels setting
 - v0.9.2: Back button on verify-id; Layout rejection/pending/unsubmitted banners; admin card shows submitted group+docs
 - v0.9.3: /api/auth/me adds verification_status to SELECT; reject PATCH writes status to users; DELETE /api/verifications cancel endpoint
+- v0.9.4: Fix stuck pending state from pre-0.9.3 rejects (DELETE handler checks users.verification_status, not request row)
+- v0.9.5: Add verification_notes column migration to users table
 
 ---
 
@@ -41,7 +44,7 @@
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.9.4`
+- Version: `0.10.0`
 
 ---
 
@@ -49,8 +52,9 @@
 
 - `verification_status` on `users` is source of truth for banners and verify-id state
 - DELETE /api/verifications checks `users.verification_status = 'pending'`, not the request row — handles stale state
-- Reject PATCH writes `verification_status = 'rejected'` + `verification_notes` to users
-- `/api/auth/me` now returns `verification_status`, `needs_academic_update`, `bio`
+- Approve (both paths) sets `verification_status = 'approved'` + promotes `unverified → member`
+- Reject sets `verification_status = 'rejected'` + `verification_notes` on users
+- `/api/auth/me` returns `verification_status`, `needs_academic_update`, `bio`
 - `'none'` is the `image_path` placeholder in verification_requests when no files uploaded
 
 ---
