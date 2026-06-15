@@ -204,3 +204,40 @@ export async function POST(request: NextRequest) {
     message: 'Verification request submitted successfully.',
   })
 }
+
+export async function DELETE(_request: NextRequest) {
+  await ensureInit()
+
+  const authUser = await getAuthUser()
+  if (!authUser) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // Only allow cancelling own pending request
+  const existing = await db.execute({
+    sql: `SELECT id FROM verification_requests WHERE user_id = ? AND status = 'pending' LIMIT 1`,
+    args: [authUser.id],
+  })
+  if (existing.rows.length === 0) {
+    return NextResponse.json({ error: 'No pending verification request found.' }, { status: 404 })
+  }
+
+  await db.batch(
+    [
+      {
+        sql: `DELETE FROM verification_requests WHERE user_id = ? AND status = 'pending'`,
+        args: [authUser.id],
+      },
+      {
+        sql: `UPDATE users SET verification_status = NULL, updated_at = datetime('now') WHERE id = ?`,
+        args: [authUser.id],
+      },
+    ],
+    'write'
+  )
+
+  const ip = _request.headers.get('x-forwarded-for') ?? 'unknown'
+  await logActivity(authUser.id, 'verification_cancelled', 'Cancelled pending verification request', ip)
+
+  return NextResponse.json({ message: 'Verification request cancelled.' })
+}

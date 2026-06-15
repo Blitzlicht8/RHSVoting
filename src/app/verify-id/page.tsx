@@ -374,6 +374,33 @@ export default function VerifyIdPage() {
             <Button variant="secondary" size="lg" className="w-full" onClick={() => router.push('/dashboard')}>
               Go to Dashboard
             </Button>
+            <div className="text-center">
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={async () => {
+                  if (!confirm('Cancel your verification request? You can resubmit later.')) return
+                  setUploading(true)
+                  try {
+                    const res = await fetch('/api/verifications', { method: 'DELETE', credentials: 'include' })
+                    const json = await res.json()
+                    if (res.ok) {
+                      addToast('Verification request cancelled.', 'success')
+                      await fetchUser()
+                    } else {
+                      addToast(json.error ?? 'Failed to cancel.', 'error')
+                    }
+                  } catch {
+                    addToast('Network error.', 'error')
+                  } finally {
+                    setUploading(false)
+                  }
+                }}
+                className="text-sm text-red-500 hover:text-red-700 transition-colors"
+              >
+                Cancel verification request
+              </button>
+            </div>
           </div>
         )}
 

@@ -55,8 +55,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
           args: [newStatus, authUser.id, notes ?? null, grade_level_id ?? null, subtype_id ?? null, section_id ?? null, requestId],
         },
         {
-          sql: `UPDATE users SET id_verified = ?, updated_at = datetime('now') WHERE id = ?`,
-          args: [idVerified, Number(verReq.user_id)],
+          sql: `UPDATE users SET id_verified = 1, verification_status = 'approved', updated_at = datetime('now') WHERE id = ?`,
+          args: [Number(verReq.user_id)],
         },
         {
           // Promote unverified users to member on approval
@@ -80,8 +80,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
           args: [newStatus, authUser.id, notes ?? null, requestId],
         },
         {
-          sql: `UPDATE users SET id_verified = ?, updated_at = datetime('now') WHERE id = ?`,
-          args: [idVerified, Number(verReq.user_id)],
+          sql: `UPDATE users SET id_verified = 0, verification_status = 'rejected', verification_notes = ?, updated_at = datetime('now') WHERE id = ?`,
+          args: [notes ?? null, Number(verReq.user_id)],
         },
       ],
       'write'
