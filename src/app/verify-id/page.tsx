@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/providers/ToastProvider'
+import { useAuth } from '@/components/providers/AuthProvider'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ const MAX_FILES = 3
 export default function VerifyIdPage() {
   const router = useRouter()
   const { addToast } = useToast()
+  const { refetch: refetchAuth } = useAuth()
 
   const [user, setUser]       = useState<User | null>(null)
   const [uiState, setUiState] = useState<UIState>('loading')
@@ -283,7 +285,7 @@ export default function VerifyIdPage() {
       }
       addToast('Verification request submitted successfully.', 'success')
       setFiles([])
-      await fetchUser()
+      await Promise.all([fetchUser(), refetchAuth()])
     } catch {
       addToast('Network error during submission.', 'error')
     } finally {
