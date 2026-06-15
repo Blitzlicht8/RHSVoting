@@ -134,6 +134,7 @@ function buildEligibility(
 }
 
 function GradeTargetingBuilder({
+  value,
   onChange,
 }: {
   value: EligibilityRule[]
@@ -147,6 +148,7 @@ function GradeTargetingBuilder({
   const [gradeSelections, setGradeSelections] = useState<Record<number, GradeSelection>>({})
   const [labels, setLabels] = useState({ l1: 'Group', l2: 'Subgroup', l3: 'Unit' })
   const fetchedRef = useRef(false)
+  const restoredRef = useRef(false)
 
   useEffect(() => {
     if (fetchedRef.current) return
@@ -167,6 +169,116 @@ function GradeTargetingBuilder({
       })
       .finally(() => setLoadingGrades(false))
   }, [])
+
+  // Restore UI state from saved eligibility rules once grade levels are available
+  useEffect(() => {
+    if (restoredRef.current || gradeLevels.length === 0 || value.length === 0) return
+    restoredRef.current = true
+
+    if (value.some((r) => r.is_all_grade)) {
+      setIsAllGrades(true)
+      return
+    }
+
+    const byGrade = new Map<number, EligibilityRule[]>()
+    for (const rule of value) {
+      if (rule.grade_level_id == null) continue
+      const arr = byGrade.get(rule.grade_level_id) ?? []
+      arr.push(rule)
+      byGrade.set(rule.grade_level_id, arr)
+    }
+
+    const gradeIds = Array.from(byGrade.keys())
+    setCheckedGradeIds(new Set(gradeIds))
+
+    for (const gradeId of gradeIds) {
+      const rules = byGrade.get(gradeId)!
+
+      // All of this grade (is_all_subtype=true, no specific subtype/section)
+      if (rules.some((r) => r.is_all_subtype && r.subtype_id == null && r.section_id == null)) {
+        setGradeSelections((prev) => ({
+          ...prev,
+          [gradeId]: { allGrade: true, subtypes: {}, directSections: {}, directAllSection: false },
+        }))
+        setGradeStates((prev) => ({
+          ...prev,
+          [gradeId]: { ...(prev[gradeId] ?? { sections: {}, sectionsLoaded: {} }), subtypes: [], subtypesLoaded: true },
+        }))
+        continue
+      }
+
+      fetch(`/api/academic/subtypes?gradeLevelId=${gradeId}`, { credentials: 'include' })
+        .then((r) => r.json())
+        .then((json) => {
+          const subtypes: GradeSubtype[] = json.data?.subtypes ?? json.data ?? []
+          setGradeStates((prev) => ({
+            ...prev,
+            [gradeId]: { ...(prev[gradeId] ?? { sections: {}, sectionsLoaded: {} }), subtypes, subtypesLoaded: true },
+          }))
+
+          if (subtypes.length === 0) {
+            const selectedIds = new Set(rules.filter((r) => r.section_id != null).map((r) => r.section_id!))
+            setGradeSelections((prev) => ({
+              ...prev,
+              [gradeId]: {
+                allGrade: false, subtypes: {}, directAllSection: false,
+                directSections: Object.fromEntries(Array.from(selectedIds).map((id) => [id, true])),
+              },
+            }))
+            fetch(`/api/academic/sections?gradeLevelId=${gradeId}`, { credentials: 'include' })
+              .then((r) => r.json())
+              .then((json2) => {
+                const sections: Section[] = json2.data?.sections ?? json2.data ?? []
+                setGradeStates((prev) => ({
+                  ...prev,
+                  [gradeId]: {
+                    ...(prev[gradeId] ?? { subtypes: [], subtypesLoaded: true, sectionsLoaded: {} }),
+                    sections: { ...(prev[gradeId]?.sections ?? {}), direct: sections },
+                    sectionsLoaded: { ...(prev[gradeId]?.sectionsLoaded ?? {}), direct: true },
+                  },
+                }))
+              })
+              .catch(() => {})
+          } else {
+            const subtypeSelMap: GradeSelection['subtypes'] = {}
+            const sectionsToFetch: number[] = []
+            for (const st of subtypes) {
+              const stRules = rules.filter((r) => r.subtype_id === st.id)
+              if (stRules.length === 0) continue
+              const allSubtype = stRules.some((r) => r.is_all_section && r.section_id == null)
+              const selectedSectionIds = new Set(stRules.filter((r) => r.section_id != null).map((r) => r.section_id!))
+              subtypeSelMap[st.id] = {
+                checked: true, allSubtype, allSection: allSubtype,
+                sections: Object.fromEntries(Array.from(selectedSectionIds).map((id) => [id, true])),
+              }
+              if (!allSubtype && selectedSectionIds.size > 0) sectionsToFetch.push(st.id)
+            }
+            setGradeSelections((prev) => ({
+              ...prev,
+              [gradeId]: { allGrade: false, subtypes: subtypeSelMap, directSections: {}, directAllSection: false },
+            }))
+            for (const stId of sectionsToFetch) {
+              fetch(`/api/academic/sections?gradeLevelId=${gradeId}&subtypeId=${stId}`, { credentials: 'include' })
+                .then((r) => r.json())
+                .then((json2) => {
+                  const sections: Section[] = json2.data?.sections ?? json2.data ?? []
+                  setGradeStates((prev) => ({
+                    ...prev,
+                    [gradeId]: {
+                      ...(prev[gradeId] ?? { subtypes, subtypesLoaded: true, sectionsLoaded: {} }),
+                      sections: { ...(prev[gradeId]?.sections ?? {}), [String(stId)]: sections },
+                      sectionsLoaded: { ...(prev[gradeId]?.sectionsLoaded ?? {}), [String(stId)]: true },
+                    },
+                  }))
+                })
+                .catch(() => {})
+            }
+          }
+        })
+        .catch(() => {})
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gradeLevels.length])
 
   // Notify parent whenever selection changes
   useEffect(() => {
@@ -732,6 +844,7 @@ export default function ElectionFormModal({
           {/* Grade targeting — shown when global=false */}
           {!formData.is_global && (
             <GradeTargetingBuilder
+              key={`${election?.id ?? 'new'}-${open}`}
               value={formData.eligibility}
               onChange={(eligibility) => handleFormChange({ eligibility })}
             />

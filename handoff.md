@@ -8,11 +8,18 @@
 2026-06-15
 
 ## Version After This Session
-`0.13.2` — fix: candidate group ID columns stored + returned for dropdown pre-selection
+`0.13.3` — fix: eligibility rules repopulate correctly when reopening an election for edit
 
 ---
 
 ## What Was Done
+
+### v0.13.3 — Eligibility restore on edit
+
+#### `src/components/admin/elections/ElectionFormModal.tsx`
+- `GradeTargetingBuilder`: `value` prop was typed but never destructured — internal state always started empty
+- Added `restoredRef` + restoration `useEffect` that fires when grade levels finish loading: reconstructs `isAllGrades`, `checkedGradeIds`, `gradeSelections`, `gradeStates` from the saved `EligibilityRule[]` prop; fetches subtypes and sections as needed for display
+- Added `key={${election?.id ?? 'new'}-${open}}` on `<GradeTargetingBuilder>` so it force-remounts each time the modal opens/closes, ensuring `restoredRef` resets and restoration reruns for each election
 
 ### v0.13.2 — Candidate group ID persistence
 
