@@ -165,7 +165,7 @@ export default function RolesPage() {
             const fullyLocked = isFullyLocked(role)
             const renameOnly = isRenameOnly(role)
             const otherSystem = role.is_system === 1 && !fullyLocked && !renameOnly
-            const isCustom = role.is_system === 0
+            const isCustom = role.is_system === 0 && !isMemberRole(role) && !isMasterAdmin(role)
 
             return (
               <div key={role.id} className={`bg-white rounded-2xl border p-5 shadow-sm ${fullyLocked ? 'border-amber-200 bg-amber-50/30' : 'border-gray-100'}`}>
