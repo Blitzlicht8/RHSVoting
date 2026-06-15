@@ -27,6 +27,7 @@ export interface CandidateForm {
   section_id?: number | null
   subtype_required?: boolean
   section_required?: boolean
+  collapsed?: boolean
   student_user_id?: number | null
   photo_url?: string | null
   mode: 'manual' | 'existing'
@@ -87,15 +88,7 @@ export default function CandidateManager({
   const [labels, setLabels] = useState({ l1: 'Group', l2: 'Subgroup', l3: 'Unit' })
   const [uploadingPhoto, setUploadingPhoto] = useState<Record<string, boolean>>({})
   const [slotErrors, setSlotErrors] = useState<Record<number, string>>({})
-  const [collapsedCandidates, setCollapsedCandidates] = useState<Set<number>>(new Set())
   const restoredRef = useRef<Set<string>>(new Set())
-
-  const toggleCandidateCollapse = (ci: number) =>
-    setCollapsedCandidates((prev) => {
-      const next = new Set(prev)
-      next.has(ci) ? next.delete(ci) : next.add(ci)
-      return next
-    })
 
   useEffect(() => {
     if (fetchedRef.current) return
@@ -111,7 +104,9 @@ export default function CandidateManager({
     })
   }, [])
 
-  // When grade-levels load, restore IDs for candidates that have name strings but missing IDs (edit/reopen flow)
+  // When grade-levels load, restore dropdown options for all manual candidates with a grade_level set.
+  // Runs whether grade_level_id is present or not — academicOptions (the lists) are local state and
+  // always need to be re-fetched on remount (e.g. after modal close/reopen with newDraft).
   const candidatesRef = useRef(candidates)
   candidatesRef.current = candidates
   useEffect(() => {
@@ -120,47 +115,54 @@ export default function CandidateManager({
     cands.forEach((cand, ci) => {
       const key = `${pi}-${ci}`
       if (cand.mode !== 'manual') return
-      if (!cand.grade_level?.trim()) return
-      if (cand.grade_level_id) return
+      if (!cand.grade_level?.trim() && !cand.grade_level_id) return
       if (restoredRef.current.has(key)) return
       restoredRef.current.add(key)
 
-      const gl = globalGradeLevels.find((g) => g.name === cand.grade_level)
-      if (!gl) return
+      // Use existing ID if available, otherwise look up by grade_level name
+      const glId = cand.grade_level_id ?? globalGradeLevels.find((g) => g.name === cand.grade_level)?.id
+      if (!glId) return
 
-      onUpdateCandidate(pi, ci, { grade_level_id: gl.id })
-      setAcademic(ci, { gradeLevelId: gl.id })
+      if (!cand.grade_level_id) onUpdateCandidate(pi, ci, { grade_level_id: glId })
+      setAcademic(ci, { gradeLevelId: glId })
 
-      fetch(`/api/academic/subtypes?gradeLevelId=${gl.id}`, { credentials: 'include' })
+      fetch(`/api/academic/subtypes?gradeLevelId=${glId}`, { credentials: 'include' })
         .then((r) => r.json())
         .then((json) => {
           const subtypes: AcademicOption[] = json.data?.subtypes ?? json.data ?? []
           if (subtypes.length === 0) {
-            fetch(`/api/academic/sections?gradeLevelId=${gl.id}`, { credentials: 'include' })
+            fetch(`/api/academic/sections?gradeLevelId=${glId}`, { credentials: 'include' })
               .then((r) => r.json())
               .then((json2) => {
                 const sections: AcademicOption[] = json2.data?.sections ?? json2.data ?? []
-                setAcademic(ci, { subtypes: [], sections, gradeLevelId: gl.id })
+                setAcademic(ci, { subtypes: [], sections, gradeLevelId: glId })
                 onUpdateCandidate(pi, ci, { subtype_required: false, section_required: sections.length > 0 })
-                const sec = sections.find((s) => s.name === cand.section)
-                if (sec) onUpdateCandidate(pi, ci, { section_id: sec.id })
+                if (!cand.section_id) {
+                  const sec = sections.find((s) => s.name === cand.section)
+                  if (sec) onUpdateCandidate(pi, ci, { section_id: sec.id })
+                }
               })
               .catch(() => {})
           } else {
-            setAcademic(ci, { subtypes, sections: [], gradeLevelId: gl.id })
+            setAcademic(ci, { subtypes, sections: [], gradeLevelId: glId })
             onUpdateCandidate(pi, ci, { subtype_required: true, section_required: false })
-            const st = subtypes.find((s) => s.name === cand.subtype)
+            // Match subtype by ID (already set from newDraft) or by name
+            const st = cand.subtype_id
+              ? subtypes.find((s) => s.id === cand.subtype_id)
+              : subtypes.find((s) => s.name === cand.subtype)
             if (st) {
-              onUpdateCandidate(pi, ci, { subtype_id: st.id })
+              if (!cand.subtype_id) onUpdateCandidate(pi, ci, { subtype_id: st.id })
               setAcademic(ci, { subtypeId: st.id })
-              fetch(`/api/academic/sections?gradeLevelId=${gl.id}&subtypeId=${st.id}`, { credentials: 'include' })
+              fetch(`/api/academic/sections?gradeLevelId=${glId}&subtypeId=${st.id}`, { credentials: 'include' })
                 .then((r) => r.json())
                 .then((json2) => {
                   const sections: AcademicOption[] = json2.data?.sections ?? json2.data ?? []
                   setAcademic(ci, { sections })
                   onUpdateCandidate(pi, ci, { section_required: sections.length > 0 })
-                  const sec = sections.find((s) => s.name === cand.section)
-                  if (sec) onUpdateCandidate(pi, ci, { section_id: sec.id })
+                  if (!cand.section_id) {
+                    const sec = sections.find((s) => s.name === cand.section)
+                    if (sec) onUpdateCandidate(pi, ci, { section_id: sec.id })
+                  }
                 })
                 .catch(() => {})
             }
@@ -260,7 +262,7 @@ export default function CandidateManager({
         const searchKey = `${pi}_${ci}`
         const dropdownResults = studentDropdowns[searchKey] || []
         const searchQuery = studentSearches[searchKey] ?? ''
-        const isCandCollapsed = collapsedCandidates.has(ci)
+        const isCandCollapsed = !!cand.collapsed
 
         if (isCandCollapsed) {
           return (
@@ -275,14 +277,14 @@ export default function CandidateManager({
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button
                   type="button"
-                  onClick={() => toggleCandidateCollapse(ci)}
+                  onClick={() => onUpdateCandidate(pi, ci, { collapsed: false })}
                   className="text-xs font-medium text-[#84050C] hover:text-[#6B0409] px-2 py-1 border border-[#E2A8A4] rounded transition-colors"
                 >
                   Edit
                 </button>
                 <button
                   type="button"
-                  onClick={() => { onRemoveCandidate(pi, ci); setCollapsedCandidates((prev) => { const n = new Set(prev); n.delete(ci); return n }) }}
+                  onClick={() => onRemoveCandidate(pi, ci)}
                   className="text-red-400 hover:text-red-600 p-1 rounded transition-colors"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -410,7 +412,7 @@ export default function CandidateManager({
               <div className="flex justify-end pt-1">
                 <button
                   type="button"
-                  onClick={() => toggleCandidateCollapse(ci)}
+                  onClick={() => onUpdateCandidate(pi, ci, { collapsed: true })}
                   className="text-xs font-medium text-white bg-[#84050C] hover:bg-[#6B0409] px-3 py-1.5 rounded-md transition-colors"
                 >
                   Save Candidate
@@ -543,7 +545,7 @@ export default function CandidateManager({
                       <button
                         type="button"
                         disabled={!canSave}
-                        onClick={() => { if (canSave) toggleCandidateCollapse(ci) }}
+                        onClick={() => { if (canSave) onUpdateCandidate(pi, ci, { collapsed: true }) }}
                         className="text-xs font-medium text-white bg-[#84050C] hover:bg-[#6B0409] disabled:bg-gray-300 disabled:cursor-not-allowed px-3 py-1.5 rounded-md transition-colors"
                       >
                         Save Candidate

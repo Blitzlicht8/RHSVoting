@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import Button from '@/components/ui/Button'
 import CandidateManager, { CandidateForm, StudentResult } from './CandidateManager'
 
@@ -10,6 +10,7 @@ export interface PositionForm {
   max_votes: number
   max_votes_mode?: 'custom' | 'candidates'
   candidates: CandidateForm[]
+  collapsed?: boolean
 }
 
 type MaxVotesMode = 'custom' | 'candidates'
@@ -42,15 +43,6 @@ export default function PositionManager({
   onSearchStudents,
   onClearStudentSearch,
 }: PositionManagerProps) {
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set())
-
-  const toggleCollapse = (pi: number) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev)
-      next.has(pi) ? next.delete(pi) : next.add(pi)
-      return next
-    })
-
   const candidateLengths = positions.map((p) => p.candidates.length).join(',')
   useEffect(() => {
     positions.forEach((pos, pi) => {
@@ -93,7 +85,7 @@ export default function PositionManager({
         {positions.map((pos, pi) => {
           const mode: MaxVotesMode = (pos.max_votes_mode === 'candidates' ? 'candidates' : 'custom') as MaxVotesMode
           const isMultiVote = pos.max_votes > 1
-          const isCollapsed = collapsed.has(pi)
+          const isCollapsed = !!pos.collapsed
 
           if (isCollapsed) {
             return (
@@ -111,7 +103,7 @@ export default function PositionManager({
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
                     type="button"
-                    onClick={() => toggleCollapse(pi)}
+                    onClick={() => onUpdatePosition(pi, { collapsed: false })}
                     className="text-xs font-medium text-[#84050C] hover:text-[#6B0409] px-2.5 py-1 border border-[#E2A8A4] rounded-md transition-colors"
                   >
                     Edit
@@ -235,7 +227,7 @@ export default function PositionManager({
               <div className="mt-3 pt-3 border-t border-gray-200 flex justify-end">
                 <button
                   type="button"
-                  onClick={() => { if (pos.name.trim()) toggleCollapse(pi) }}
+                  onClick={() => { if (pos.name.trim()) onUpdatePosition(pi, { collapsed: true }) }}
                   disabled={!pos.name.trim()}
                   className="text-xs font-medium text-white bg-[#84050C] hover:bg-[#6B0409] disabled:bg-gray-300 disabled:cursor-not-allowed px-3 py-1.5 rounded-md transition-colors"
                 >
