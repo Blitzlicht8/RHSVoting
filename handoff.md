@@ -8,64 +8,48 @@
 2026-06-15
 
 ## Version After This Session
-`0.13.4` — fix: eligibility restore root cause (onChange clobbered saved rules before restoration ran)
+`0.14.0` — feat: position max_votes_mode — custom / match candidates / auto (eligible voters)
 
 ---
 
 ## What Was Done
 
-### v0.13.4 — Eligibility restore root-cause fix
-
-#### `src/components/admin/elections/ElectionFormModal.tsx`
-- Root cause: `onChange` effect fires on mount with empty state → calls `onChange([])` → overwrites `formData.eligibility` in parent → by the time grade levels load, restoration reads `value = []` and exits early
-- Fix: added `initialValueRef = useRef(value)` to capture saved rules at mount time; restoration now reads from `initialValueRef.current` (stable, unaffected by parent re-renders)
-- Fix: gate on `onChange` effect — suppressed when `!restoredRef.current && initialValueRef.current.length > 0` so the on-mount empty state never clobbers parent's saved eligibility
-
-### v0.13.3 — Eligibility restore on edit
-
-#### `src/components/admin/elections/ElectionFormModal.tsx`
-- `GradeTargetingBuilder`: `value` prop was typed but never destructured — internal state always started empty
-- Added `restoredRef` + restoration `useEffect` that fires when grade levels finish loading: reconstructs `isAllGrades`, `checkedGradeIds`, `gradeSelections`, `gradeStates` from the saved `EligibilityRule[]` prop; fetches subtypes and sections as needed for display
-- Added `key={${election?.id ?? 'new'}-${open}}` on `<GradeTargetingBuilder>` so it force-remounts each time the modal opens/closes, ensuring `restoredRef` resets and restoration reruns for each election
-
-### v0.13.2 — Candidate group ID persistence
+### v0.14.0 — Position max_votes_mode: eligible_auto
 
 #### `src/lib/db.ts`
-- Added 3 idempotent `ALTER TABLE` migrations to `newColumns`:
-  - `ALTER TABLE candidates ADD COLUMN grade_level_id INTEGER`
-  - `ALTER TABLE candidates ADD COLUMN subtype_id INTEGER`
-  - `ALTER TABLE candidates ADD COLUMN section_id INTEGER`
+- Added `ALTER TABLE positions ADD COLUMN max_votes_mode TEXT NOT NULL DEFAULT 'custom'` to newColumns
+
+#### `src/components/admin/elections/PositionManager.tsx`
+- `PositionForm.max_votes_mode` and `MaxVotesMode` extended to include `'eligible_auto'`
+- Mode detection in render now uses `(pos.max_votes_mode as MaxVotesMode) ?? 'custom'`
+- Collapsed badge: shows `· auto` when mode is `eligible_auto` instead of max count
+- Segmented control: added `Auto (eligible voters)` third option
+- `eligible_auto` display block: helper text explaining calculation happens at activation; no number input shown
 
 #### `src/app/api/elections/[id]/route.ts`
-- `CandidateInput` interface: added `grade_level_id`, `subtype_id`, `section_id` optional fields
-- `syncPositions` INSERT: expanded from 12 to 15 columns, now stores the ID columns alongside text names
-- GET candidates SELECT: added `c.grade_level_id, c.subtype_id, c.section_id` to the query
+- `PositionInput`: added `max_votes_mode?: string`
+- `syncPositions` INSERT: now stores `max_votes_mode` (5 columns instead of 4)
+- PATCH `status → active`: after candidate count check, resolves `eligible_auto` positions — counts eligible voters (global: all id_verified active users; scoped: JOIN election_eligibility matching grade/section), then UPDATE positions SET max_votes = count
 
 #### `src/app/admin/elections/page.tsx`
-- `handleSave` payload: added `grade_level_id`, `subtype_id`, `section_id` to candidate mapping
-- `openEdit` candidate mapping + type annotation: added `grade_level_id`, `subtype_id`, `section_id` — dropdowns in CandidateManager now pre-select correctly on re-open
+- `addPosition`: default includes `max_votes_mode: 'custom'`
+- `openEdit` positions map + type annotation: includes `max_votes_mode`
+- `handleSave` payload: includes `max_votes_mode: p.max_votes_mode ?? 'custom'`
 
-Note: CandidateManager dropdowns already used IDs as `value` (`acad.gradeLevelId`, `acad.subtypeId`, `cand.section_id`) and the restore effect already prioritized IDs — no changes needed there.
+### v0.13.4 — Eligibility restore root-cause fix
+- `onChange` effect fired on mount with empty state, clobbering `formData.eligibility` before grade levels loaded
+- Fix: `initialValueRef` captures saved rules at mount; restoration reads from ref; `onChange` suppressed until `restoredRef` is true when saved rules exist
 
----
+### v0.13.3 — Eligibility restore on edit
+- `GradeTargetingBuilder`: destructured `value` prop, added restoration useEffect + key for remount on open
 
-## Previous Sessions
+### v0.13.2 — Candidate group ID persistence
+- `candidates` table: `grade_level_id`, `subtype_id`, `section_id` columns
+- API GET/INSERT and admin page `openEdit`/`handleSave` all thread the ID columns through
 
 ### v0.13.1 — Revoke verification bugfixes
-- PATCH revoke: sets `verification_status = 'rejected'` (banner now shows)
-- POST /api/verifications: DELETE prior rows unconditionally before insert (fixed UNIQUE crash on resubmit)
-
-### v0.13.0 — UX Polish: Rejection Notes + Navbar Indicator + Status Sync
-- Mandatory rejection notes in admin verifications UI
-- Amber dot badge on Navbar avatar for unverified users
-
+### v0.13.0 — UX Polish: Rejection Notes + Navbar Indicator
 ### v0.12.0 — Unverified role guards + visual indicators
-### v0.11.2 — master_admin permissions all show checked
-### v0.11.1 — member delete button showing incorrectly
-### v0.11.0 — Roles system overhaul
-### v0.10.1 — Rejected banner stuck after resubmit
-### v0.10.0 — Auto-upgrade unverified → member on approval
-### v0.9.0–0.9.5 — Verify-ID overhaul, group dropdowns, etc.
 
 ---
 
@@ -73,7 +57,7 @@ Note: CandidateManager dropdowns already used IDs as `value` (`acad.gradeLevelId
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.13.2`
+- Version: `0.14.0`
 
 ---
 
@@ -81,21 +65,22 @@ Note: CandidateManager dropdowns already used IDs as `value` (`acad.gradeLevelId
 
 - `verification_status` on `users` is source of truth for banners and verify-id state
 - `unverified` role is auto-only — PATCH guard at API level + removed from role selects in UI
-- `master_admin` role assignment requires actor to be `master_admin` — enforced at API + hidden in UI for non-master-admins
-- DELETE /api/verifications checks `users.verification_status = 'pending'`, not the request row
-- Approve (both paths) sets `verification_status = 'approved'` + promotes `unverified → member`
+- `master_admin` role assignment requires actor to be `master_admin`
+- DELETE /api/verifications checks `users.verification_status = 'pending'`
+- Approve sets `verification_status = 'approved'` + promotes `unverified → member`
 - Reject sets `verification_status = 'rejected'` + `verification_notes` on users
-- **Revoke** (admin users page `id_verified=false`) sets `id_verified=0`, `role='unverified'`, `verification_status='rejected'`
+- **Revoke** sets `id_verified=0`, `role='unverified'`, `verification_status='rejected'`
 - `/api/auth/me` returns `verification_status`, `needs_academic_update`, `bio`
 - `'none'` is the `image_path` placeholder in verification_requests when no files uploaded
 - `verify-id/page.tsx` calls both local `fetchUser()` AND `refetchAuth()` on submit
 - `deriveUiState` priority: id_verified → pending → rejected → upload
 - POST /api/verifications deletes ALL prior rows for user before insert (pending guard runs first)
-- Roles page is `master_admin`-only — redirects others to `/admin`
-- `member` role: `is_system = 0` in DB — guarded by name checks in UI and API, not is_system flag
-- `master_admin` role: fully locked. Permissions display forced all-true (DB stores `{}`).
-- Rejection reason is mandatory in admin verifications UI — validated client-side before API call
-- Candidates store `grade_level_id`, `subtype_id`, `section_id` alongside text names — dropdowns pre-select on edit
+- Roles page is `master_admin`-only
+- `master_admin` role: permissions display forced all-true (DB stores `{}`)
+- Rejection reason mandatory in admin verifications UI
+- Candidates store `grade_level_id`, `subtype_id`, `section_id` alongside text names
+- `GradeTargetingBuilder` uses `initialValueRef` + `restoredRef` pattern to restore eligibility on edit
+- `eligible_auto` positions: `max_votes` is computed at activation from eligible voter count, not stored ahead of time
 
 ---
 
@@ -105,3 +90,4 @@ Note: CandidateManager dropdowns already used IDs as `value` (`acad.gradeLevelId
 - Per-position candidate-count validation on activate
 - Achievements editor for new candidates
 - Admin UI for user-level achievements
+- `eligible_auto` eligible count query is simplified (no subtype matching) — may under/over-count for complex eligibility rules

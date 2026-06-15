@@ -31,6 +31,7 @@ interface CandidateInput {
 interface PositionInput {
   name?: string
   max_votes?: number
+  max_votes_mode?: string
   candidates?: CandidateInput[]
 }
 
@@ -41,8 +42,8 @@ async function syncPositions(electionId: number, positions: PositionInput[]) {
     const posName = (pos.name ?? '').trim()
     if (!posName) continue
     const posResult = await db.execute({
-      sql: `INSERT INTO positions (election_id, name, max_votes, order_index) VALUES (?, ?, ?, ?)`,
-      args: [electionId, posName, pos.max_votes ?? 1, i],
+      sql: `INSERT INTO positions (election_id, name, max_votes, max_votes_mode, order_index) VALUES (?, ?, ?, ?, ?)`,
+      args: [electionId, posName, pos.max_votes ?? 1, pos.max_votes_mode ?? 'custom', i],
     })
     const posId = Number(posResult.lastInsertRowid)
     for (const cand of pos.candidates ?? []) {
@@ -236,6 +237,36 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       const candCheck = await db.execute({ sql: `SELECT COUNT(*) AS cnt FROM candidates WHERE election_id = ?`, args: [electionId] })
       if (Number((candCheck.rows[0] as unknown as { cnt: number }).cnt) === 0) {
         return NextResponse.json({ error: 'Cannot start — no candidates have been added.' }, { status: 400 })
+      }
+      // Resolve eligible_auto positions: compute eligible voter count and set max_votes
+      const autoPositions = await db.execute({
+        sql: `SELECT id FROM positions WHERE election_id = ? AND max_votes_mode = 'eligible_auto'`,
+        args: [electionId],
+      })
+      if (autoPositions.rows.length > 0) {
+        const elecRow = await db.execute({ sql: `SELECT is_global FROM elections WHERE id = ?`, args: [electionId] })
+        const isGlobal = !!(elecRow.rows[0] as unknown as { is_global: number })?.is_global
+        let eligibleCount: number
+        if (isGlobal) {
+          const r = await db.execute({ sql: `SELECT COUNT(*) as cnt FROM users WHERE id_verified = 1 AND active = 1`, args: [] })
+          eligibleCount = Number((r.rows[0] as unknown as { cnt: number }).cnt)
+        } else {
+          const r = await db.execute({
+            sql: `SELECT COUNT(DISTINCT u.id) as cnt FROM users u
+                  JOIN election_eligibility ee ON ee.election_id = ?
+                  WHERE u.id_verified = 1 AND u.active = 1
+                    AND (ee.is_all_grade = 1 OR u.grade_level_id = ee.grade_level_id)
+                    AND (ee.is_all_section = 1 OR u.section_id = ee.section_id)`,
+            args: [electionId],
+          })
+          eligibleCount = Number((r.rows[0] as unknown as { cnt: number }).cnt)
+        }
+        for (const pos of autoPositions.rows) {
+          await db.execute({
+            sql: `UPDATE positions SET max_votes = ? WHERE id = ?`,
+            args: [Math.max(1, eligibleCount), Number(pos.id)],
+          })
+        }
       }
     }
     setClauses.push('status = ?')

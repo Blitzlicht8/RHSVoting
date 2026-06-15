@@ -132,10 +132,11 @@ export default function ElectionsPage() {
           thumbnail_url: full.thumbnail_url ?? null,
           auto_start: !!full.auto_start,
           auto_end: !!full.auto_end,
-          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; grade_level?: string; subtype?: string; section?: string; grade_level_id?: number | null; subtype_id?: number | null; section_id?: number | null; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
+          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; max_votes_mode?: string; candidates: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; grade_level?: string; subtype?: string; section?: string; grade_level_id?: number | null; subtype_id?: number | null; section_id?: number | null; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
             id: p.id,
             name: p.name,
             max_votes: p.max_votes ?? 1,
+            max_votes_mode: (p.max_votes_mode as 'custom' | 'candidates' | 'eligible_auto') ?? 'custom',
             collapsed: true,
             candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; grade_level?: string; subtype?: string; section?: string; grade_level_id?: number | null; subtype_id?: number | null; section_id?: number | null; student_user_id?: number | null; photo_url?: string | null }) => ({
               id: c.id,
@@ -241,6 +242,7 @@ export default function ElectionsPage() {
         thumbnail_url: formData.thumbnail_url ?? null,
         positions: formData.positions.map((p) => ({
           ...p,
+          max_votes_mode: p.max_votes_mode ?? 'custom',
           candidates: p.candidates.map((c) => ({
             id: c.id,
             name: c.name,
@@ -357,7 +359,7 @@ export default function ElectionsPage() {
   const addPosition = () => {
     setFormData((f) => ({
       ...f,
-      positions: [...f.positions, { name: '', max_votes: 1, candidates: [] }],
+      positions: [...f.positions, { name: '', max_votes: 1, max_votes_mode: 'custom' as const, candidates: [] }],
     }))
   }
 

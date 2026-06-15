@@ -8,12 +8,12 @@ export interface PositionForm {
   id?: number
   name: string
   max_votes: number
-  max_votes_mode?: 'custom' | 'candidates'
+  max_votes_mode?: 'custom' | 'candidates' | 'eligible_auto'
   candidates: CandidateForm[]
   collapsed?: boolean
 }
 
-type MaxVotesMode = 'custom' | 'candidates'
+type MaxVotesMode = 'custom' | 'candidates' | 'eligible_auto'
 
 interface PositionManagerProps {
   positions: PositionForm[]
@@ -60,6 +60,8 @@ export default function PositionManager({
     const pos = positions[pi]
     if (mode === 'candidates') {
       onUpdatePosition(pi, { max_votes_mode: mode, max_votes: Math.max(2, pos.candidates.length) })
+    } else if (mode === 'eligible_auto') {
+      onUpdatePosition(pi, { max_votes_mode: mode })
     } else {
       onUpdatePosition(pi, { max_votes_mode: mode })
     }
@@ -83,7 +85,7 @@ export default function PositionManager({
 
       <div className="space-y-3">
         {positions.map((pos, pi) => {
-          const mode: MaxVotesMode = (pos.max_votes_mode === 'candidates' ? 'candidates' : 'custom') as MaxVotesMode
+          const mode: MaxVotesMode = (pos.max_votes_mode as MaxVotesMode) ?? 'custom'
           const isMultiVote = pos.max_votes > 1
           const isCollapsed = !!pos.collapsed
 
@@ -97,7 +99,7 @@ export default function PositionManager({
                   <span className="text-sm font-medium text-gray-900 truncate">{pos.name || 'Unnamed position'}</span>
                   <span className="text-xs text-gray-400 flex-shrink-0">
                     {pos.candidates.length} candidate{pos.candidates.length !== 1 ? 's' : ''}
-                    {isMultiVote ? ` · max ${pos.max_votes}` : ''}
+                    {isMultiVote && mode === 'eligible_auto' ? ' · auto' : isMultiVote ? ` · max ${pos.max_votes}` : ''}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -175,7 +177,7 @@ export default function PositionManager({
                 <div className="ml-6 mb-3 p-3 bg-white border border-gray-200 rounded-lg space-y-2">
                   <p className="text-xs font-medium text-gray-700">Max candidates per voter</p>
                   <div className="flex gap-0.5 bg-gray-100 rounded-md p-0.5 w-fit">
-                    {(['custom', 'candidates'] as MaxVotesMode[]).map((m) => (
+                    {(['custom', 'candidates', 'eligible_auto'] as MaxVotesMode[]).map((m) => (
                       <button
                         key={m}
                         type="button"
@@ -184,7 +186,7 @@ export default function PositionManager({
                           mode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                         }`}
                       >
-                        {m === 'custom' ? 'Custom' : 'Match candidates'}
+                        {m === 'custom' ? 'Custom' : m === 'candidates' ? 'Match candidates' : 'Auto (eligible voters)'}
                       </button>
                     ))}
                   </div>
@@ -208,6 +210,11 @@ export default function PositionManager({
                       </div>
                       <p className="text-xs text-gray-400">Automatically matches the number of candidates. Voters can pick every candidate — useful for approval voting.</p>
                     </>
+                  )}
+                  {mode === 'eligible_auto' && (
+                    <p className="text-xs text-gray-400">
+                      Calculated automatically when the election starts — set to the total number of eligible voters. Useful for referendums where every voter&apos;s selection should count.
+                    </p>
                   )}
                 </div>
               )}
