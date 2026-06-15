@@ -121,9 +121,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid form data.' }, { status: 400 })
   }
 
+  const grade_level_id = formData.get('grade_level_id') ? Number(formData.get('grade_level_id')) : null
+  const subtype_id     = formData.get('subtype_id')     ? Number(formData.get('subtype_id'))     : null
+  const section_id     = formData.get('section_id')     ? Number(formData.get('section_id'))     : null
+  const doc_type       = (formData.get('doc_type') as string) || null
+
+  if (!grade_level_id) {
+    return NextResponse.json({ error: 'Group is required.' }, { status: 400 })
+  }
+
   const rawFiles = formData.getAll('file') as File[]
 
-  // Validate files if provided
   if (rawFiles.length > MAX_FILES) {
     return NextResponse.json({ error: 'Maximum 3 files allowed.' }, { status: 400 })
   }
@@ -157,9 +165,9 @@ export async function POST(request: NextRequest) {
 
   const insertResult = await db.execute({
     sql: `INSERT INTO verification_requests
-            (user_id, image_path, status, grade_level_id, subtype_id, section_id, created_at, updated_at)
-          VALUES (?, ?, 'pending', NULL, NULL, NULL, datetime('now'), datetime('now'))`,
-    args: [authUser.id, primaryUrl],
+            (user_id, image_path, status, grade_level_id, subtype_id, section_id, doc_type, created_at, updated_at)
+          VALUES (?, ?, 'pending', ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+    args: [authUser.id, primaryUrl, grade_level_id, subtype_id, section_id, doc_type],
   })
 
   const verificationRequestId = Number(insertResult.lastInsertRowid)
@@ -173,10 +181,16 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // Mark user as pending
+  // Update user with group/section info and set pending status
   await db.execute({
-    sql: `UPDATE users SET verification_status = 'pending', updated_at = datetime('now') WHERE id = ?`,
-    args: [authUser.id],
+    sql: `UPDATE users SET
+            grade_level_id = ?,
+            subtype_id = ?,
+            section_id = ?,
+            verification_status = 'pending',
+            updated_at = datetime('now')
+          WHERE id = ?`,
+    args: [grade_level_id, subtype_id, section_id, authUser.id],
   })
 
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'

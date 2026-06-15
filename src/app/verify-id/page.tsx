@@ -55,25 +55,9 @@ function UploadCloudIcon() {
 
 function LogoIcon() {
   return (
-    <svg
-      width="40"
-      height="40"
-      viewBox="0 0 48 48"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M24 4L6 12v12c0 10.5 7.7 20.3 18 22.6C34.3 44.3 42 34.5 42 24V12L24 4z"
-        fill="#84050C"
-        opacity="0.15"
-      />
-      <path
-        d="M24 4L6 12v12c0 10.5 7.7 20.3 18 22.6C34.3 44.3 42 34.5 42 24V12L24 4z"
-        stroke="#84050C"
-        strokeWidth="2.5"
-        strokeLinejoin="round"
-      />
+    <svg width="40" height="40" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M24 4L6 12v12c0 10.5 7.7 20.3 18 22.6C34.3 44.3 42 34.5 42 24V12L24 4z" fill="#84050C" opacity="0.15" />
+      <path d="M24 4L6 12v12c0 10.5 7.7 20.3 18 22.6C34.3 44.3 42 34.5 42 24V12L24 4z" stroke="#84050C" strokeWidth="2.5" strokeLinejoin="round" />
       <rect x="16" y="18" width="4" height="3" rx="1" fill="#84050C" />
       <rect x="22" y="19" width="10" height="1.5" rx="0.75" fill="#84050C" />
       <rect x="16" y="24" width="4" height="3" rx="1" fill="#84050C" opacity="0.5" />
@@ -97,31 +81,93 @@ export default function VerifyIdPage() {
 
   const [user, setUser]       = useState<User | null>(null)
   const [uiState, setUiState] = useState<UIState>('loading')
-  const [appName, setAppName] = useState('Community Hub')
 
-  // Upload state
-  const [showDoczone, setShowDoczone] = useState(false)
-  const [files, setFiles]             = useState<File[]>([])
-  const [isDragging, setIsDragging]   = useState(false)
-  const [uploading, setUploading]     = useState(false)
-  const [fileError, setFileError]     = useState<string | null>(null)
+  // Settings
+  const [appName, setAppName]     = useState('Community Hub')
+  const [groupL1, setGroupL1]     = useState('Group')
+  const [groupL2, setGroupL2]     = useState('Subgroup')
+  const [groupL3, setGroupL3]     = useState('Unit')
+  const [docTypeOptions, setDocTypeOptions] = useState<string[]>([])
+  const [docType, setDocType]     = useState('')
+
+  // Academic cascades
+  const [gradeLevels, setGradeLevels] = useState<Array<{id: number, name: string}>>([])
+  const [subtypes, setSubtypes]       = useState<Array<{id: number, name: string}>>([])
+  const [sections, setSections]       = useState<Array<{id: number, name: string}>>([])
+  const [gradeLevelId, setGradeLevelId] = useState('')
+  const [subtypeId, setSubtypeId]       = useState('')
+  const [sectionId, setSectionId]       = useState('')
+
+  // Upload
+  const [files, setFiles]           = useState<File[]>([])
+  const [isDragging, setIsDragging] = useState(false)
+  const [uploading, setUploading]   = useState(false)
+  const [fileError, setFileError]   = useState<string | null>(null)
+  const [formError, setFormError]   = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dragCounter  = useRef(0)
 
-  const hasFiles = files.length > 0
+  // Whether doc upload section is shown (driven by settings)
+  const docsRequired = docTypeOptions.length > 0
 
-  // ── Load settings ─────────────────────────────────────────────────────────────
+  // ── Settings + grade levels on mount ──────────────────────────────────────────
 
   useEffect(() => {
     fetch('/api/settings')
       .then(r => r.json())
       .then(j => {
         const s = j.data ?? {}
-        if (s.app_name) setAppName(s.app_name)
+        if (s.app_name)        setAppName(s.app_name)
+        if (s.group_label_l1)  setGroupL1(s.group_label_l1)
+        if (s.group_label_l2)  setGroupL2(s.group_label_l2)
+        if (s.group_label_l3)  setGroupL3(s.group_label_l3)
+        if (s.doc_type_labels) {
+          try {
+            const arr = JSON.parse(s.doc_type_labels)
+            if (Array.isArray(arr) && arr.length > 0) {
+              setDocTypeOptions(arr)
+              setDocType(arr[0])
+            }
+          } catch {}
+        }
       })
       .catch(() => {})
+
+    fetch('/api/academic/grade-levels')
+      .then(r => r.json())
+      .then(j => setGradeLevels(j.data ?? []))
+      .catch(() => {})
   }, [])
+
+  // ── Cascade: grade level → subtypes ──────────────────────────────────────────
+
+  useEffect(() => {
+    setSubtypeId('')
+    setSectionId('')
+    setSubtypes([])
+    setSections([])
+    if (!gradeLevelId) return
+    fetch(`/api/academic/subtypes?gradeLevelId=${gradeLevelId}`)
+      .then(r => r.json())
+      .then(j => setSubtypes(j.data ?? []))
+      .catch(() => {})
+  }, [gradeLevelId])
+
+  // ── Cascade: subtype → sections ───────────────────────────────────────────────
+
+  useEffect(() => {
+    setSectionId('')
+    setSections([])
+    if (!gradeLevelId) return
+    const url = subtypeId
+      ? `/api/academic/sections?gradeLevelId=${gradeLevelId}&subtypeId=${subtypeId}`
+      : `/api/academic/sections?gradeLevelId=${gradeLevelId}`
+    fetch(url)
+      .then(r => r.json())
+      .then(j => setSections(j.data ?? []))
+      .catch(() => {})
+  }, [gradeLevelId, subtypeId])
 
   // ── Fetch current user ────────────────────────────────────────────────────────
 
@@ -142,9 +188,9 @@ export default function VerifyIdPage() {
   useEffect(() => { fetchUser() }, [fetchUser])
 
   function deriveUiState(u: User) {
-    if (u.id_verified)                          { setUiState('verified'); return }
-    if (u.verification_status === 'pending')    { setUiState('pending');  return }
-    if (u.verification_status === 'rejected')   { setUiState('rejected'); return }
+    if (u.id_verified)                        { setUiState('verified'); return }
+    if (u.verification_status === 'pending')  { setUiState('pending');  return }
+    if (u.verification_status === 'rejected') { setUiState('rejected'); return }
     setUiState('upload')
   }
 
@@ -179,33 +225,46 @@ export default function VerifyIdPage() {
   }
 
   const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault()
-    dragCounter.current++
-    setIsDragging(true)
+    e.preventDefault(); dragCounter.current++; setIsDragging(true)
   }
-
   const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    dragCounter.current--
+    e.preventDefault(); dragCounter.current--
     if (dragCounter.current === 0) setIsDragging(false)
   }
-
-  const handleDragOver  = (e: React.DragEvent) => { e.preventDefault() }
-
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault() }
   const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    dragCounter.current = 0
-    setIsDragging(false)
+    e.preventDefault(); dragCounter.current = 0; setIsDragging(false)
     const dropped = Array.from(e.dataTransfer.files ?? [])
     if (dropped.length) addFiles(dropped)
   }
 
-  const openFilePicker = () => { fileInputRef.current?.click() }
-
-  // ── Submit ────────────────────────────────────────────────────────────────────
+  // ── Validate + submit ─────────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
+    setFormError(null)
+
+    if (!gradeLevelId) {
+      setFormError(`Please select your ${groupL1.toLowerCase()}.`)
+      return
+    }
+    if (subtypes.length > 0 && !subtypeId) {
+      setFormError(`Please select your ${groupL2.toLowerCase()}.`)
+      return
+    }
+    if (sections.length > 0 && !sectionId) {
+      setFormError(`Please select your ${groupL3.toLowerCase()}.`)
+      return
+    }
+    if (docsRequired && files.length === 0) {
+      setFormError('Please attach at least one document.')
+      return
+    }
+
     const formData = new FormData()
+    formData.append('grade_level_id', gradeLevelId)
+    if (subtypeId) formData.append('subtype_id', subtypeId)
+    if (sectionId) formData.append('section_id', sectionId)
+    if (docsRequired) formData.append('doc_type', docType)
     for (const file of files) {
       formData.append('file', file)
     }
@@ -222,12 +281,8 @@ export default function VerifyIdPage() {
         addToast(json.error ?? 'Submission failed. Please try again.', 'error')
         return
       }
-      addToast(
-        hasFiles ? "Documents submitted. We'll review them shortly." : 'Verification request submitted.',
-        'success'
-      )
+      addToast('Verification request submitted successfully.', 'success')
       setFiles([])
-      setShowDoczone(false)
       await fetchUser()
     } catch {
       addToast('Network error during submission.', 'error')
@@ -235,8 +290,6 @@ export default function VerifyIdPage() {
       setUploading(false)
     }
   }
-
-  // ── Helpers ───────────────────────────────────────────────────────────────────
 
   function formatBytes(bytes: number) {
     if (bytes < 1024)        return `${bytes} B`
@@ -246,8 +299,11 @@ export default function VerifyIdPage() {
 
   function resetUploadState() {
     setFiles([])
-    setShowDoczone(false)
     setFileError(null)
+    setFormError(null)
+    setGradeLevelId('')
+    setSubtypeId('')
+    setSectionId('')
     setUiState('upload')
   }
 
@@ -300,7 +356,7 @@ export default function VerifyIdPage() {
                 Your request is under review. This usually takes 1–2 business days.
               </p>
             </div>
-            {user?.id_photo_url && (
+            {user?.id_photo_url && user.id_photo_url !== 'none' && (
               <div className="w-full">
                 <p className="text-xs font-medium text-gray-500 mb-2 text-left">Submitted document</p>
                 <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
@@ -354,11 +410,11 @@ export default function VerifyIdPage() {
 
         {/* ── Upload ── */}
         {uiState === 'upload' && (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div>
               <h1 className="text-xl font-bold text-gray-900">Verify your identity</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Submit a request for an admin to verify your account.
+                Fill in your details below to submit a verification request.
               </p>
             </div>
 
@@ -373,49 +429,95 @@ export default function VerifyIdPage() {
               aria-label="Upload verification documents"
             />
 
-            {/* Default view — no doczone, no files */}
-            {!showDoczone && !hasFiles && (
-              <div className="space-y-4">
-                <Button
-                  variant="primary"
-                  size="lg"
-                  loading={uploading}
-                  onClick={handleSubmit}
-                  className="w-full"
+            {/* ── Group L1 ── */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {groupL1} <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={gradeLevelId}
+                onChange={e => { setGradeLevelId(e.target.value); setFormError(null) }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+              >
+                <option value="">Select {groupL1.toLowerCase()}…</option>
+                {gradeLevels.map(g => (
+                  <option key={g.id} value={String(g.id)}>{g.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* ── Group L2 — only when subtypes exist ── */}
+            {subtypes.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {groupL2} <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={subtypeId}
+                  onChange={e => { setSubtypeId(e.target.value); setFormError(null) }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                 >
-                  {uploading ? 'Submitting…' : 'Verify Me'}
-                </Button>
-                <div className="text-center">
-                  <button
-                    type="button"
-                    onClick={() => setShowDoczone(true)}
-                    className="text-sm text-[#84050C] hover:text-[#6B0409] font-medium transition-colors"
-                  >
-                    + Attach documents (optional)
-                  </button>
-                </div>
+                  <option value="">Select {groupL2.toLowerCase()}…</option>
+                  {subtypes.map(s => (
+                    <option key={s.id} value={String(s.id)}>{s.name}</option>
+                  ))}
+                </select>
               </div>
             )}
 
-            {/* Doczone revealed */}
-            {(showDoczone || hasFiles) && (
-              <div className="space-y-4">
+            {/* ── Group L3 — only when sections exist ── */}
+            {sections.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {groupL3} <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={sectionId}
+                  onChange={e => { setSectionId(e.target.value); setFormError(null) }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+                >
+                  <option value="">Select {groupL3.toLowerCase()}…</option>
+                  {sections.map(s => (
+                    <option key={s.id} value={String(s.id)}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* ── Document upload — only when doc types configured ── */}
+            {docsRequired && (
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Document Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={docType}
+                    onChange={e => setDocType(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+                  >
+                    {docTypeOptions.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Drop zone */}
                 <button
                   type="button"
-                  onClick={openFilePicker}
+                  onClick={() => fileInputRef.current?.click()}
                   onDragEnter={handleDragEnter}
                   onDragLeave={handleDragLeave}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
                   disabled={uploading || files.length >= MAX_FILES}
                   className={[
-                    'w-full rounded-xl border-2 border-dashed p-8 flex flex-col items-center gap-3',
+                    'w-full rounded-xl border-2 border-dashed p-6 flex flex-col items-center gap-3',
                     'transition-all duration-200 cursor-pointer outline-none',
                     'focus-visible:ring-2 focus-visible:ring-[#84050C] focus-visible:ring-offset-2',
                     isDragging
                       ? 'border-[#BA4955] bg-[#FEE2E2]/60 scale-[1.01]'
-                      : 'border-gray-300 bg-gray-50 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60/50',
+                      : 'border-gray-300 bg-gray-50 hover:border-[#BA4955] hover:bg-[#FEE2E2]/30',
                     (uploading || files.length >= MAX_FILES) ? 'opacity-50 cursor-not-allowed' : '',
                   ].join(' ')}
                   aria-label="Click or drag and drop to upload verification documents"
@@ -428,7 +530,7 @@ export default function VerifyIdPage() {
                     <p className="text-xs text-gray-400 mt-1">
                       Images or PDF — max 5 MB each, up to {MAX_FILES} files
                     </p>
-                    {hasFiles && (
+                    {files.length > 0 && (
                       <p className="text-xs text-[#84050C] mt-1 font-medium">
                         {files.length}/{MAX_FILES} file{files.length !== 1 ? 's' : ''} selected
                       </p>
@@ -447,7 +549,7 @@ export default function VerifyIdPage() {
                 )}
 
                 {/* Selected files list */}
-                {hasFiles && (
+                {files.length > 0 && (
                   <ul className="space-y-2">
                     {files.map((file, idx) => (
                       <li key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm">
@@ -479,43 +581,28 @@ export default function VerifyIdPage() {
                     ))}
                   </ul>
                 )}
-
-                {/* Submit / cancel */}
-                {hasFiles ? (
-                  <Button
-                    variant="primary"
-                    size="lg"
-                    loading={uploading}
-                    disabled={!!fileError}
-                    onClick={handleSubmit}
-                    className="w-full"
-                  >
-                    {uploading ? 'Uploading…' : 'Submit with Documents'}
-                  </Button>
-                ) : (
-                  <div className="space-y-3">
-                    <Button
-                      variant="primary"
-                      size="lg"
-                      loading={uploading}
-                      onClick={handleSubmit}
-                      className="w-full"
-                    >
-                      {uploading ? 'Submitting…' : 'Verify Me'}
-                    </Button>
-                    <div className="text-center">
-                      <button
-                        type="button"
-                        onClick={() => setShowDoczone(false)}
-                        className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
+
+            {/* Form error */}
+            {formError && (
+              <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                {formError}
+              </div>
+            )}
+
+            <Button
+              variant="primary"
+              size="lg"
+              loading={uploading}
+              onClick={handleSubmit}
+              className="w-full"
+            >
+              {uploading ? 'Submitting…' : 'Submit for Verification'}
+            </Button>
           </div>
         )}
 
