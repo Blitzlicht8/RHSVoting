@@ -234,9 +234,20 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       if (Number((posCheck.rows[0] as unknown as { cnt: number }).cnt) === 0) {
         return NextResponse.json({ error: 'Cannot start — election has no positions.' }, { status: 400 })
       }
-      const candCheck = await db.execute({ sql: `SELECT COUNT(*) AS cnt FROM candidates WHERE election_id = ?`, args: [electionId] })
-      if (Number((candCheck.rows[0] as unknown as { cnt: number }).cnt) === 0) {
-        return NextResponse.json({ error: 'Cannot start — no candidates have been added.' }, { status: 400 })
+      const emptPositions = await db.execute({
+        sql: `SELECT p.name FROM positions p
+              LEFT JOIN candidates c ON c.position_id = p.id
+              WHERE p.election_id = ?
+              GROUP BY p.id, p.name
+              HAVING COUNT(c.id) = 0`,
+        args: [electionId],
+      })
+      if (emptPositions.rows.length > 0) {
+        const names = emptPositions.rows.map((r: any) => `"${r.name}"`).join(', ')
+        return NextResponse.json(
+          { error: `Cannot start — the following positions have no candidates: ${names}` },
+          { status: 400 }
+        )
       }
       // Resolve eligible_auto positions: compute eligible voter count and set max_votes
       const autoPositions = await db.execute({

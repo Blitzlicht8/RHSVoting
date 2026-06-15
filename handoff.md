@@ -8,11 +8,18 @@
 2026-06-15
 
 ## Version After This Session
-`0.14.1` — fix: eligible_auto count includes subtype_id matching in election activation
+`0.14.2` — fix: per-position candidate check on election activation
 
 ---
 
 ## What Was Done
+
+### v0.14.2 — Per-position candidate check on activation
+
+#### `src/app/api/elections/[id]/route.ts`
+- Replaced total candidate count check with a per-position LEFT JOIN query
+- Returns 400 with named empty positions: `Cannot start — the following positions have no candidates: "President", "VP"`
+- Old check: any candidate anywhere passed validation; new check: every position must have ≥1 candidate
 
 ### v0.14.1 — Fix eligible_auto subtype matching
 
@@ -63,7 +70,7 @@
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.14.1`
+- Version: `0.14.2`
 
 ---
 
@@ -93,6 +100,5 @@
 ## What's Left / Ideas
 
 - `intended_role` column in `verification_requests` unused — drop in migration
-- Per-position candidate-count validation on activate
 - Achievements editor for new candidates
 - Admin UI for user-level achievements
