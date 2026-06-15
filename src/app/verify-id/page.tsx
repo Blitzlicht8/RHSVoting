@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/providers/ToastProvider'
@@ -19,7 +18,6 @@ interface User {
 }
 
 type UIState = 'loading' | 'verified' | 'pending' | 'rejected' | 'upload'
-type VerifyStep = 'type_select' | 'student_info' | 'upload_photo'
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -87,12 +85,9 @@ function LogoIcon() {
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif', 'application/pdf']
 const MAX_FILES = 3
-
-const DEFAULT_DOC_TYPES = ['Government ID', 'Enrollment Form', 'Registration Form', 'Other Document']
-type DocType = string
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -100,108 +95,42 @@ export default function VerifyIdPage() {
   const router = useRouter()
   const { addToast } = useToast()
 
-  const [user, setUser]           = useState<User | null>(null)
-  const [uiState, setUiState]     = useState<UIState>('loading')
-
-  // Multi-step state (for uiState === 'upload')
-  const [verifyStep, setVerifyStep]     = useState<VerifyStep>('type_select')
-  const [intendedRole, setIntendedRole] = useState<'member' | 'staff' | ''>('')
-  const [stepError, setStepError]       = useState<string | null>(null)
-
-  // Cascading dropdowns
-  const [gradeLevels, setGradeLevels] = useState<Array<{id: number, name: string}>>([])
-  const [subtypes, setSubtypes]       = useState<Array<{id: number, name: string}>>([])
-  const [sections, setSections]       = useState<Array<{id: number, name: string}>>([])
-  const [gradeLevelId, setGradeLevelId] = useState<string>('')
-  const [subtypeId, setSubtypeId]       = useState<string>('')
-  const [sectionId, setSectionId]       = useState<string>('')
-
-  // Settings
-  const [docTypeOptions, setDocTypeOptions] = useState<string[]>(DEFAULT_DOC_TYPES)
+  const [user, setUser]       = useState<User | null>(null)
+  const [uiState, setUiState] = useState<UIState>('loading')
   const [appName, setAppName] = useState('Community Hub')
-  const [groupL1, setGroupL1] = useState('Group')
-  const [groupL2, setGroupL2] = useState('Subgroup')
-  const [groupL3, setGroupL3] = useState('Unit')
-  const [memberLabel, setMemberLabel] = useState('Member')
-  const [staffLabel, setStaffLabel] = useState('Staff')
 
-  // Document type
-  const [docType, setDocType] = useState<DocType>('')
-
-  // Upload form state
-  const [files, setFiles]           = useState<File[]>([])
-  const [isDragging, setIsDragging] = useState(false)
-  const [uploading, setUploading]   = useState(false)
-  const [fileError, setFileError]   = useState<string | null>(null)
+  // Upload state
+  const [showDoczone, setShowDoczone] = useState(false)
+  const [files, setFiles]             = useState<File[]>([])
+  const [isDragging, setIsDragging]   = useState(false)
+  const [uploading, setUploading]     = useState(false)
+  const [fileError, setFileError]     = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dragCounter  = useRef(0)
 
-  // ── Fetch settings + grade levels on mount ────────────────────────────────
+  const hasFiles = files.length > 0
+
+  // ── Load settings ─────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    fetch('/api/settings').then(r => r.json()).then(j => {
-      const s = j.data ?? {}
-      if (s.app_name) setAppName(s.app_name)
-      if (s.group_label_l1) setGroupL1(s.group_label_l1)
-      if (s.group_label_l2) setGroupL2(s.group_label_l2)
-      if (s.group_label_l3) setGroupL3(s.group_label_l3)
-      if (s.doc_type_labels) {
-        try {
-          const arr = JSON.parse(s.doc_type_labels)
-          if (Array.isArray(arr) && arr.length) {
-            setDocTypeOptions(arr)
-            setDocType(arr[0])
-          }
-        } catch {}
-      } else {
-        setDocType(DEFAULT_DOC_TYPES[0])
-      }
-    }).catch(() => setDocType(DEFAULT_DOC_TYPES[0]))
-    fetch('/api/academic/grade-levels').then(r => r.json()).then(j => setGradeLevels(j.data ?? []))
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(j => {
+        const s = j.data ?? {}
+        if (s.app_name) setAppName(s.app_name)
+      })
+      .catch(() => {})
   }, [])
 
-  // ── Cascade: grade level → subtypes ───────────────────────────────────────
-
-  useEffect(() => {
-    setSubtypeId('')
-    setSectionId('')
-    setSubtypes([])
-    setSections([])
-    if (!gradeLevelId) return
-    fetch(`/api/academic/subtypes?gradeLevelId=${gradeLevelId}`)
-      .then(r => r.json())
-      .then(j => setSubtypes(j.data ?? []))
-  }, [gradeLevelId])
-
-  // ── Cascade: subtype → sections ────────────────────────────────────────────
-
-  useEffect(() => {
-    setSectionId('')
-    setSections([])
-    if (!gradeLevelId) return
-    const url = subtypeId
-      ? `/api/academic/sections?gradeLevelId=${gradeLevelId}&subtypeId=${subtypeId}`
-      : `/api/academic/sections?gradeLevelId=${gradeLevelId}`
-    fetch(url)
-      .then(r => r.json())
-      .then(j => setSections(j.data ?? []))
-  }, [gradeLevelId, subtypeId])
-
-  // ── Fetch current user ─────────────────────────────────────────────────────
+  // ── Fetch current user ────────────────────────────────────────────────────────
 
   const fetchUser = useCallback(async () => {
     try {
       const res = await fetch('/api/auth/me')
-      if (res.status === 401) {
-        router.push('/')
-        return
-      }
+      if (res.status === 401) { router.push('/'); return }
       const json = await res.json()
-      if (!res.ok || !json.data) {
-        addToast('Failed to load your profile.', 'error')
-        return
-      }
+      if (!res.ok || !json.data) { addToast('Failed to load your profile.', 'error'); return }
       const u: User = json.data
       setUser(u)
       deriveUiState(u)
@@ -210,36 +139,21 @@ export default function VerifyIdPage() {
     }
   }, [router, addToast])
 
-  useEffect(() => {
-    fetchUser()
-  }, [fetchUser])
+  useEffect(() => { fetchUser() }, [fetchUser])
 
   function deriveUiState(u: User) {
-    if (u.id_verified) {
-      setUiState('verified')
-      return
-    }
-    if (u.verification_status === 'pending') {
-      setUiState('pending')
-      return
-    }
-    if (u.verification_status === 'rejected') {
-      setUiState('rejected')
-      return
-    }
+    if (u.id_verified)                          { setUiState('verified'); return }
+    if (u.verification_status === 'pending')    { setUiState('pending');  return }
+    if (u.verification_status === 'rejected')   { setUiState('rejected'); return }
     setUiState('upload')
   }
 
-  // ── File selection logic ───────────────────────────────────────────────────
+  // ── File logic ────────────────────────────────────────────────────────────────
 
   const validateIncoming = (incoming: File[]): string | null => {
     for (const f of incoming) {
-      if (!ALLOWED_TYPES.includes(f.type)) {
-        return `"${f.name}" is not a supported type. Use images or PDF.`
-      }
-      if (f.size > MAX_FILE_SIZE_BYTES) {
-        return `"${f.name}" exceeds the 5 MB limit.`
-      }
+      if (!ALLOWED_TYPES.includes(f.type)) return `"${f.name}" is not a supported type. Use images or PDF.`
+      if (f.size > MAX_FILE_SIZE_BYTES)    return `"${f.name}" exceeds the 5 MB limit.`
     }
     return null
   }
@@ -247,10 +161,7 @@ export default function VerifyIdPage() {
   const addFiles = (incoming: File[]) => {
     setFileError(null)
     const combined = [...files, ...incoming]
-    if (combined.length > MAX_FILES) {
-      setFileError(`You can upload at most ${MAX_FILES} files.`)
-      return
-    }
+    if (combined.length > MAX_FILES) { setFileError(`You can upload at most ${MAX_FILES} files.`); return }
     const err = validateIncoming(incoming)
     if (err) { setFileError(err); return }
     setFiles(combined)
@@ -279,9 +190,7 @@ export default function VerifyIdPage() {
     if (dragCounter.current === 0) setIsDragging(false)
   }
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-  }
+  const handleDragOver  = (e: React.DragEvent) => { e.preventDefault() }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
@@ -291,23 +200,12 @@ export default function VerifyIdPage() {
     if (dropped.length) addFiles(dropped)
   }
 
-  const openFilePicker = () => {
-    fileInputRef.current?.click()
-  }
+  const openFilePicker = () => { fileInputRef.current?.click() }
 
-  // ── Upload ─────────────────────────────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────────────
 
-  const handleUpload = async () => {
-    if (files.length === 0) return
-
+  const handleSubmit = async () => {
     const formData = new FormData()
-    formData.append('intended_role', intendedRole || 'member')
-    formData.append('doc_type', docType)
-    if (intendedRole === 'member') {
-      if (gradeLevelId) formData.append('grade_level_id', gradeLevelId)
-      if (subtypeId)    formData.append('subtype_id', subtypeId)
-      if (sectionId)    formData.append('section_id', sectionId)
-    }
     for (const file of files) {
       formData.append('file', file)
     }
@@ -320,31 +218,40 @@ export default function VerifyIdPage() {
         body: formData,
       })
       const json = await res.json()
-
       if (!res.ok) {
-        addToast(json.error ?? 'Upload failed. Please try again.', 'error')
+        addToast(json.error ?? 'Submission failed. Please try again.', 'error')
         return
       }
-
-      addToast('Documents submitted. We\'ll review them shortly.', 'success')
+      addToast(
+        hasFiles ? "Documents submitted. We'll review them shortly." : 'Verification request submitted.',
+        'success'
+      )
       setFiles([])
+      setShowDoczone(false)
       await fetchUser()
     } catch {
-      addToast('Network error during upload.', 'error')
+      addToast('Network error during submission.', 'error')
     } finally {
       setUploading(false)
     }
   }
 
-  // ── Render helpers ─────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────────
 
   function formatBytes(bytes: number) {
-    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024)        return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  function resetUploadState() {
+    setFiles([])
+    setShowDoczone(false)
+    setFileError(null)
+    setUiState('upload')
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-[#FEE2E2] via-white to-[#FEE2E2]/30 flex items-center justify-center p-4">
@@ -377,12 +284,7 @@ export default function VerifyIdPage() {
                 Your identity has been confirmed. You have full access to {appName}.
               </p>
             </div>
-            <Button
-              variant="primary"
-              size="lg"
-              className="w-full"
-              onClick={() => router.push('/dashboard')}
-            >
+            <Button variant="primary" size="lg" className="w-full" onClick={() => router.push('/dashboard')}>
               Go to Dashboard
             </Button>
           </div>
@@ -395,7 +297,7 @@ export default function VerifyIdPage() {
             <div>
               <h1 className="text-xl font-bold text-gray-900">Verification pending</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Your documents are under review. This usually takes 1–2 business days.
+                Your request is under review. This usually takes 1–2 business days.
               </p>
             </div>
             {user?.id_photo_url && (
@@ -403,11 +305,7 @@ export default function VerifyIdPage() {
                 <p className="text-xs font-medium text-gray-500 mb-2 text-left">Submitted document</p>
                 <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={user.id_photo_url}
-                    alt="Submitted document"
-                    className="w-full h-40 object-cover"
-                  />
+                  <img src={user.id_photo_url} alt="Submitted document" className="w-full h-40 object-cover" />
                 </div>
               </div>
             )}
@@ -417,12 +315,7 @@ export default function VerifyIdPage() {
                 An admin will review your submission. You will be notified by email once the review is complete.
               </p>
             </div>
-            <Button
-              variant="secondary"
-              size="lg"
-              className="w-full"
-              onClick={() => router.push('/dashboard')}
-            >
+            <Button variant="secondary" size="lg" className="w-full" onClick={() => router.push('/dashboard')}>
               Go to Dashboard
             </Button>
           </div>
@@ -433,439 +326,200 @@ export default function VerifyIdPage() {
           <div className="flex flex-col items-center text-center py-4 gap-6">
             <XCircleIcon />
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Verification rejected</h1>
+              <h1 className="text-xl font-bold text-gray-900">Verification Denied</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Your submission was not approved. Please re-upload your school documents.
+                Your submission was not approved. You can try again below.
               </p>
             </div>
 
             {user?.verification_notes && (
               <div className="w-full rounded-xl bg-red-50 border border-red-200 p-4 text-left">
-                <p className="text-xs font-semibold text-red-700 mb-1">Reason from admin</p>
+                <p className="text-xs font-semibold text-red-700 mb-1">Reason</p>
                 <p className="text-sm text-red-600 whitespace-pre-wrap">{user.verification_notes}</p>
               </div>
             )}
 
-            {/* Fall through to upload form */}
-            <UploadForm
-              files={files}
-              docType={docType}
-              setDocType={setDocType}
-              isDragging={isDragging}
-              fileError={fileError}
-              uploading={uploading}
-              fileInputRef={fileInputRef}
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              onOpenPicker={openFilePicker}
-              onFileChange={handleFileChange}
-              onRemoveFile={removeFile}
-              onUpload={handleUpload}
-              formatBytes={formatBytes}
-              showSkip={false}
-            />
+            <Button variant="primary" size="lg" className="w-full" onClick={resetUploadState}>
+              Try Again
+            </Button>
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard')}
+              className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Go to Dashboard
+            </button>
           </div>
         )}
 
-        {/* ── No submission yet — multi-step ── */}
+        {/* ── Upload ── */}
         {uiState === 'upload' && (
           <div className="space-y-6">
             <div>
               <h1 className="text-xl font-bold text-gray-900">Verify your identity</h1>
               <p className="text-sm text-gray-500 mt-1">
-                Complete the steps below to submit your documents for review.
+                Submit a request for an admin to verify your account.
               </p>
             </div>
 
-            {/* Progress indicator */}
-            {(() => {
-              const stepNum = verifyStep === 'type_select' ? 1 : verifyStep === 'student_info' ? 2 : 3
-              const totalSteps = intendedRole === 'staff' ? 2 : 3
-              return (
-                <div className="flex items-center gap-2">
-                  {Array.from({ length: totalSteps }, (_, i) => (
-                    <div key={i} className="flex items-center gap-2 flex-1">
-                      <div
-                        className={[
-                          'h-1.5 rounded-full flex-1 transition-colors',
-                          i < stepNum ? 'bg-[#84050C]' : 'bg-gray-200',
-                        ].join(' ')}
-                      />
-                    </div>
-                  ))}
-                  <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">
-                    Step {stepNum} of {totalSteps}
-                  </span>
-                </div>
-              )
-            })()}
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,application/pdf"
+              multiple
+              className="sr-only"
+              onChange={handleFileChange}
+              aria-label="Upload verification documents"
+            />
 
-            {/* Step 1: Type select */}
-            {verifyStep === 'type_select' && (
+            {/* Default view — no doczone, no files */}
+            {!showDoczone && !hasFiles && (
               <div className="space-y-4">
-                <p className="text-sm font-medium text-gray-700">What is your role in this community?</p>
-                <div className="grid grid-cols-2 gap-3">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  loading={uploading}
+                  onClick={handleSubmit}
+                  className="w-full"
+                >
+                  {uploading ? 'Submitting…' : 'Verify Me'}
+                </Button>
+                <div className="text-center">
                   <button
                     type="button"
-                    onClick={() => {
-                      setIntendedRole('member')
-                      setStepError(null)
-                      setVerifyStep('student_info')
-                    }}
-                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60 transition-all text-center focus:outline-none focus:ring-2 focus:ring-[#84050C]"
+                    onClick={() => setShowDoczone(true)}
+                    className="text-sm text-[#84050C] hover:text-[#6B0409] font-medium transition-colors"
                   >
-                    <svg className="w-8 h-8 text-[#84050C]" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                    </svg>
-                    <span className="text-sm font-semibold text-gray-900">{memberLabel}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIntendedRole('staff')
-                      setStepError(null)
-                      setVerifyStep('upload_photo')
-                    }}
-                    className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-gray-200 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60 transition-all text-center focus:outline-none focus:ring-2 focus:ring-[#84050C]"
-                  >
-                    <svg className="w-8 h-8 text-[#84050C]" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0M12 12.75h.008v.008H12v-.008z" />
-                    </svg>
-                    <span className="text-sm font-semibold text-gray-900">{staffLabel}</span>
+                    + Attach documents (optional)
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Step 2: Member info — cascading dropdowns + doc type */}
-            {verifyStep === 'student_info' && (
+            {/* Doczone revealed */}
+            {(showDoczone || hasFiles) && (
               <div className="space-y-4">
-                <p className="text-sm font-medium text-gray-700">Tell us about your {groupL1.toLowerCase()} and {groupL3.toLowerCase()}.</p>
-
-                {/* Group L1 */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {groupL1} <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={gradeLevelId}
-                    onChange={(e) => { setGradeLevelId(e.target.value); setStepError(null) }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                  >
-                    <option value="">Select {groupL1.toLowerCase()}…</option>
-                    {gradeLevels.map(g => (
-                      <option key={g.id} value={String(g.id)}>{g.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Group L2 — only shown when subtypes exist */}
-                {subtypes.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {groupL2}
-                    </label>
-                    <select
-                      value={subtypeId}
-                      onChange={(e) => { setSubtypeId(e.target.value); setStepError(null) }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                    >
-                      <option value="">Select {groupL2.toLowerCase()}…</option>
-                      {subtypes.map(s => (
-                        <option key={s.id} value={String(s.id)}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Group L3 — only shown when sections exist */}
-                {sections.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {groupL3} <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={sectionId}
-                      onChange={(e) => { setSectionId(e.target.value); setStepError(null) }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                    >
-                      <option value="">Select {groupL3.toLowerCase()}…</option>
-                      {sections.map(s => (
-                        <option key={s.id} value={String(s.id)}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Document Type */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Document Type <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={docType}
-                    onChange={(e) => setDocType(e.target.value as DocType)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                  >
-                    {docTypeOptions.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {stepError && (
-                  <p className="text-sm text-red-600">{stepError}</p>
-                )}
-                <div className="flex gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => { setStepError(null); setVerifyStep('type_select') }}
-                    className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!gradeLevelId) { setStepError(`Please select a ${groupL1.toLowerCase()}.`); return }
-                      if (subtypes.length > 0 && !subtypeId) { setStepError(`Please select a ${groupL2.toLowerCase()}.`); return }
-                      if (sections.length === 0) { setStepError(`No ${groupL3.toLowerCase()} found. Contact admin.`); return }
-                      if (!sectionId) { setStepError(`Please select a ${groupL3.toLowerCase()}.`); return }
-                      setStepError(null)
-                      setVerifyStep('upload_photo')
-                    }}
-                    className="flex-1 px-4 py-2 rounded-lg bg-[#84050C] hover:bg-[#6B0409] text-white text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C]"
-                  >
-                    Continue
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Step 3: Upload documents */}
-            {verifyStep === 'upload_photo' && (
-              <>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStepError(null)
-                      setVerifyStep(intendedRole === 'staff' ? 'type_select' : 'student_info')
-                    }}
-                    className="text-sm text-[#84050C] hover:text-[#6B0409] font-medium flex items-center gap-1"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Back
-                  </button>
-                </div>
-
-                {/* Doc type selector for staff (members set it in step 2) */}
-                {intendedRole === 'staff' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Document Type <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={docType}
-                      onChange={(e) => setDocType(e.target.value as DocType)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                    >
-                      {docTypeOptions.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <UploadForm
-                  files={files}
-                  docType={docType}
-                  setDocType={setDocType}
-                  isDragging={isDragging}
-                  fileError={fileError}
-                  uploading={uploading}
-                  fileInputRef={fileInputRef}
+                {/* Drop zone */}
+                <button
+                  type="button"
+                  onClick={openFilePicker}
                   onDragEnter={handleDragEnter}
                   onDragLeave={handleDragLeave}
                   onDragOver={handleDragOver}
                   onDrop={handleDrop}
-                  onOpenPicker={openFilePicker}
-                  onFileChange={handleFileChange}
-                  onRemoveFile={removeFile}
-                  onUpload={handleUpload}
-                  formatBytes={formatBytes}
-                  showSkip={true}
-                />
-              </>
+                  disabled={uploading || files.length >= MAX_FILES}
+                  className={[
+                    'w-full rounded-xl border-2 border-dashed p-8 flex flex-col items-center gap-3',
+                    'transition-all duration-200 cursor-pointer outline-none',
+                    'focus-visible:ring-2 focus-visible:ring-[#84050C] focus-visible:ring-offset-2',
+                    isDragging
+                      ? 'border-[#BA4955] bg-[#FEE2E2]/60 scale-[1.01]'
+                      : 'border-gray-300 bg-gray-50 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60/50',
+                    (uploading || files.length >= MAX_FILES) ? 'opacity-50 cursor-not-allowed' : '',
+                  ].join(' ')}
+                  aria-label="Click or drag and drop to upload verification documents"
+                >
+                  <UploadCloudIcon />
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-700">
+                      {isDragging ? 'Drop your files here' : 'Click to upload or drag & drop'}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Images or PDF — max 5 MB each, up to {MAX_FILES} files
+                    </p>
+                    {hasFiles && (
+                      <p className="text-xs text-[#84050C] mt-1 font-medium">
+                        {files.length}/{MAX_FILES} file{files.length !== 1 ? 's' : ''} selected
+                      </p>
+                    )}
+                  </div>
+                </button>
+
+                {/* File error */}
+                {fileError && (
+                  <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                    <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    {fileError}
+                  </div>
+                )}
+
+                {/* Selected files list */}
+                {hasFiles && (
+                  <ul className="space-y-2">
+                    {files.map((file, idx) => (
+                      <li key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {file.type === 'application/pdf' ? (
+                            <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4 text-[#BA4955] flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3h18M3 3v18" />
+                            </svg>
+                          )}
+                          <span className="truncate max-w-[180px] font-medium text-gray-700">{file.name}</span>
+                          <span className="text-gray-400 flex-shrink-0">{formatBytes(file.size)}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(idx)}
+                          disabled={uploading}
+                          className="ml-2 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* Submit / cancel */}
+                {hasFiles ? (
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    loading={uploading}
+                    disabled={!!fileError}
+                    onClick={handleSubmit}
+                    className="w-full"
+                  >
+                    {uploading ? 'Uploading…' : 'Submit with Documents'}
+                  </Button>
+                ) : (
+                  <div className="space-y-3">
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      loading={uploading}
+                      onClick={handleSubmit}
+                      className="w-full"
+                    >
+                      {uploading ? 'Submitting…' : 'Verify Me'}
+                    </Button>
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        onClick={() => setShowDoczone(false)}
+                        className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
+
       </div>
     </main>
-  )
-}
-
-// ─── Upload form sub-component ─────────────────────────────────────────────────
-
-interface UploadFormProps {
-  files: File[]
-  docType: DocType
-  setDocType: (v: DocType) => void
-  isDragging: boolean
-  fileError: string | null
-  uploading: boolean
-  fileInputRef: React.RefObject<HTMLInputElement>
-  onDragEnter: (e: React.DragEvent) => void
-  onDragLeave: (e: React.DragEvent) => void
-  onDragOver: (e: React.DragEvent) => void
-  onDrop: (e: React.DragEvent) => void
-  onOpenPicker: () => void
-  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
-  onRemoveFile: (index: number) => void
-  onUpload: () => void
-  formatBytes: (n: number) => string
-  showSkip: boolean
-}
-
-function UploadForm({
-  files,
-  isDragging,
-  fileError,
-  uploading,
-  fileInputRef,
-  onDragEnter,
-  onDragLeave,
-  onDragOver,
-  onDrop,
-  onOpenPicker,
-  onFileChange,
-  onRemoveFile,
-  onUpload,
-  formatBytes,
-  showSkip,
-}: UploadFormProps) {
-  return (
-    <div className="space-y-4 w-full">
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*,application/pdf"
-        multiple
-        className="sr-only"
-        onChange={onFileChange}
-        aria-label="Upload verification documents"
-      />
-
-      {/* Drop zone */}
-      <button
-        type="button"
-        onClick={onOpenPicker}
-        onDragEnter={onDragEnter}
-        onDragLeave={onDragLeave}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
-        disabled={uploading || files.length >= MAX_FILES}
-        className={[
-          'w-full rounded-xl border-2 border-dashed p-8 flex flex-col items-center gap-3',
-          'transition-all duration-200 cursor-pointer outline-none',
-          'focus-visible:ring-2 focus-visible:ring-[#84050C] focus-visible:ring-offset-2',
-          isDragging
-            ? 'border-[#BA4955] bg-[#FEE2E2]/60 scale-[1.01]'
-            : 'border-gray-300 bg-gray-50 hover:border-[#BA4955] hover:bg-[#FEE2E2]/60/50',
-          (uploading || files.length >= MAX_FILES) ? 'opacity-50 cursor-not-allowed' : '',
-        ].join(' ')}
-        aria-label="Click or drag and drop to upload verification documents"
-      >
-        <UploadCloudIcon />
-        <div className="text-center">
-          <p className="text-sm font-medium text-gray-700">
-            {isDragging ? 'Drop your files here' : 'Click to upload or drag & drop'}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            Images or PDF — max 5 MB each, up to {MAX_FILES} files
-          </p>
-          {files.length > 0 && (
-            <p className="text-xs text-[#84050C] mt-1 font-medium">
-              {files.length}/{MAX_FILES} file{files.length !== 1 ? 's' : ''} selected
-            </p>
-          )}
-        </div>
-      </button>
-
-      {/* File error */}
-      {fileError && (
-        <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-          <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-          </svg>
-          {fileError}
-        </div>
-      )}
-
-      {/* Selected files list */}
-      {files.length > 0 && (
-        <ul className="space-y-2">
-          {files.map((file, idx) => (
-            <li key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm">
-              <div className="flex items-center gap-2 min-w-0">
-                {file.type === 'application/pdf' ? (
-                  <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clipRule="evenodd" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4 text-[#BA4955] flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3h18M3 3v18" />
-                  </svg>
-                )}
-                <span className="truncate max-w-[180px] font-medium text-gray-700">{file.name}</span>
-                <span className="text-gray-400 flex-shrink-0">{formatBytes(file.size)}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => onRemoveFile(idx)}
-                disabled={uploading}
-                className="ml-2 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
-                aria-label={`Remove ${file.name}`}
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* Upload button */}
-      {files.length > 0 && (
-        <Button
-          variant="primary"
-          size="lg"
-          loading={uploading}
-          disabled={files.length === 0 || !!fileError}
-          onClick={onUpload}
-          className="w-full"
-        >
-          {uploading ? 'Uploading…' : 'Submit Documents for Review'}
-        </Button>
-      )}
-
-      {/* Skip link */}
-      {showSkip && files.length === 0 && (
-        <div className="text-center pt-2">
-          <Link
-            href="/dashboard"
-            className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            Skip for now →
-          </Link>
-        </div>
-      )}
-    </div>
   )
 }

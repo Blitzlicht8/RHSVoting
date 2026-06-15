@@ -1,10 +1,12 @@
-﻿export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { db, ensureInit } from '@/lib/db'
-import { getAuthUser, isAdmin } from '@/lib/auth'
+import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
 import { InValue } from '@libsql/client'
+
+const MAX_FILES = 3
 
 export async function GET(request: NextRequest) {
   await ensureInit()
@@ -20,14 +22,14 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status')
-  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10))
-  const limit = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '20', 10)))
+  const page   = Math.max(1, parseInt(searchParams.get('page')  || '1',  10))
+  const limit  = Math.max(1, Math.min(100, parseInt(searchParams.get('limit') || '20', 10)))
   const offset = (page - 1) * limit
 
   const role = authUser.role as string
 
   const conditions: string[] = []
-  const params: InValue[] = []
+  const params: InValue[]    = []
 
   if (status && ['pending', 'approved', 'rejected'].includes(status)) {
     conditions.push('vr.status = ?')
@@ -53,7 +55,7 @@ export async function GET(request: NextRequest) {
 
   const requestsResult = await db.execute({
     sql: `SELECT vr.*, u.name AS user_name, u.email AS user_email, u.role AS user_role,
-                 u.avatar_url AS user_avatar_url, u.grade_level, u.section, vr.intended_role,
+                 u.avatar_url AS user_avatar_url, u.grade_level, u.section,
                  vr.grade_level_id, vr.subtype_id, vr.section_id, vr.doc_type,
                  gl.name AS grade_level_name, gs.name AS subtype_name, s.name AS section_name
           FROM verification_requests vr
@@ -67,8 +69,7 @@ export async function GET(request: NextRequest) {
     args: [...params, limit, offset],
   })
 
-  // Fetch documents for each request
-  const requests = requestsResult.rows
+  const requests   = requestsResult.rows
   const requestIds = requests.map(r => Number(r.id))
 
   let documentsMap: Record<number, Array<{id: number, file_path: string}>> = {}
@@ -101,9 +102,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Check for existing pending request
+  // Block if already pending
   const existing = await db.execute({
-    sql: `SELECT id, status FROM verification_requests WHERE user_id = ? AND status = 'pending' LIMIT 1`,
+    sql: `SELECT id FROM verification_requests WHERE user_id = ? AND status = 'pending' LIMIT 1`,
     args: [authUser.id],
   })
   if (existing.rows.length > 0) {
@@ -120,29 +121,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid form data.' }, { status: 400 })
   }
 
-  const intended_role = (formData.get('intended_role') as string) || 'student'
-  const doc_type      = (formData.get('doc_type') as string) || 'School ID'
-  const grade_level_id = formData.get('grade_level_id') ? Number(formData.get('grade_level_id')) : null
-  const subtype_id     = formData.get('subtype_id')     ? Number(formData.get('subtype_id'))     : null
-  const section_id     = formData.get('section_id')     ? Number(formData.get('section_id'))     : null
-
-  const userRoleRow = await db.execute({ sql: 'SELECT role FROM users WHERE id = ?', args: [authUser.id] })
-  const userRole = userRoleRow.rows[0]?.role as string | undefined
-  const isStudent = !userRole || userRole === 'member'
-  if (isStudent) {
-    if (!grade_level_id) return NextResponse.json({ error: 'Grade level is required' }, { status: 400 })
-    if (!section_id) return NextResponse.json({ error: 'Section is required' }, { status: 400 })
-  }
-
   const rawFiles = formData.getAll('file') as File[]
-  if (rawFiles.length === 0) {
-    return NextResponse.json({ error: 'At least one file is required.' }, { status: 400 })
-  }
-  if (rawFiles.length > 3) {
+
+  // Validate files if provided
+  if (rawFiles.length > MAX_FILES) {
     return NextResponse.json({ error: 'Maximum 3 files allowed.' }, { status: 400 })
   }
-
-  // Validate file size and type before uploading
   for (const file of rawFiles) {
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json({ error: `File "${file.name}" exceeds 5 MB limit.` }, { status: 400 })
@@ -153,7 +137,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Upload each file to Vercel Blob
+  // Upload files to Vercel Blob if provided
   const uploadedUrls: string[] = []
   for (const file of rawFiles) {
     const blob = await put(`verifications/${authUser.id}/${Date.now()}-${file.name}`, file, {
@@ -162,34 +146,25 @@ export async function POST(request: NextRequest) {
     uploadedUrls.push(blob.url)
   }
 
-  // Use first URL as the legacy id_image field
-  const primaryUrl = uploadedUrls[0]
+  // 'none' placeholder when no files uploaded (image_path is NOT NULL)
+  const primaryUrl = uploadedUrls[0] ?? 'none'
 
-  // Delete any previously rejected request so the unique user_id constraint doesn't block resubmission
+  // Delete any previously rejected request before inserting new one
   await db.execute({
     sql: `DELETE FROM verification_requests WHERE user_id = ? AND status = 'rejected'`,
     args: [authUser.id],
   })
 
-  // INSERT verification_request
   const insertResult = await db.execute({
     sql: `INSERT INTO verification_requests
-            (user_id, image_path, status, intended_role, grade_level_id, subtype_id, section_id, doc_type, created_at, updated_at)
-          VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-    args: [
-      authUser.id,
-      primaryUrl,
-      intended_role,
-      grade_level_id,
-      subtype_id,
-      section_id,
-      doc_type,
-    ],
+            (user_id, image_path, status, grade_level_id, subtype_id, section_id, created_at, updated_at)
+          VALUES (?, ?, 'pending', NULL, NULL, NULL, datetime('now'), datetime('now'))`,
+    args: [authUser.id, primaryUrl],
   })
 
   const verificationRequestId = Number(insertResult.lastInsertRowid)
 
-  // INSERT verification_documents for each uploaded file
+  // Insert documents if any files were uploaded
   for (const url of uploadedUrls) {
     await db.execute({
       sql: `INSERT INTO verification_documents (verification_request_id, file_path, created_at)
@@ -198,20 +173,17 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // UPDATE users with grade/subtype/section IDs
+  // Mark user as pending
   await db.execute({
-    sql: `UPDATE users SET
-            grade_level_id = ?,
-            subtype_id = ?,
-            section_id = ?,
-            verification_status = 'pending',
-            updated_at = datetime('now')
-          WHERE id = ?`,
-    args: [grade_level_id, subtype_id, section_id, authUser.id],
+    sql: `UPDATE users SET verification_status = 'pending', updated_at = datetime('now') WHERE id = ?`,
+    args: [authUser.id],
   })
 
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
-  await logActivity(authUser.id, 'verification_submitted', `Submitted ${rawFiles.length} document(s) for verification`, ip)
+  const docLabel = rawFiles.length > 0
+    ? `Submitted ${rawFiles.length} document(s) for verification`
+    : 'Submitted verification request without documents'
+  await logActivity(authUser.id, 'verification_submitted', docLabel, ip)
 
   return NextResponse.json({
     data: { id: verificationRequestId },

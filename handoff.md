@@ -8,38 +8,36 @@
 2026-06-15
 
 ## Version After This Session
-`0.8.1` — unverified role, DB role seeds, register fix, type updates
+`0.9.0` — verify-id page overhaul, simplified verification flow
 
 ---
 
 ## What Was Done
 
-### v0.8.1 — unverified role system
+### v0.9.0 — Verify-ID page overhaul
 
-#### 1. Role type update (`src/types/index.ts`)
-- Added `'unverified'` as explicit literal to `Role` union type
+#### 1. `src/app/verify-id/page.tsx` — full rewrite
+- Removed `VerifyStep` type, `verifyStep` state, and all multi-step logic
+- Removed `intendedRole` state and all role-picker UI (type_select step gone)
+- Removed cascading academic dropdowns (`gradeLevels`, `subtypes`, `sections`, all related state and useEffects)
+- Removed `memberLabel`, `staffLabel`, `stepError`, `docTypeOptions` state
+- Added `showDoczone` boolean state for progressive disclosure of the upload zone
+- **Default upload view**: full-width "Verify Me" button + small "+ Attach documents (optional)" link below
+- **Doczone revealed**: clicking attach shows drag-drop zone; if user has files, shows file list + "Submit with Documents"; if no files yet, shows "Verify Me" + Cancel
+- `hasFiles` derived from `files.length > 0` — controls submit button label and doczone persistence
+- **Rejected state**: title changed to "Verification Denied", notes shown in red-tinted box labeled "Reason", "Try Again" button resets to upload state (no dead end), "Go to Dashboard" secondary link
+- Removed `UploadForm` sub-component (inlined into upload section)
+- Settings fetch now only loads `app_name`
 
-#### 2. Register default role (`src/app/api/auth/register/route.ts`)
-- Changed new account INSERT from `'student'` → `'unverified'`
-- Re-send OTP path (existing unverified-email accounts) unchanged — preserves whatever role was already set
-
-#### 3. DB role seeds (`src/lib/db.ts`)
-- Added 6 `INSERT OR IGNORE` entries to the main `db.batch([...], 'write')` call, immediately after `CREATE TABLE IF NOT EXISTS roles`
-- Seeds: `master_admin`, `admin`, `moderator`, `staff`, `member`, `unverified` — all `is_system: 1`, `permissions: '{}'`
-- Also added `unverified` to the existing `roleSeeds` loop (runs after batch, OR IGNORE so no conflict)
-
-#### 4. Auth helpers (`src/lib/auth.ts`)
-- `getRoleLabel`: added `unverified: 'Unverified'`
-- `getRoleBadgeVariant`: added `if (role === 'unverified') return 'default'` (gray badge, below member)
-
-#### 5. Users API (`src/app/api/users/[id]/route.ts`)
-- `ALL_ROLES`: added `'unverified'`
-- `ROLE_LEVEL`: added `unverified: -1` (below member at 0)
-
-#### 6. Verification approval auto-upgrade (`src/app/api/verifications/[id]/route.ts`)
-- On `approve`: added batch entry `UPDATE users SET role = 'member' WHERE id = ? AND role = 'unverified'`
-- Conditional — only fires when current role is `unverified`; no-op for users already `member` or above
-- Runs in the same atomic batch as `id_verified = 1` and group sync
+#### 2. `src/app/api/verifications/route.ts` — POST simplification
+- Removed `intended_role` field reading and validation
+- Removed `grade_level_id`/`section_id` requirement check (was blocking unverified users)
+- Files now optional: if no files in FormData, skip upload; use `'none'` as `image_path` placeholder
+- `verification_documents` inserts only run when files are present
+- `users.verification_status` still set to `'pending'` on submit
+- Removed `isAdmin` import (unused)
+- `intended_role` column no longer written to `verification_requests`
+- Activity log message adapts: "Submitted N document(s)" vs "Submitted verification request without documents"
 
 ---
 
@@ -47,40 +45,35 @@
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.8.1`
+- Version: `0.9.0`
 
 ---
 
 ## Key Architectural Notes
 
-- `unverified` is the new default role for all new accounts registered via `/api/auth/register`
-- `isAdmin()` check is `['master_admin', 'admin', 'moderator']` — `unverified` and `member` are correctly excluded
-- Verification approval in `verifications/[id]/route.ts` is the single place that promotes `unverified` → `member`
-- `ROLE_LEVEL['unverified'] = -1` means admins can delete/edit unverified users (level below member)
-- Roles table in DB is now seeded idempotently both in the main batch and in the roleSeeds loop
+- `verify-id` page is now a single-view flow: no steps, no role picker
+- POST `/api/verifications` accepts 0–3 files; `image_path = 'none'` when no files
+- Rejected state has "Try Again" → resets uiState to `'upload'` for resubmission
+- The `intended_role` column still exists in DB but is no longer written to by this flow
+- Admin verifications page (`/admin/verifications`) unchanged — GET handler untouched
 
 ---
 
 ## What's Left / Ideas for Next Session
 
-- `grade_level_id`/`subtype_id`/`section_id` not restored in `openEdit` — dropdowns won't pre-select existing values on edit
-- `max_votes_mode` not persisted to DB — if desired, add column to positions table
-- Per-position candidate-count validation on activate (current check is total across election, not per-position)
-- Achievements: currently only editable on existing candidates via the form; new candidates in "existing member" mode don't have achievements editor
-- Admin UI for user-level achievements (separate from candidate achievements) — `/api/users/me/achievements` routes exist but no UI
-- Verification resubmission: allow users to resubmit after rejection
-- Consider showing `unverified` users a distinct banner prompting them to complete verification
+- `intended_role` column in `verification_requests` is now unused — could be dropped in a migration
+- Admin verifications page: `intended_role` column may show blank/null — cosmetic, not breaking
+- Per-position candidate-count validation on activate
+- Achievements editor for new candidates in "existing member" mode
+- Admin UI for user-level achievements
+- `max_votes_mode` not persisted to DB
 
 ---
 
 ## Key Files Changed This Session
 
 ```
-src/types/index.ts                                Role type: added 'unverified'
-src/app/api/auth/register/route.ts               INSERT role: 'student' → 'unverified'
-src/lib/db.ts                                     6 INSERT OR IGNORE seeds in batch + unverified in roleSeeds loop
-src/lib/auth.ts                                   getRoleLabel + getRoleBadgeVariant: unverified
-src/app/api/users/[id]/route.ts                  ALL_ROLES + ROLE_LEVEL: unverified at -1
-src/app/api/verifications/[id]/route.ts          approve batch: promote unverified → member
-package.json                                      0.8.1
+src/app/verify-id/page.tsx                       Full rewrite — simplified flow, progressive disclosure
+src/app/api/verifications/route.ts               POST: files optional, removed role/grade validation
+package.json                                      0.8.1 → 0.9.0
 ```
