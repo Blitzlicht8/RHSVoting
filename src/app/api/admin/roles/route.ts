@@ -7,7 +7,19 @@ export async function GET() {
   await ensureInit()
   const auth = await getAuthUser()
   if (!auth || auth.role !== 'master_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  const result = await db.execute({ sql: `SELECT * FROM roles ORDER BY is_system DESC, name ASC`, args: [] })
+  const result = await db.execute({
+    sql: `SELECT * FROM roles ORDER BY
+      CASE name
+        WHEN 'master_admin' THEN 0
+        WHEN 'admin' THEN 1
+        WHEN 'moderator' THEN 2
+        WHEN 'staff' THEN 3
+        WHEN 'member' THEN 4
+        WHEN 'unverified' THEN 5
+        ELSE 6
+      END, name ASC`,
+    args: [],
+  })
   return NextResponse.json({ data: result.rows })
 }
 
