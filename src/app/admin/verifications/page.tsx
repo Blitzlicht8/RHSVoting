@@ -94,6 +94,13 @@ export default function VerificationsPage() {
   const [rejectNotes, setRejectNotes] = useState('')
   const [actioning, setActioning] = useState<number | null>(null)
 
+  const [showApproveModal, setShowApproveModal] = useState(false)
+  const [selectedApproveRequest, setSelectedApproveRequest] = useState<VerifRequest | null>(null)
+  const [approveGradeLevels, setApproveGradeLevels] = useState<{ id: number; name: string }[]>([])
+  const [approveSubtypes, setApproveSubtypes] = useState<{ id: number; name: string }[]>([])
+  const [approveSections, setApproveSections] = useState<{ id: number; name: string }[]>([])
+  const [approveForm, setApproveForm] = useState({ grade_level_id: '', subtype_id: '', section_id: '' })
+
   const isAdmin = ['master_admin', 'admin', 'moderator'].includes(user?.role ?? '')
 
   const fetchSettings = useCallback(async () => {
@@ -172,14 +179,45 @@ export default function VerificationsPage() {
     }
   }
 
-  const handleApprove = async (req: VerifRequest) => {
+  const openApproveModal = (req: VerifRequest) => {
+    setSelectedApproveRequest(req)
+    setApproveForm({ grade_level_id: '', subtype_id: '', section_id: '' })
+    setApproveSubtypes([])
+    setApproveSections([])
+    fetch('/api/academic/grade-levels', { credentials: 'include' })
+      .then(r => r.json()).then(j => setApproveGradeLevels(j.data ?? []))
+    setShowApproveModal(true)
+  }
+
+  useEffect(() => {
+    if (!approveForm.grade_level_id) { setApproveSubtypes([]); setApproveSections([]); return }
+    fetch(`/api/academic/subtypes?gradeLevelId=${approveForm.grade_level_id}`, { credentials: 'include' })
+      .then(r => r.json()).then(j => setApproveSubtypes(j.data ?? []))
+  }, [approveForm.grade_level_id])
+
+  useEffect(() => {
+    if (!approveForm.grade_level_id) { setApproveSections([]); return }
+    const url = `/api/academic/sections?gradeLevelId=${approveForm.grade_level_id}${approveForm.subtype_id ? `&subtypeId=${approveForm.subtype_id}` : ''}`
+    fetch(url, { credentials: 'include' }).then(r => r.json()).then(j => setApproveSections(j.data ?? []))
+  }, [approveForm.grade_level_id, approveForm.subtype_id])
+
+  const handleApprove = async () => {
+    if (!selectedApproveRequest) return
+    const req = selectedApproveRequest
+    if (!approveForm.grade_level_id) { addToast('Group is required', 'error'); return }
+    setShowApproveModal(false)
     setActioning(req.id)
     try {
       const res = await fetch(`/api/verifications/${req.id}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve' }),
+        body: JSON.stringify({
+          action: 'approve',
+          grade_level_id: parseInt(approveForm.grade_level_id),
+          subtype_id: approveForm.subtype_id ? parseInt(approveForm.subtype_id) : null,
+          section_id: approveForm.section_id ? parseInt(approveForm.section_id) : null,
+        }),
       })
       const json = await res.json()
       if (res.ok) {
@@ -429,7 +467,7 @@ export default function VerificationsPage() {
                       className="flex-1 bg-green-600 hover:bg-green-700 focus:ring-green-500"
                       loading={actioning === req.id}
                       disabled={actioning === req.id}
-                      onClick={() => handleApprove(req)}
+                      onClick={() => openApproveModal(req)}
                     >
                       Approve
                     </Button>
@@ -550,6 +588,67 @@ export default function VerificationsPage() {
           onClose={() => setLightbox(null)}
         />
       )}
+
+      {/* Approve Modal — group assignment required */}
+      <Modal
+        isOpen={showApproveModal}
+        onClose={() => setShowApproveModal(false)}
+        title="Approve Verification"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowApproveModal(false)}>Cancel</Button>
+            <Button variant="primary" disabled={!approveForm.grade_level_id} onClick={handleApprove}>Approve</Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          {selectedApproveRequest && (
+            <p className="text-sm text-gray-600">
+              Approving ID verification for <strong>{selectedApproveRequest.user_name}</strong>.
+            </p>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {settings['group_label_l1'] || 'Group'} <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={approveForm.grade_level_id}
+              onChange={(e) => setApproveForm(f => ({ ...f, grade_level_id: e.target.value, subtype_id: '', section_id: '' }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+            >
+              <option value="">— Select {settings['group_label_l1']?.toLowerCase() || 'group'} —</option>
+              {approveGradeLevels.map(gl => <option key={gl.id} value={String(gl.id)}>{gl.name}</option>)}
+            </select>
+          </div>
+          {approveSubtypes.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{settings['group_label_l2'] || 'Subgroup'}</label>
+              <select
+                value={approveForm.subtype_id}
+                onChange={(e) => setApproveForm(f => ({ ...f, subtype_id: e.target.value, section_id: '' }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+              >
+                <option value="">— Select {settings['group_label_l2']?.toLowerCase() || 'subgroup'} —</option>
+                {approveSubtypes.map(st => <option key={st.id} value={String(st.id)}>{st.name}</option>)}
+              </select>
+            </div>
+          )}
+          {approveSections.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{settings['group_label_l3'] || 'Unit'}</label>
+              <select
+                value={approveForm.section_id}
+                onChange={(e) => setApproveForm(f => ({ ...f, section_id: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
+              >
+                <option value="">— Select {settings['group_label_l3']?.toLowerCase() || 'unit'} —</option>
+                {approveSections.map(sec => <option key={sec.id} value={String(sec.id)}>{sec.name}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       {/* Reject Modal */}
       <Modal

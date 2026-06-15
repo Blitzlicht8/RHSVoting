@@ -21,10 +21,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const body = await request.json()
-  const { action, notes } = body
+  const { action, notes, grade_level_id, subtype_id, section_id } = body
 
   if (!action || !['approve', 'reject'].includes(action)) {
     return NextResponse.json({ error: 'action must be "approve" or "reject"' }, { status: 400 })
+  }
+
+  if (action === 'approve' && !grade_level_id) {
+    return NextResponse.json({ error: 'Group assignment is required for approval' }, { status: 400 })
   }
 
   const verReqResult = await db.execute({
@@ -45,9 +49,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       [
         {
           sql: `UPDATE verification_requests
-                SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), notes = ?
+                SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), notes = ?,
+                    grade_level_id = ?, subtype_id = ?, section_id = ?
                 WHERE id = ?`,
-          args: [newStatus, authUser.id, notes ?? null, requestId],
+          args: [newStatus, authUser.id, notes ?? null, grade_level_id ?? null, subtype_id ?? null, section_id ?? null, requestId],
         },
         {
           sql: `UPDATE users SET id_verified = ?, updated_at = datetime('now') WHERE id = ?`,
@@ -59,13 +64,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
           args: [Number(verReq.user_id)],
         },
         {
-          // Sync grade_level_id, subtype_id, section_id from the verification request to the user
-          sql: `UPDATE users
-                SET grade_level_id = (SELECT grade_level_id FROM verification_requests WHERE id = ?),
-                    subtype_id     = (SELECT subtype_id     FROM verification_requests WHERE id = ?),
-                    section_id     = (SELECT section_id     FROM verification_requests WHERE id = ?)
-                WHERE id = (SELECT user_id FROM verification_requests WHERE id = ?)`,
-          args: [requestId, requestId, requestId, requestId],
+          sql: `UPDATE users SET grade_level_id = ?, subtype_id = ?, section_id = ? WHERE id = ?`,
+          args: [grade_level_id ?? null, subtype_id ?? null, section_id ?? null, Number(verReq.user_id)],
         },
       ],
       'write'

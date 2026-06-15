@@ -171,6 +171,9 @@ export default function UsersPage() {
   const [uploading, setUploading] = useState(false)
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
 
+  const [resettingPassword, setResettingPassword] = useState(false)
+  const [resetPasswordResult, setResetPasswordResult] = useState<string | null>(null)
+
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createUploadFiles, setCreateUploadFiles] = useState<File[]>([])
@@ -464,7 +467,31 @@ export default function UsersPage() {
     }
   }, [addToast])
 
+  const handleResetPassword = async () => {
+    if (!editUser) return
+    setResettingPassword(true)
+    try {
+      const res = await fetch(`/api/admin/users/${editUser.id}/reset-password`, {
+        method: 'POST', credentials: 'include',
+      })
+      const json = await res.json()
+      if (res.ok) {
+        setResetPasswordResult(json.data.password)
+      } else {
+        addToast(json.error || 'Reset failed', 'error')
+      }
+    } catch {
+      addToast('Network error', 'error')
+    } finally {
+      setResettingPassword(false)
+    }
+  }
+
   const handleCreateUser = async () => {
+    if (createForm.id_verified && !createForm.grade_level_id) {
+      addToast('Group is required for verified accounts', 'error')
+      return
+    }
     setCreating(true)
     try {
       const res = await fetch('/api/admin/users/create', {
@@ -522,8 +549,8 @@ export default function UsersPage() {
   const assignableRoles = currentUser ? getAssignableRoles(currentUser.role as Role) : []
   const canVerify = currentUser?.role === 'master_admin' || currentUser?.role === 'admin'
   const totalPages = data ? Math.ceil(data.total / 20) : 1
-  const isStudentRole = createForm.role === 'member'
-  const isEditStudentRole = editForm.role === 'member'
+  const isStudentRole = createForm.id_verified  // show academic fields when creating a verified user
+  const isEditStudentRole = true                 // always show academic fields when editing
 
   return (
     <AdminLayout>
@@ -959,7 +986,7 @@ export default function UsersPage() {
       {/* Edit User Modal */}
       <Modal
         isOpen={!!editUser}
-        onClose={() => setEditUser(null)}
+        onClose={() => { setEditUser(null); setResetPasswordResult(null) }}
         title={editUser ? `Edit: ${editUser.name}` : 'Edit User'}
         size="md"
         footer={
@@ -993,7 +1020,7 @@ export default function UsersPage() {
                 onChange={(e) => setEditForm(f => ({ ...f, role: e.target.value as Role, grade_level_id: '', subtype_id: '', section_id: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
               >
-                {(currentUser?.role === 'master_admin' ? ALL_ROLES : (['member', 'staff'] as Role[])).map((r) => (
+                {assignableRoles.map((r) => (
                   <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                 ))}
               </select>
@@ -1058,6 +1085,28 @@ export default function UsersPage() {
                 <span className="text-sm text-gray-700">Active</span>
               </label>
             </div>
+            {/* Reset Password */}
+            <div className="border-t pt-4">
+              <div className="text-sm font-medium text-gray-700 mb-2">Reset Password</div>
+              {resetPasswordResult ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                  <p className="text-xs text-amber-700">New password generated — share with user then ask them to change it.</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-sm font-mono bg-white border border-amber-200 rounded px-2 py-1 select-all">{resetPasswordResult}</code>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(resetPasswordResult); addToast('Copied', 'success') }}
+                      className="px-2 py-1 text-xs border border-amber-300 rounded text-amber-700 hover:bg-amber-100"
+                    >Copy</button>
+                  </div>
+                  <button onClick={() => setResetPasswordResult(null)} className="text-xs text-gray-400 hover:text-gray-600">Dismiss</button>
+                </div>
+              ) : (
+                <Button variant="secondary" loading={resettingPassword} disabled={resettingPassword} onClick={handleResetPassword}>
+                  Generate New Password
+                </Button>
+              )}
+            </div>
+
             {/* Verification documents */}
             <div className="border-t pt-4">
               <div className="text-sm font-medium text-gray-700 mb-2">Verification Documents</div>
