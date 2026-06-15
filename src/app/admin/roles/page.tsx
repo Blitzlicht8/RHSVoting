@@ -258,7 +258,7 @@ export default function RolesPage() {
                       return (
                         <label key={p} className="flex items-center gap-2 text-xs cursor-pointer">
                           <input type="checkbox"
-                            checked={isEditing ? !!editPerms[p] : !!perms[p]}
+                            checked={isEditing ? !!editPerms[p] : (fullyLocked ? true : !!perms[p])}
                             onChange={isEditing ? e=>setEditPerms(prev=>({...prev,[p]:e.target.checked})) : undefined}
                             disabled={!isEditing}
                             className="w-3.5 h-3.5 rounded border-gray-300 text-[#84050C]" />
