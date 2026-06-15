@@ -157,9 +157,9 @@ export async function POST(request: NextRequest) {
   // 'none' placeholder when no files uploaded (image_path is NOT NULL)
   const primaryUrl = uploadedUrls[0] ?? 'none'
 
-  // Delete any previously rejected request before inserting new one
+  // Delete any prior request (approved or rejected) — pending already blocked above
   await db.execute({
-    sql: `DELETE FROM verification_requests WHERE user_id = ? AND status = 'rejected'`,
+    sql: `DELETE FROM verification_requests WHERE user_id = ?`,
     args: [authUser.id],
   })
 

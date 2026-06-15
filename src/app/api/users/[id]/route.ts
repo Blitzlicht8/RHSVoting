@@ -146,8 +146,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (body.id_verified) {
       setClauses.push(`verification_status = 'approved'`)
     } else {
-      // Revoking verification auto-reverts role to unverified (master_admin protected)
+      // Revoking: revert role to unverified, mark status rejected so banner shows
       setClauses.push(`role = CASE WHEN role = 'master_admin' THEN role ELSE 'unverified' END`)
+      setClauses.push(`verification_status = 'rejected'`)
     }
   }
 
