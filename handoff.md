@@ -8,49 +8,48 @@
 2026-06-15
 
 ## Version After This Session
-`0.12.0` — unverified role guards + admin users page UX improvements
+`0.13.0` — UX polish: rejection notes mandatory, navbar unverified indicator, verify-id UIState confirmed
 
 ---
 
 ## What Was Done
 
-### v0.12.0 — Unverified role guards + visual indicators
+### v0.13.0 — UX Polish: Rejection Notes + Navbar Indicator + Status Sync
 
-#### `src/app/api/users/route.ts`
-- SELECT now includes `verification_status`
-- GET supports `?verification_status=pending` filter for pending-count and pending-filter queries
+#### `src/app/admin/verifications/page.tsx`
+- Added `rejectNotesError` state
+- `openRejectModal`: resets `rejectNotesError` to `''` on open
+- `handleReject`: validates `rejectNotes.trim()` before closing modal — returns early with inline error if empty; API call blocked
+- Reject modal label now shows red asterisk: `Reason / Notes *`
+- Textarea `onChange` clears `rejectNotesError` on keystroke
+- Inline error `<p>` renders below textarea when `rejectNotesError` is set
+- Textarea border turns red (`border-red-400`) when error is active
+- Shows existing `selectedRejectRequest.notes` in an amber context box above textarea (for re-review context)
 
-#### `src/app/api/users/[id]/route.ts`
-- PATCH: explicit guard — `unverified` role returns 403 (auto-only, cannot be manually assigned)
-- PATCH: explicit guard — `master_admin` role returns 403 unless actor is `master_admin`
-- Both guards placed before `ALL_ROLES.includes` check
+#### `src/components/Navbar.tsx`
+- Avatar button: adds `title="Verify your identity"` when `user.role === 'unverified'`
+- Amber dot badge (`w-2 h-2 bg-amber-400 rounded-full absolute top-0 right-0 pointer-events-none`) rendered as sibling to avatar button inside the `relative` wrapper — visible outside button's `overflow-hidden`
 
-#### `src/app/admin/users/page.tsx`
-- `UserRow` interface: added `verification_status?: string | null`
-- `ROLE_BADGE.unverified`: changed from `'default'` to `'warning'` (amber badge)
-- Added `pendingFilter` + `pendingCount` state
-- `fetchPendingCount()` callback — fetches total pending verification users, runs on mount
-- `fetchUsers()` now accepts `vs: string` (verification_status) 4th arg; called with `pendingFilter ? 'pending' : ''`
-- **Pending Verification chip**: amber filter chip above search bar, shows count badge when > 0, toggles pending filter
-- **⚠ indicator**: shown in name column (desktop + mobile) for users with `role === 'unverified'`
-- **Inline role selects** (desktop + mobile): `unverified` removed from selectable options; if user IS unverified, a disabled "Unverified (auto)" option shown as current value; `master_admin` option hidden unless current user is `master_admin`
-- **Edit modal role select**: shows disabled "Unverified (auto-assigned)" option when editing an unverified user; note "Only Master Admins can assign the Master Admin role" visible when current user is `master_admin`
-- Role filter dropdown already included `unverified` via `ALL_ROLES` — no change needed
+#### `src/app/verify-id/page.tsx`
+- **No changes needed** — `deriveUiState` already implements correct priority (verified → pending → rejected → upload), and `handleSubmit` already calls `fetchUser() + refetchAuth()` after successful POST, triggering UIState → `'pending'` without reload. Confirmed correct as-is.
 
 ---
 
 ## Previous Sessions
 
+### v0.12.0 — Unverified role guards + visual indicators
+- `api/users/route.ts`: SELECT includes `verification_status`; GET supports `?verification_status=pending` filter
+- `api/users/[id]/route.ts`: PATCH guards — `unverified` role → 403; `master_admin` role → 403 unless actor is `master_admin`
+- `admin/users/page.tsx`: pending filter chip, ⚠ indicator for unverified users, `unverified` removed from role selects, disabled "Unverified (auto)" shown as current value
+
 ### v0.11.2 — master_admin permissions all show checked
 - `admin/roles/page.tsx`: permissions display forces `checked={true}` for `fullyLocked` roles
-- Root cause: master_admin permissions column in DB is `{}` — UI was rendering unchecked for missing keys
 
 ### v0.11.1 — member delete button showing incorrectly
-- `admin/roles/page.tsx`: `isCustom` now guards by name (`!isMemberRole && !isMasterAdmin`) in addition to `is_system === 0`
-- Root cause: member has `is_system = 0` in DB, so old check treated it as custom
+- `admin/roles/page.tsx`: `isCustom` guards by name in addition to `is_system === 0`
 
 ### v0.11.0 — Roles system overhaul
-- Roles page, API guards, lock rules, new permission keys, UI improvements (see prior handoff for full detail)
+- Roles page, API guards, lock rules, new permission keys, UI improvements
 
 ### v0.10.1 — Rejected banner stuck after resubmit
 ### v0.10.0 — Auto-upgrade unverified → member on approval
@@ -62,7 +61,7 @@
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.12.0`
+- Version: `0.13.0`
 
 ---
 
@@ -77,10 +76,12 @@
 - `/api/auth/me` returns `verification_status`, `needs_academic_update`, `bio`
 - `'none'` is the `image_path` placeholder in verification_requests when no files uploaded
 - `verify-id/page.tsx` calls both local `fetchUser()` AND `refetchAuth()` on submit
+- `deriveUiState` priority: id_verified → pending → rejected → upload
 - Roles page is `master_admin`-only — redirects others to `/admin`
 - `member` role: `is_system = 0` in DB — guarded by name checks in UI and API, not is_system flag
 - `member` role: name-editable only. Permissions blocked at API + UI level.
 - `master_admin` role: fully locked. Permissions display forced all-true (DB stores `{}`).
+- Rejection reason is now mandatory in admin verifications UI — validated client-side before API call
 
 ---
 

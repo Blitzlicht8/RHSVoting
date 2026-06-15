@@ -98,6 +98,7 @@ export default function VerificationsPage() {
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [selectedRejectRequest, setSelectedRejectRequest] = useState<VerifRequest | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
+  const [rejectNotesError, setRejectNotesError] = useState('')
   const [actioning, setActioning] = useState<number | null>(null)
 
   const [showApproveModal, setShowApproveModal] = useState(false)
@@ -274,11 +275,16 @@ export default function VerificationsPage() {
   const openRejectModal = (req: VerifRequest) => {
     setSelectedRejectRequest(req)
     setRejectNotes('')
+    setRejectNotesError('')
     setShowRejectModal(true)
   }
 
   const handleReject = async () => {
     if (!selectedRejectRequest) return
+    if (!rejectNotes.trim()) {
+      setRejectNotesError('A rejection reason is required.')
+      return
+    }
     const req = selectedRejectRequest
     setShowRejectModal(false)
     setActioning(req.id)
@@ -702,15 +708,31 @@ export default function VerificationsPage() {
               Rejecting ID verification for <strong>{selectedRejectRequest.user_name}</strong>.
             </p>
           )}
+          {selectedRejectRequest?.notes && (
+            <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="font-medium text-amber-700 mb-0.5">Previous rejection reason</p>
+              <p className="text-amber-600 whitespace-pre-wrap">{selectedRejectRequest.notes}</p>
+            </div>
+          )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Reason / Notes</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Reason / Notes <span className="text-red-500">*</span>
+            </label>
             <textarea
               value={rejectNotes}
-              onChange={(e) => setRejectNotes(e.target.value)}
+              onChange={(e) => { setRejectNotes(e.target.value); setRejectNotesError('') }}
               rows={4}
-              placeholder="Optional: provide a reason for rejection..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+              placeholder="Provide a reason for rejection…"
+              className={[
+                'w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 resize-none',
+                rejectNotesError
+                  ? 'border-red-400 focus:ring-red-500'
+                  : 'border-gray-300 focus:ring-red-500',
+              ].join(' ')}
             />
+            {rejectNotesError && (
+              <p className="mt-1 text-xs text-red-600">{rejectNotesError}</p>
+            )}
           </div>
         </div>
       </Modal>

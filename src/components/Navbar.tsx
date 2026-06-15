@@ -90,6 +90,7 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
             onClick={() => setShowDropdown((v) => !v)}
             className="w-9 h-9 rounded-full bg-[#84050C] text-white text-sm font-semibold flex items-center justify-center hover:bg-[#6B0409] transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C] focus:ring-offset-2 overflow-hidden"
             aria-label="User menu"
+            title={user?.role === 'unverified' ? 'Verify your identity' : undefined}
           >
             {user?.avatar_url ? (
               <img
@@ -102,6 +103,9 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
               <span className="text-sm font-semibold">{user?.name?.charAt(0)?.toUpperCase() || '?'}</span>
             )}
           </button>
+          {user?.role === 'unverified' && (
+            <span className="absolute top-0 right-0 w-2 h-2 bg-amber-400 rounded-full pointer-events-none" />
+          )}
 
           {showDropdown && (
             <div className="absolute right-0 top-11 w-56 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50">
