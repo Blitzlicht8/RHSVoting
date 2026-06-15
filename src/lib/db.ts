@@ -380,6 +380,12 @@ async function _init(): Promise<void> {
         )`,
         args: [],
       },
+      { sql: `INSERT OR IGNORE INTO roles (name, is_system, permissions) VALUES ('master_admin', 1, '{}')`, args: [] },
+      { sql: `INSERT OR IGNORE INTO roles (name, is_system, permissions) VALUES ('admin', 1, '{}')`, args: [] },
+      { sql: `INSERT OR IGNORE INTO roles (name, is_system, permissions) VALUES ('moderator', 1, '{}')`, args: [] },
+      { sql: `INSERT OR IGNORE INTO roles (name, is_system, permissions) VALUES ('staff', 1, '{}')`, args: [] },
+      { sql: `INSERT OR IGNORE INTO roles (name, is_system, permissions) VALUES ('member', 1, '{}')`, args: [] },
+      { sql: `INSERT OR IGNORE INTO roles (name, is_system, permissions) VALUES ('unverified', 1, '{}')`, args: [] },
     ],
     'write'
   )
@@ -404,6 +410,7 @@ async function _init(): Promise<void> {
     { name: 'moderator', is_system: 0, perms: '{"viewReports":true,"managePosts":true}' },
     { name: 'staff', is_system: 0, perms: '{"managePosts":true}' },
     { name: 'member', is_system: 0, perms: '{}' },
+    { name: 'unverified', is_system: 1, perms: '{}' },
   ]
   for (const r of roleSeeds) {
     await db.execute({ sql: `INSERT OR IGNORE INTO roles (name, is_system, permissions) VALUES (?,?,?)`, args: [r.name, r.is_system, r.perms] })

@@ -8,50 +8,38 @@
 2026-06-15
 
 ## Version After This Session
-`0.8.0` — DateTimePicker, Auto-Start/Auto-End, Achievements, UX improvements
+`0.8.1` — unverified role, DB role seeds, register fix, type updates
 
 ---
 
 ## What Was Done
 
-### v0.8.0 — Major feature session
+### v0.8.1 — unverified role system
 
-#### 1. Custom DateTimePicker (`src/components/ui/DateTimePicker.tsx`)
-- New reusable component replacing both `datetime-local` inputs in ElectionFormModal
-- Props: `value: string` (YYYY-MM-DDTHH:MM), `onChange`, `min?`, `placeholder?`
-- Calendar grid (Sun–Sat), prev/next month navigation
-- 12h time picker with AM/PM toggle, 5-min minute steps
-- Selected date: `bg-[#84050C] text-white`; today: ring; past dates (from `min`): disabled `text-gray-300`
-- Close on outside click or Escape; 44px cell tap targets
+#### 1. Role type update (`src/types/index.ts`)
+- Added `'unverified'` as explicit literal to `Role` union type
 
-#### 2. Auto-Start / Auto-End (`src/lib/autoTransition.ts`)
-- New `checkAutoTransition(electionId)` utility: checks auto_start/auto_end flags and transitions draft→active or active→ended when schedule time has passed
-- auto_start requires positions+candidates before activating
-- DB: `auto_start INTEGER NOT NULL DEFAULT 0`, `auto_end INTEGER NOT NULL DEFAULT 0` added to elections table (db.ts newColumns — idempotent)
-- Form toggles in ElectionFormModal: show auto_start+auto_end for draft; auto_end only for active; neither for ended
-- `EMPTY_FORM` updated with `auto_start: false, auto_end: false`
-- Payload includes both in handleSave; openEdit maps from API response
-- API PATCH (`[id]/route.ts`): setClauses include auto_start/auto_end; calls `checkAutoTransition` after save
-- API POST (`route.ts`): includes auto_start/auto_end in the settings UPDATE after INSERT; calls `checkAutoTransition` after create
-- API GET list (`route.ts`): pre-flight runs `checkAutoTransition` for all pending elections before main query
-- API GET single (`[id]/route.ts`): calls `checkAutoTransition` before fetching and returning election
-- Lazy — no cron needed; transitions fire the first time someone loads the election after the scheduled time
+#### 2. Register default role (`src/app/api/auth/register/route.ts`)
+- Changed new account INSERT from `'student'` → `'unverified'`
+- Re-send OTP path (existing unverified-email accounts) unchanged — preserves whatever role was already set
 
-#### 3. Admin Achievements Form (`src/components/admin/elections/CandidateManager.tsx`)
-- `AchievementInput` interface exported: `{ title: string; description?: string; year?: number }`
-- `CandidateForm.achievements?: AchievementInput[]` added
-- Achievements editor in manual mode (below qualifications): title input + year input per row, optional description textarea (collapsed by default, expand via "+ Add description" link), "Add Achievement" button, × remove per row
-- `expandedAch` local state tracks which description textareas are open
-- API GET single: fetches `candidate_achievements` grouped by candidate_id, attaches as `achievements[]` to each candidate
-- API syncPositions (`[id]/route.ts`): after inserting each candidate, inserts `candidate_achievements` rows (cascade DELETE handles cleanup on re-save)
-- handleSave payload: `achievements: c.achievements.map(...)` strips UI-only fields before sending
-- openEdit: maps `achievements` from API response into CandidateForm
+#### 3. DB role seeds (`src/lib/db.ts`)
+- Added 6 `INSERT OR IGNORE` entries to the main `db.batch([...], 'write')` call, immediately after `CREATE TABLE IF NOT EXISTS roles`
+- Seeds: `master_admin`, `admin`, `moderator`, `staff`, `member`, `unverified` — all `is_system: 1`, `permissions: '{}'`
+- Also added `unverified` to the existing `roleSeeds` loop (runs after batch, OR IGNORE so no conflict)
 
-#### 4. Additional Optimizations
-- **isDirty tracking** (ElectionFormModal): `isDirty` state set on any `handleFormChange` call, cleared when modal closes. If dirty and user tries to close (X, backdrop, or Cancel), shows confirmation dialog. For new elections: "Discard all draft progress?"; for edit elections: "You have unsaved changes. Close without saving?"
-- **Auto badges** (`src/app/elections/[id]/page.tsx`): Admin sees "Auto-start scheduled" (blue) and "Auto-end scheduled" (orange) info badges near the dates section when those flags are active
-- **Voting view hint** (already correct in prior session): multi-vote positions already show "Select up to N candidates" — no change needed
-- **fetchElections after confirmStatus** (already correct in prior session): handleStatusChange already calls `fetchElections()` — no change needed
+#### 4. Auth helpers (`src/lib/auth.ts`)
+- `getRoleLabel`: added `unverified: 'Unverified'`
+- `getRoleBadgeVariant`: added `if (role === 'unverified') return 'default'` (gray badge, below member)
+
+#### 5. Users API (`src/app/api/users/[id]/route.ts`)
+- `ALL_ROLES`: added `'unverified'`
+- `ROLE_LEVEL`: added `unverified: -1` (below member at 0)
+
+#### 6. Verification approval auto-upgrade (`src/app/api/verifications/[id]/route.ts`)
+- On `approve`: added batch entry `UPDATE users SET role = 'member' WHERE id = ? AND role = 'unverified'`
+- Conditional — only fires when current role is `unverified`; no-op for users already `member` or above
+- Runs in the same atomic batch as `id_verified = 1` and group sync
 
 ---
 
@@ -59,21 +47,17 @@
 
 - Build: passing
 - TypeScript: clean
-- Version: `0.8.0`
+- Version: `0.8.1`
 
 ---
 
 ## Key Architectural Notes
 
-- `autoTransition.ts` is imported by both elections API routes — lazy, no cron, fires on any election GET
-- `DateTimePicker` stores/returns `YYYY-MM-DDTHH:MM` — compatible with existing `new Date(formData.start_date).toISOString()` conversion in handleSave
-- `auto_start`/`auto_end` are booleans in form state, stored as INTEGER 0|1 in DB
-- `AchievementInput` is exported from CandidateManager — imported by admin/elections/page.tsx
-- `expandedAch` in CandidateManager is local-only UI state, not persisted to form or DB
-- `syncPositions` in `[id]/route.ts` DELETEs positions → cascade deletes candidates → cascade deletes achievements; re-inserts fresh on every save
-- `candidate_achievements` in GET is only fetched if candidates.length > 0 (prevents empty IN() query)
-- Collapse state stored in `pos.collapsed` / `cand.collapsed` fields — persists via newDraft across modal close/reopen
-- `academic_loading` flag prevents Save Candidate from firing during async dropdown fetch window
+- `unverified` is the new default role for all new accounts registered via `/api/auth/register`
+- `isAdmin()` check is `['master_admin', 'admin', 'moderator']` — `unverified` and `member` are correctly excluded
+- Verification approval in `verifications/[id]/route.ts` is the single place that promotes `unverified` → `member`
+- `ROLE_LEVEL['unverified'] = -1` means admins can delete/edit unverified users (level below member)
+- Roles table in DB is now seeded idempotently both in the main batch and in the roleSeeds loop
 
 ---
 
@@ -85,20 +69,18 @@
 - Achievements: currently only editable on existing candidates via the form; new candidates in "existing member" mode don't have achievements editor
 - Admin UI for user-level achievements (separate from candidate achievements) — `/api/users/me/achievements` routes exist but no UI
 - Verification resubmission: allow users to resubmit after rejection
+- Consider showing `unverified` users a distinct banner prompting them to complete verification
 
 ---
 
 ## Key Files Changed This Session
 
 ```
-src/lib/autoTransition.ts                         NEW — lazy auto-transition utility
-src/components/ui/DateTimePicker.tsx              NEW — custom date+time picker
-src/lib/db.ts                                     newColumns: auto_start, auto_end on elections
-src/components/admin/elections/ElectionFormModal.tsx  DateTimePicker, auto toggles, isDirty
-src/components/admin/elections/CandidateManager.tsx   AchievementInput, achievements editor
-src/app/api/elections/[id]/route.ts               auto_start/end PATCH, achievements GET, checkAutoTransition
-src/app/api/elections/route.ts                    auto_start/end POST, pre-flight transitions GET
-src/app/admin/elections/page.tsx                  EMPTY_FORM, handleSave, openEdit for auto+achievements
-src/app/elections/[id]/page.tsx                   auto badges in admin header
-package.json                                      0.8.0
+src/types/index.ts                                Role type: added 'unverified'
+src/app/api/auth/register/route.ts               INSERT role: 'student' → 'unverified'
+src/lib/db.ts                                     6 INSERT OR IGNORE seeds in batch + unverified in roleSeeds loop
+src/lib/auth.ts                                   getRoleLabel + getRoleBadgeVariant: unverified
+src/app/api/users/[id]/route.ts                  ALL_ROLES + ROLE_LEVEL: unverified at -1
+src/app/api/verifications/[id]/route.ts          approve batch: promote unverified → member
+package.json                                      0.8.1
 ```

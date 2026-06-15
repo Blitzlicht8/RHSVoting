@@ -6,9 +6,10 @@ import { logActivity } from '@/lib/logger'
 import { Role } from '@/types'
 import { InValue } from '@libsql/client'
 
-const ALL_ROLES: Role[] = ['master_admin', 'admin', 'moderator', 'staff', 'member']
+const ALL_ROLES: Role[] = ['master_admin', 'admin', 'moderator', 'staff', 'member', 'unverified']
 
 const ROLE_LEVEL: Record<string, number> = {
+  unverified: -1,
   member: 0,
   staff: 1,
   moderator: 2,

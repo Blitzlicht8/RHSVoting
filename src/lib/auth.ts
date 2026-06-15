@@ -76,6 +76,7 @@ export function getRoleBadgeVariant(role: Role): 'default' | 'danger' | 'purple'
   if (role === 'moderator') return 'purple'
   if (role === 'staff') return 'info'
   if (role === 'member') return 'default'
+  if (role === 'unverified') return 'default'
   if (role.includes('admin')) return 'purple'
   return 'default'
 }
@@ -87,6 +88,7 @@ export function getRoleLabel(role: Role): string {
     moderator: 'Moderator',
     staff: 'Staff',
     member: 'Member',
+    unverified: 'Unverified',
   }
   return labels[role] ?? role
 }

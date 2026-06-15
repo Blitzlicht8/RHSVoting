@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   const hashedPassword = await bcrypt.hash(password, 12)
   const result = await db.execute({
     sql: `INSERT INTO users (email, password_hash, name, role, email_verified, id_verified)
-          VALUES (?, ?, ?, 'student', 0, 0)`,
+          VALUES (?, ?, ?, 'unverified', 0, 0)`,
     args: [email, hashedPassword, name],
   })
   const userId = Number(result.lastInsertRowid)

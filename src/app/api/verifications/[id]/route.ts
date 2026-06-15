@@ -54,6 +54,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
           args: [idVerified, Number(verReq.user_id)],
         },
         {
+          // Promote unverified users to member on approval
+          sql: `UPDATE users SET role = 'member' WHERE id = ? AND role = 'unverified'`,
+          args: [Number(verReq.user_id)],
+        },
+        {
           // Sync grade_level_id, subtype_id, section_id from the verification request to the user
           sql: `UPDATE users
                 SET grade_level_id = (SELECT grade_level_id FROM verification_requests WHERE id = ?),
