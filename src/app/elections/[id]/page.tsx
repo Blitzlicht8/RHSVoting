@@ -39,6 +39,8 @@ interface Election {
   hasVoted: boolean
   thumbnail_url?: string | null
   share_token?: string | null
+  auto_start?: number | boolean
+  auto_end?: number | boolean
 }
 
 interface UserVote {
@@ -885,6 +887,28 @@ export default function ElectionDetailPage() {
               {' – '}
               {new Date(election.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             </div>
+
+            {/* Auto-start / Auto-end badges for admins */}
+            {isAdmin && (election.auto_start || election.auto_end) && (
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                {!!election.auto_start && election.status === 'draft' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Auto-start scheduled
+                  </span>
+                )}
+                {!!election.auto_end && election.status !== 'ended' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-600 border border-orange-100">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Auto-end scheduled
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Admin actions */}
             {isAdmin && election.status === 'draft' && (

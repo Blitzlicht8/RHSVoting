@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { checkAutoTransition } from '@/lib/autoTransition'
 
 export async function GET(request: NextRequest) {
   await ensureInit()
@@ -55,6 +56,15 @@ export async function GET(request: NextRequest) {
         u.section_id ?? null,
       )
     }
+  }
+
+  // Pre-flight: trigger lazy auto-transitions before building the list so clients see fresh status
+  const pendingTransitions = await db.execute({
+    sql: `SELECT id FROM elections WHERE (status = 'draft' AND auto_start = 1) OR (status = 'active' AND auto_end = 1)`,
+    args: [],
+  })
+  for (const row of pendingTransitions.rows) {
+    await checkAutoTransition(Number(row.id)).catch(() => {})
   }
 
   // Use a scalar subquery for hasVoted — LEFT JOIN caused N duplicate rows per election
@@ -165,12 +175,14 @@ export async function POST(request: NextRequest) {
     await syncPositions(electionId, body.positions)
   }
 
-  // Save is_global and allow_teacher_vote
+  // Save is_global, allow_teacher_vote, auto_start, auto_end
   const isGlobal = body.is_global ? 1 : 0
   const allowTeacherVote = body.allow_teacher_vote ? 1 : 0
+  const autoStart = body.auto_start ? 1 : 0
+  const autoEnd = body.auto_end ? 1 : 0
   await db.execute({
-    sql: `UPDATE elections SET is_global = ?, allow_teacher_vote = ? WHERE id = ?`,
-    args: [isGlobal, allowTeacherVote, electionId],
+    sql: `UPDATE elections SET is_global = ?, allow_teacher_vote = ?, auto_start = ?, auto_end = ? WHERE id = ?`,
+    args: [isGlobal, allowTeacherVote, autoStart, autoEnd, electionId],
   })
 
   // Save eligibility rules
@@ -192,6 +204,9 @@ export async function POST(request: NextRequest) {
       })
     }
   }
+
+  // Immediate auto-transition check — handles "start/end time already in the past" on create
+  await checkAutoTransition(electionId).catch(() => {})
 
   const election = await db.execute({
     sql: 'SELECT * FROM elections WHERE id = ?',

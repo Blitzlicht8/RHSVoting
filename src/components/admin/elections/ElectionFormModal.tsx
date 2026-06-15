@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
 import Spinner from '@/components/ui/Spinner'
+import DateTimePicker from '@/components/ui/DateTimePicker'
 import PositionManager, { PositionForm } from './PositionManager'
 import { CandidateForm, StudentResult } from './CandidateManager'
 
@@ -37,6 +38,8 @@ export interface ElectionForm {
   allow_teacher_vote: boolean
   eligibility: EligibilityRule[]
   thumbnail_url?: string | null
+  auto_start: boolean
+  auto_end: boolean
 }
 
 export interface Election {
@@ -465,10 +468,24 @@ export default function ElectionFormModal({
 }: ElectionFormModalProps) {
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [thumbnailUploading, setThumbnailUploading] = useState(false)
+  const [isDirty, setIsDirty] = useState(false)
 
   useEffect(() => {
-    if (!open) setConfirmDiscard(false)
+    if (!open) { setConfirmDiscard(false); setIsDirty(false) }
   }, [open])
+
+  const handleFormChange = (updates: Partial<ElectionForm>) => {
+    setIsDirty(true)
+    onFormChange(updates)
+  }
+
+  const handleClose = () => {
+    if (isDirty) {
+      setConfirmDiscard(true)
+    } else {
+      onClose()
+    }
+  }
 
   const handleThumbnailUpload = async (file: File) => {
     setThumbnailUploading(true)
@@ -482,7 +499,7 @@ export default function ElectionFormModal({
       })
       const json = await res.json()
       if (res.ok && json.url) {
-        onFormChange({ thumbnail_url: json.url })
+        handleFormChange({ thumbnail_url: json.url })
       }
     } finally {
       setThumbnailUploading(false)
@@ -492,7 +509,7 @@ export default function ElectionFormModal({
   return (
     <Modal
       isOpen={open}
-      onClose={onClose}
+      onClose={handleClose}
       title={election ? 'Edit Election' : 'New Election'}
       size="lg"
       footer={
@@ -502,7 +519,7 @@ export default function ElectionFormModal({
               Discard Draft
             </Button>
           ) : (
-            <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button variant="secondary" onClick={handleClose} disabled={saving}>Cancel</Button>
           )}
           <Button onClick={onSave} loading={saving}>
             {election ? 'Save Changes' : 'Create Election'}
@@ -510,9 +527,13 @@ export default function ElectionFormModal({
         </>
       }
     >
-      {confirmDiscard && !election && (
+      {confirmDiscard && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <span className="text-sm text-red-800">Discard all draft progress? This cannot be undone.</span>
+          <span className="text-sm text-red-800">
+            {!election
+              ? 'Discard all draft progress? This cannot be undone.'
+              : 'You have unsaved changes. Close without saving?'}
+          </span>
           <div className="flex gap-2 flex-shrink-0">
             <button
               type="button"
@@ -523,10 +544,13 @@ export default function ElectionFormModal({
             </button>
             <button
               type="button"
-              onClick={() => { setConfirmDiscard(false); onDiscard?.() }}
+              onClick={() => {
+                setConfirmDiscard(false)
+                if (!election) { onDiscard?.() } else { onClose() }
+              }}
               className="px-3 py-1 rounded bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors"
             >
-              Discard
+              {!election ? 'Discard' : 'Close'}
             </button>
           </div>
         </div>
@@ -553,7 +577,7 @@ export default function ElectionFormModal({
                   />
                   <button
                     type="button"
-                    onClick={() => onFormChange({ thumbnail_url: null })}
+                    onClick={() => handleFormChange({ thumbnail_url: null })}
                     className="absolute top-2 right-2 bg-white/90 hover:bg-white text-gray-700 rounded-full p-1.5 shadow-sm transition-colors"
                     title="Remove image"
                   >
@@ -596,7 +620,7 @@ export default function ElectionFormModal({
               <input
                 type="text"
                 value={formData.title}
-                onChange={(e) => onFormChange({ title: e.target.value })}
+                onChange={(e) => handleFormChange({ title: e.target.value })}
                 placeholder="e.g. Student Council Election 2025"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
               />
@@ -606,7 +630,7 @@ export default function ElectionFormModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <textarea
                 value={formData.description}
-                onChange={(e) => onFormChange({ description: e.target.value })}
+                onChange={(e) => handleFormChange({ description: e.target.value })}
                 rows={3}
                 placeholder="Optional description..."
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] resize-none"
@@ -618,31 +642,68 @@ export default function ElectionFormModal({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Start Date &amp; Time <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="datetime-local"
+                <DateTimePicker
                   value={formData.start_date}
-                  onChange={(e) => onFormChange({ start_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
+                  onChange={(v) => handleFormChange({ start_date: v })}
+                  placeholder="Pick start date & time"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   End Date &amp; Time <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="datetime-local"
+                <DateTimePicker
                   value={formData.end_date}
-                  onChange={(e) => onFormChange({ end_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
+                  onChange={(v) => handleFormChange({ end_date: v })}
+                  min={formData.start_date || undefined}
+                  placeholder="Pick end date & time"
                 />
               </div>
             </div>
+
+            {/* Auto-start / Auto-end toggles */}
+            {formData.status !== 'ended' && (
+              <div className="space-y-3 pt-1">
+                {formData.status === 'draft' && (
+                  <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={formData.auto_start}
+                      onClick={() => handleFormChange({ auto_start: !formData.auto_start })}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C] focus:ring-offset-1 mt-0.5 ${formData.auto_start ? 'bg-[#84050C]' : 'bg-gray-300'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${formData.auto_start ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Auto-start</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Automatically activate at the start date &amp; time. If already past, activates immediately on save.</p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-start gap-3">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={formData.auto_end}
+                    onClick={() => handleFormChange({ auto_end: !formData.auto_end })}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C] focus:ring-offset-1 mt-0.5 ${formData.auto_end ? 'bg-[#84050C]' : 'bg-gray-300'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${formData.auto_end ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Auto-end</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Automatically end at the end date &amp; time. If already past, ends immediately on save.</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
               <select
                 value={formData.status}
-                onChange={(e) => onFormChange({ status: e.target.value as ElectionStatus })}
+                onChange={(e) => handleFormChange({ status: e.target.value as ElectionStatus })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
               >
                 <option value="draft">Draft</option>
@@ -662,7 +723,7 @@ export default function ElectionFormModal({
             <input
               type="checkbox"
               checked={formData.is_global}
-              onChange={(e) => onFormChange({ is_global: e.target.checked, eligibility: [], ...(e.target.checked && { allow_teacher_vote: true }) })}
+              onChange={(e) => handleFormChange({ is_global: e.target.checked, eligibility: [], ...(e.target.checked && { allow_teacher_vote: true }) })}
               className="w-4 h-4"
             />
             <span className="text-sm text-gray-700">Global Election (all verified members can vote)</span>
@@ -672,7 +733,7 @@ export default function ElectionFormModal({
           {!formData.is_global && (
             <GradeTargetingBuilder
               value={formData.eligibility}
-              onChange={(eligibility) => onFormChange({ eligibility })}
+              onChange={(eligibility) => handleFormChange({ eligibility })}
             />
           )}
         </div>

@@ -10,7 +10,7 @@ import { useToast } from '@/components/providers/ToastProvider'
 import ElectionList, { Election } from '@/components/admin/elections/ElectionList'
 import ElectionFormModal, { ElectionForm, ElectionStatus, EligibilityRule } from '@/components/admin/elections/ElectionFormModal'
 import { PositionForm } from '@/components/admin/elections/PositionManager'
-import { CandidateForm, StudentResult } from '@/components/admin/elections/CandidateManager'
+import { CandidateForm, StudentResult, AchievementInput } from '@/components/admin/elections/CandidateManager'
 
 function toDatetimeLocal(iso: string): string {
   if (!iso) return ''
@@ -39,6 +39,8 @@ const EMPTY_FORM: ElectionForm = {
   is_global: false,
   allow_teacher_vote: false,
   eligibility: [],
+  auto_start: false,
+  auto_end: false,
 }
 
 export default function ElectionsPage() {
@@ -128,17 +130,20 @@ export default function ElectionsPage() {
             is_exclude: !!r.is_exclude,
           })),
           thumbnail_url: full.thumbnail_url ?? null,
-          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
+          auto_start: !!full.auto_start,
+          auto_end: !!full.auto_end,
+          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; candidates: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
             id: p.id,
             name: p.name,
             max_votes: p.max_votes ?? 1,
             collapsed: true,
-            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }) => ({
+            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }) => ({
               id: c.id,
               name: c.name,
               bio: c.bio || '',
               platform: c.platform ?? '',
               qualifications: c.qualifications ?? '',
+              achievements: (c.achievements ?? []).map(({ title, description, year }: AchievementInput) => ({ title, description, year })),
               grade_level: c.grade_level ?? '',
               subtype: c.subtype ?? '',
               section: c.section ?? '',
@@ -227,6 +232,8 @@ export default function ElectionsPage() {
         end_date: new Date(formData.end_date).toISOString(),
         is_global: formData.is_global,
         allow_teacher_vote: formData.allow_teacher_vote,
+        auto_start: formData.auto_start,
+        auto_end: formData.auto_end,
         eligibility: formData.is_global ? [] : formData.eligibility,
         thumbnail_url: formData.thumbnail_url ?? null,
         positions: formData.positions.map((p) => ({
@@ -237,6 +244,7 @@ export default function ElectionsPage() {
             bio: c.bio,
             platform: c.platform ?? null,
             qualifications: c.qualifications ?? null,
+            achievements: (c.achievements ?? []).map(({ title, description, year }: AchievementInput) => ({ title, description, year })),
             grade_level: c.grade_level || null,
             subtype: c.subtype || null,
             section: c.section || null,

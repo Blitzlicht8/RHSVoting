@@ -4,12 +4,20 @@ import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
 import { ElectionStatus, Position, Candidate } from '@/types'
 import { InValue } from '@libsql/client'
+import { checkAutoTransition } from '@/lib/autoTransition'
+
+interface AchievementInput {
+  title?: string
+  description?: string
+  year?: number
+}
 
 interface CandidateInput {
   name?: string
   bio?: string
   platform?: string | null
   qualifications?: string | null
+  achievements?: AchievementInput[]
   grade_level?: string
   subtype?: string | null
   section?: string
@@ -37,10 +45,21 @@ async function syncPositions(electionId: number, positions: PositionInput[]) {
     for (const cand of pos.candidates ?? []) {
       const candName = (cand.name ?? '').trim()
       if (!candName) continue
-      await db.execute({
+      const candResult = await db.execute({
         sql: `INSERT INTO candidates (election_id, position_id, name, bio, platform, qualifications, grade_level, subtype, section, student_user_id, user_id, photo_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [electionId, posId, candName, cand.bio ?? null, cand.platform ?? null, cand.qualifications ?? null, cand.grade_level ?? null, cand.subtype ?? null, cand.section ?? null, cand.student_user_id ?? null, cand.student_user_id ?? null, cand.photo_url ?? null],
       })
+      const candId = Number(candResult.lastInsertRowid)
+      if (Array.isArray(cand.achievements) && cand.achievements.length > 0) {
+        for (const ach of cand.achievements) {
+          const achTitle = (ach.title ?? '').trim()
+          if (!achTitle) continue
+          await db.execute({
+            sql: `INSERT INTO candidate_achievements (candidate_id, title, description, year) VALUES (?, ?, ?, ?)`,
+            args: [candId, achTitle, ach.description ?? null, ach.year ?? null],
+          })
+        }
+      }
     }
   }
 }
@@ -63,6 +82,9 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   if (isNaN(electionId)) {
     return NextResponse.json({ error: 'Invalid election ID' }, { status: 400 })
   }
+
+  // Run lazy auto-transition before reading election state
+  await checkAutoTransition(electionId).catch(() => {})
 
   const electionResult = await db.execute({
     sql: 'SELECT * FROM elections WHERE id = ?',
@@ -96,9 +118,25 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   })
   const candidates = candidatesResult.rows as unknown as Candidate[]
 
+  // Fetch achievements for all candidates in this election
+  const achievementsMap: Record<number, object[]> = {}
+  if (candidates.length > 0) {
+    const achResult = await db.execute({
+      sql: `SELECT * FROM candidate_achievements WHERE candidate_id IN (${candidates.map(() => '?').join(',')}) ORDER BY year DESC`,
+      args: candidates.map((c) => c.id),
+    })
+    for (const row of achResult.rows) {
+      const cid = Number(row.candidate_id)
+      if (!achievementsMap[cid]) achievementsMap[cid] = []
+      achievementsMap[cid].push(row)
+    }
+  }
+
   const positionsWithCandidates = positions.map((pos) => ({
     ...pos,
-    candidates: candidates.filter((c) => c.position_id === pos.id),
+    candidates: candidates
+      .filter((c) => c.position_id === pos.id)
+      .map((c) => ({ ...c, achievements: achievementsMap[Number(c.id)] ?? [] })),
   }))
 
   const voteCountResult = await db.execute({
@@ -214,6 +252,16 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     values.push(typeof body.thumbnail_url === 'string' ? body.thumbnail_url : null)
   }
 
+  if (body.auto_start !== undefined) {
+    setClauses.push('auto_start = ?')
+    values.push(body.auto_start ? 1 : 0)
+  }
+
+  if (body.auto_end !== undefined) {
+    setClauses.push('auto_end = ?')
+    values.push(body.auto_end ? 1 : 0)
+  }
+
   const hasPositions = Array.isArray(body.positions)
   const hasEligibility = Array.isArray(body.eligibility)
 
@@ -260,6 +308,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       })
     }
   }
+
+  // Immediate auto-transition check — handles "start/end time already in the past" on save
+  await checkAutoTransition(electionId).catch(() => {})
 
   const updated = await db.execute({ sql: 'SELECT * FROM elections WHERE id = ?', args: [electionId] })
   return NextResponse.json({ data: { election: updated.rows[0] } })

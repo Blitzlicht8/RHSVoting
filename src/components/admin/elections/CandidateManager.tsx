@@ -13,12 +13,19 @@ export interface StudentResult {
   section_name: string | null
 }
 
+export interface AchievementInput {
+  title: string
+  description?: string
+  year?: number
+}
+
 export interface CandidateForm {
   id?: number
   name: string
   bio: string
   platform?: string
   qualifications?: string
+  achievements?: AchievementInput[]
   grade_level?: string
   subtype?: string
   section?: string
@@ -90,6 +97,8 @@ export default function CandidateManager({
   const [uploadingPhoto, setUploadingPhoto] = useState<Record<string, boolean>>({})
   const [slotErrors, setSlotErrors] = useState<Record<number, string>>({})
   const restoredRef = useRef<Set<string>>(new Set())
+  // Track which achievement description textareas are expanded: key = `${ci}_${achIdx}`
+  const [expandedAch, setExpandedAch] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (fetchedRef.current) return
@@ -471,6 +480,99 @@ export default function CandidateManager({
                   rows={3}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] resize-none"
                 />
+
+                {/* Achievements editor */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-500">Achievements</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = cand.achievements ?? []
+                        onUpdateCandidate(pi, ci, { achievements: [...current, { title: '' }] })
+                      }}
+                      className="text-xs text-[#84050C] hover:text-[#6B0409] font-medium flex items-center gap-1"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Achievement
+                    </button>
+                  </div>
+                  {(cand.achievements ?? []).map((ach, ai) => {
+                    const achKey = `${ci}_${ai}`
+                    const isExpanded = expandedAch.has(achKey)
+                    return (
+                      <div key={ai} className="bg-gray-50 rounded-md border border-gray-200 p-2 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={ach.title}
+                            onChange={(e) => {
+                              const updated = [...(cand.achievements ?? [])]
+                              updated[ai] = { ...ach, title: e.target.value }
+                              onUpdateCandidate(pi, ci, { achievements: updated })
+                            }}
+                            placeholder="Achievement title"
+                            className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#84050C]"
+                          />
+                          <input
+                            type="number"
+                            value={ach.year ?? ''}
+                            onChange={(e) => {
+                              const updated = [...(cand.achievements ?? [])]
+                              updated[ai] = { ...ach, year: e.target.value ? Number(e.target.value) : undefined }
+                              onUpdateCandidate(pi, ci, { achievements: updated })
+                            }}
+                            placeholder="Year"
+                            min={1900}
+                            max={2099}
+                            className="w-16 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#84050C]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = (cand.achievements ?? []).filter((_, idx) => idx !== ai)
+                              onUpdateCandidate(pi, ci, { achievements: updated })
+                              setExpandedAch((prev) => {
+                                const next = new Set(prev)
+                                next.delete(achKey)
+                                return next
+                              })
+                            }}
+                            className="text-red-400 hover:text-red-600 p-0.5 flex-shrink-0"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                        {!isExpanded ? (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedAch((prev) => new Set(prev).add(achKey))}
+                            className="text-xs text-gray-400 hover:text-gray-600"
+                          >
+                            + Add description
+                          </button>
+                        ) : (
+                          <textarea
+                            value={ach.description ?? ''}
+                            onChange={(e) => {
+                              const updated = [...(cand.achievements ?? [])]
+                              updated[ai] = { ...ach, description: e.target.value }
+                              onUpdateCandidate(pi, ci, { achievements: updated })
+                            }}
+                            placeholder="Optional description…"
+                            rows={2}
+                            autoFocus
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-[#84050C] resize-none"
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
 
                 {(() => {
                   const acad = getAcademic(ci)
