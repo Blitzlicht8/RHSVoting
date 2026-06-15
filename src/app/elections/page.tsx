@@ -136,7 +136,7 @@ function ElectionCard({
                 Preview
               </Link>
               <Link
-                href={`/admin/elections/${election.id}/edit`}
+                href="/admin/elections"
                 className="text-sm text-[#84050C] hover:text-[#6B0409] px-3 py-1.5 rounded-lg border border-[#E2A8A4] hover:border-[#D47F88] transition-colors"
               >
                 Edit
