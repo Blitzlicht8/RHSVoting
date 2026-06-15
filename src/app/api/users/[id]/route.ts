@@ -116,6 +116,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   if (body.role !== undefined && adminUser) {
+    if (body.role === 'unverified') {
+      return NextResponse.json({ error: 'The unverified role is assigned automatically and cannot be set manually' }, { status: 403 })
+    }
+    if (body.role === 'master_admin' && authUser.role !== 'master_admin') {
+      return NextResponse.json({ error: 'Only Master Admin can assign the Master Admin role' }, { status: 403 })
+    }
     if (!ALL_ROLES.includes(body.role as Role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 })
     }

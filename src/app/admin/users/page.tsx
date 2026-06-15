@@ -27,6 +27,7 @@ interface UserRow {
   grade_level_id?: number | null
   subtype_id?: number | null
   section_id?: number | null
+  verification_status?: string | null
 }
 
 interface EditForm {
@@ -62,7 +63,7 @@ const ROLE_BADGE: Record<string, 'danger' | 'warning' | 'purple' | 'info' | 'def
   moderator: 'purple',
   staff: 'info',
   member: 'default',
-  unverified: 'default',
+  unverified: 'warning',
 }
 
 const ALL_ROLES: Role[] = ['master_admin', 'admin', 'moderator', 'staff', 'member', 'unverified']
@@ -139,6 +140,8 @@ export default function UsersPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<Role | ''>('')
+  const [pendingFilter, setPendingFilter] = useState(false)
+  const [pendingCount, setPendingCount] = useState(0)
   const [patchingId, setPatchingId] = useState<number | null>(null)
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<UserRow | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -196,12 +199,13 @@ export default function UsersPage() {
     currentUser?.role === 'admin' ||
     currentUser?.role === 'moderator'
 
-  const fetchUsers = useCallback(async (p: number, s: string, r: string) => {
+  const fetchUsers = useCallback(async (p: number, s: string, r: string, vs: string) => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ page: String(p), limit: '20' })
       if (s) params.set('search', s)
       if (r) params.set('role', r)
+      if (vs) params.set('verification_status', vs)
       const res = await fetch(`/api/users?${params}`, { credentials: 'include' })
       const json = await res.json()
       if (res.ok) {
@@ -216,6 +220,18 @@ export default function UsersPage() {
     }
   }, [addToast])
 
+  const fetchPendingCount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/users?verification_status=pending&limit=1&page=1', { credentials: 'include' })
+      const json = await res.json()
+      if (res.ok) setPendingCount(json.data?.total ?? 0)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    fetchPendingCount()
+  }, [fetchPendingCount])
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
@@ -228,8 +244,8 @@ export default function UsersPage() {
   }, [search])
 
   useEffect(() => {
-    fetchUsers(page, debouncedSearch, roleFilter)
-  }, [page, debouncedSearch, roleFilter, fetchUsers])
+    fetchUsers(page, debouncedSearch, roleFilter, pendingFilter ? 'pending' : '')
+  }, [page, debouncedSearch, roleFilter, pendingFilter, fetchUsers])
 
   // Load grade levels when create modal opens
   useEffect(() => {
@@ -531,7 +547,8 @@ export default function UsersPage() {
       setShowCreateModal(false)
       setCreateUploadFiles([])
       if (createUploadInputRef.current) createUploadInputRef.current.value = ''
-      fetchUsers(page, debouncedSearch, roleFilter)
+      fetchPendingCount()
+      fetchUsers(page, debouncedSearch, roleFilter, pendingFilter ? 'pending' : '')
     } catch { addToast('Network error', 'error') }
     finally { setCreating(false) }
   }
@@ -584,6 +601,25 @@ export default function UsersPage() {
               + Create User
             </button>
           )}
+        </div>
+
+        {/* Quick filter chips */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          <button
+            onClick={() => { setPendingFilter(v => !v); setPage(1) }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              pendingFilter
+                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700'
+            }`}
+          >
+            <span>⏳ Pending Verification</span>
+            {pendingCount > 0 && (
+              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${pendingFilter ? 'bg-amber-200 text-amber-900' : 'bg-amber-100 text-amber-700'}`}>
+                {pendingCount}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Filters */}
@@ -658,7 +694,12 @@ export default function UsersPage() {
                         <div className="flex items-center gap-3">
                           <UserAvatar user={u} size="sm" />
                           <div>
-                            <div className="font-medium text-gray-900">{u.name}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-gray-900">{u.name}</span>
+                              {u.role === 'unverified' && (
+                                <span className="text-amber-500 text-sm leading-none" title="Unverified — awaiting ID review">⚠</span>
+                              )}
+                            </div>
                             <div className="text-xs text-gray-500">{u.email}</div>
                           </div>
                         </div>
@@ -672,7 +713,10 @@ export default function UsersPage() {
                           onChange={(e) => patchUser(u.id, { role: e.target.value as Role })}
                           className="text-xs border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white disabled:opacity-60 disabled:cursor-not-allowed"
                         >
-                          {ALL_ROLES.map((r) => (
+                          {u.role === 'unverified' && (
+                            <option value="unverified" disabled>Unverified (auto)</option>
+                          )}
+                          {ALL_ROLES.filter(r => r !== 'unverified' && (r !== 'master_admin' || currentUser?.role === 'master_admin')).map((r) => (
                             <option
                               key={r}
                               value={r}
@@ -808,7 +852,12 @@ export default function UsersPage() {
                   <div className="flex items-start gap-3 mb-3">
                     <UserAvatar user={u} size="md" />
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-gray-900 truncate">{u.name}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-gray-900 truncate">{u.name}</span>
+                        {u.role === 'unverified' && (
+                          <span className="text-amber-500 text-sm leading-none flex-shrink-0" title="Unverified">⚠</span>
+                        )}
+                      </div>
                       <div className="text-xs text-gray-500 truncate">{u.email}</div>
                       <Badge variant={ROLE_BADGE[u.role]} size="sm" className="mt-1">
                         {ROLE_LABELS[u.role]}
@@ -897,7 +946,10 @@ export default function UsersPage() {
                         onChange={(e) => patchUser(u.id, { role: e.target.value as Role })}
                         className="text-xs border border-gray-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-[#84050C] bg-white disabled:opacity-60"
                       >
-                        {ALL_ROLES.map((r) => (
+                        {u.role === 'unverified' && (
+                          <option value="unverified" disabled>Unverified (auto)</option>
+                        )}
+                        {ALL_ROLES.filter(r => r !== 'unverified' && (r !== 'master_admin' || currentUser?.role === 'master_admin')).map((r) => (
                           <option key={r} value={r} disabled={!assignableRoles.includes(r)}>
                             {ROLE_LABELS[r]}
                           </option>
@@ -1024,10 +1076,16 @@ export default function UsersPage() {
                 onChange={(e) => setEditForm(f => ({ ...f, role: e.target.value as Role, grade_level_id: '', subtype_id: '', section_id: '' }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
               >
+                {editUser?.role === 'unverified' && (
+                  <option value="unverified" disabled>Unverified (auto-assigned)</option>
+                )}
                 {assignableRoles.map((r) => (
                   <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                 ))}
               </select>
+              {currentUser?.role === 'master_admin' && (
+                <p className="mt-1 text-xs text-amber-700">Only Master Admins can assign the Master Admin role.</p>
+              )}
             </div>
             {isEditStudentRole && (
               <>
