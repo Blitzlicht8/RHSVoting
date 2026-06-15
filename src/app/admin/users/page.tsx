@@ -1305,31 +1305,31 @@ export default function UsersPage() {
           {/* Academic fields for member / moderator */}
           {isStudentRole && (
             <>
-              {/* Grade Level */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Grade Level</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {l1} {createForm.id_verified && <span className="text-red-500">*</span>}
+                </label>
                 <select
                   value={createForm.grade_level_id}
                   onChange={(e) => setCreateForm(f => ({ ...f, grade_level_id: e.target.value, subtype_id: '', section_id: '' }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                 >
-                  <option value="">— Select grade level —</option>
+                  <option value="">— Select {l1.toLowerCase()} —</option>
                   {gradeLevels.map((gl) => (
                     <option key={gl.id} value={String(gl.id)}>{gl.name}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Subtype (only if subtypes exist for this grade level) */}
               {subtypes.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Track / Strand</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{l2}</label>
                   <select
                     value={createForm.subtype_id}
                     onChange={(e) => setCreateForm(f => ({ ...f, subtype_id: e.target.value, section_id: '' }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                   >
-                    <option value="">— Select track/strand —</option>
+                    <option value="">— Select {l2.toLowerCase()} —</option>
                     {subtypes.map((st) => (
                       <option key={st.id} value={String(st.id)}>{st.name}</option>
                     ))}
@@ -1337,16 +1337,15 @@ export default function UsersPage() {
                 </div>
               )}
 
-              {/* Section */}
               {sections.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{l3}</label>
                   <select
                     value={createForm.section_id}
                     onChange={(e) => setCreateForm(f => ({ ...f, section_id: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
                   >
-                    <option value="">— Select section —</option>
+                    <option value="">— Select {l3.toLowerCase()} —</option>
                     {sections.map((sec) => (
                       <option key={sec.id} value={String(sec.id)}>{sec.name}</option>
                     ))}
