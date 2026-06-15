@@ -256,6 +256,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
                   JOIN election_eligibility ee ON ee.election_id = ?
                   WHERE u.id_verified = 1 AND u.active = 1
                     AND (ee.is_all_grade = 1 OR u.grade_level_id = ee.grade_level_id)
+                    AND (ee.is_all_subtype = 1 OR u.subtype_id = ee.subtype_id)
                     AND (ee.is_all_section = 1 OR u.section_id = ee.section_id)`,
             args: [electionId],
           })
