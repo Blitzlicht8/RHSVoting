@@ -315,6 +315,10 @@ export default function UsersPage() {
 
   const handleSaveEdit = async () => {
     if (!editUser) return
+    if (editForm.email_verified && !editForm.grade_level_id) {
+      addToast(`${l1} is required for verified users`, 'error')
+      return
+    }
     setSaving(true)
     try {
       const patch: Record<string, unknown> = {}
