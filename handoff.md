@@ -8,11 +8,18 @@
 2026-06-15
 
 ## Version After This Session
-`0.13.3` — fix: eligibility rules repopulate correctly when reopening an election for edit
+`0.13.4` — fix: eligibility restore root cause (onChange clobbered saved rules before restoration ran)
 
 ---
 
 ## What Was Done
+
+### v0.13.4 — Eligibility restore root-cause fix
+
+#### `src/components/admin/elections/ElectionFormModal.tsx`
+- Root cause: `onChange` effect fires on mount with empty state → calls `onChange([])` → overwrites `formData.eligibility` in parent → by the time grade levels load, restoration reads `value = []` and exits early
+- Fix: added `initialValueRef = useRef(value)` to capture saved rules at mount time; restoration now reads from `initialValueRef.current` (stable, unaffected by parent re-renders)
+- Fix: gate on `onChange` effect — suppressed when `!restoredRef.current && initialValueRef.current.length > 0` so the on-mount empty state never clobbers parent's saved eligibility
 
 ### v0.13.3 — Eligibility restore on edit
 

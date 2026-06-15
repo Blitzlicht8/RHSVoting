@@ -149,6 +149,7 @@ function GradeTargetingBuilder({
   const [labels, setLabels] = useState({ l1: 'Group', l2: 'Subgroup', l3: 'Unit' })
   const fetchedRef = useRef(false)
   const restoredRef = useRef(false)
+  const initialValueRef = useRef(value)
 
   useEffect(() => {
     if (fetchedRef.current) return
@@ -172,16 +173,17 @@ function GradeTargetingBuilder({
 
   // Restore UI state from saved eligibility rules once grade levels are available
   useEffect(() => {
-    if (restoredRef.current || gradeLevels.length === 0 || value.length === 0) return
+    const saved = initialValueRef.current
+    if (restoredRef.current || gradeLevels.length === 0 || saved.length === 0) return
     restoredRef.current = true
 
-    if (value.some((r) => r.is_all_grade)) {
+    if (saved.some((r) => r.is_all_grade)) {
       setIsAllGrades(true)
       return
     }
 
     const byGrade = new Map<number, EligibilityRule[]>()
-    for (const rule of value) {
+    for (const rule of saved) {
       if (rule.grade_level_id == null) continue
       const arr = byGrade.get(rule.grade_level_id) ?? []
       arr.push(rule)
@@ -192,7 +194,7 @@ function GradeTargetingBuilder({
     setCheckedGradeIds(new Set(gradeIds))
 
     for (const gradeId of gradeIds) {
-      const rules = byGrade.get(gradeId)!
+      const rules = byGrade.get(gradeId) ?? []
 
       // All of this grade (is_all_subtype=true, no specific subtype/section)
       if (rules.some((r) => r.is_all_subtype && r.subtype_id == null && r.section_id == null)) {
@@ -280,8 +282,11 @@ function GradeTargetingBuilder({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gradeLevels.length])
 
-  // Notify parent whenever selection changes
+  // Notify parent whenever selection changes.
+  // Suppressed before restoration completes so the on-mount empty state
+  // does not overwrite the saved eligibility in the parent's formData.
   useEffect(() => {
+    if (!restoredRef.current && initialValueRef.current.length > 0) return
     if (isAllGrades) {
       onChange([{ grade_level_id: null, subtype_id: null, section_id: null, is_all_grade: true, is_all_subtype: true, is_all_section: true, is_exclude: false }])
       return
