@@ -213,15 +213,17 @@ export async function DELETE(_request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Only allow cancelling own pending request
-  const existing = await db.execute({
-    sql: `SELECT id FROM verification_requests WHERE user_id = ? AND status = 'pending' LIMIT 1`,
+  // Check user's current verification_status — must be 'pending' to cancel
+  const userRow = await db.execute({
+    sql: `SELECT verification_status FROM users WHERE id = ?`,
     args: [authUser.id],
   })
-  if (existing.rows.length === 0) {
-    return NextResponse.json({ error: 'No pending verification request found.' }, { status: 404 })
+  const currentStatus = userRow.rows[0]?.verification_status as string | null
+  if (currentStatus !== 'pending') {
+    return NextResponse.json({ error: 'No pending verification request to cancel.' }, { status: 409 })
   }
 
+  // Delete any pending request row (may not exist if stuck from old code) + reset user status
   await db.batch(
     [
       {

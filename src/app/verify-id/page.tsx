@@ -386,10 +386,11 @@ export default function VerifyIdPage() {
                     const json = await res.json()
                     if (res.ok) {
                       addToast('Verification request cancelled.', 'success')
-                      await fetchUser()
                     } else {
                       addToast(json.error ?? 'Failed to cancel.', 'error')
                     }
+                    // Always re-fetch — clears stale state even on error
+                    await fetchUser()
                   } catch {
                     addToast('Network error.', 'error')
                   } finally {
