@@ -132,6 +132,7 @@ export default function ElectionsPage() {
             id: p.id,
             name: p.name,
             max_votes: p.max_votes ?? 1,
+            collapsed: true,
             candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; grade_level?: string; subtype?: string; section?: string; student_user_id?: number | null; photo_url?: string | null }) => ({
               id: c.id,
               name: c.name,
@@ -144,6 +145,7 @@ export default function ElectionsPage() {
               student_user_id: c.student_user_id ?? null,
               photo_url: c.photo_url ?? null,
               mode: c.student_user_id ? 'existing' as const : 'manual' as const,
+              collapsed: true,
             })),
           })),
         })
