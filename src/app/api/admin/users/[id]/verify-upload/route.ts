@@ -54,6 +54,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     })
   }
 
+  // Promote unverified → member on admin-driven verification
+  await db.execute({ sql: `UPDATE users SET role = 'member' WHERE id = ? AND role = 'unverified'`, args: [targetId] })
+
   // Mark user as verified
   const grade_level_id = formData.get('grade_level_id') ? parseInt(formData.get('grade_level_id') as string) : null
   const subtype_id = formData.get('subtype_id') ? parseInt(formData.get('subtype_id') as string) : null

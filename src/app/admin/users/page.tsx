@@ -72,7 +72,8 @@ const ROLE_LEVEL: Record<string, number> = {
 }
 
 function getAssignableRoles(currentUserRole: Role): Role[] {
-  if (currentUserRole === 'master_admin') return ALL_ROLES
+  // 'unverified' is an auto role — never manually assignable
+  if (currentUserRole === 'master_admin') return ['master_admin', 'admin', 'moderator', 'staff', 'member']
   if (currentUserRole === 'admin') return ['moderator', 'staff', 'member']
   if (currentUserRole === 'moderator') return ['member']
   return []
@@ -172,6 +173,8 @@ export default function UsersPage() {
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [createUploadFiles, setCreateUploadFiles] = useState<File[]>([])
+  const createUploadInputRef = useRef<HTMLInputElement | null>(null)
   const [createForm, setCreateForm] = useState({
     name: '', email: '', password: '', role: 'member' as Role,
     grade_level_id: '', subtype_id: '', section_id: '',
@@ -475,13 +478,29 @@ export default function UsersPage() {
         }),
       })
       const json = await res.json()
-      if (res.ok) {
-        addToast('User created', 'success')
-        setShowCreateModal(false)
-        fetchUsers(page, debouncedSearch, roleFilter)
-      } else {
-        addToast(json.error || 'Failed', 'error')
+      if (!res.ok) { addToast(json.error || 'Failed', 'error'); return }
+
+      // If id_verified and documents attached, upload them
+      if (createForm.id_verified && createUploadFiles.length > 0) {
+        const fd = new FormData()
+        createUploadFiles.forEach(f => fd.append('files', f))
+        if (createForm.grade_level_id) fd.append('grade_level_id', createForm.grade_level_id)
+        if (createForm.subtype_id) fd.append('subtype_id', createForm.subtype_id)
+        if (createForm.section_id) fd.append('section_id', createForm.section_id)
+        const upRes = await fetch(`/api/admin/users/${json.data.userId}/verify-upload`, {
+          method: 'POST', credentials: 'include', body: fd,
+        })
+        if (!upRes.ok) {
+          const upJson = await upRes.json()
+          addToast(upJson.error || 'Upload failed — user created but docs not saved', 'error')
+        }
       }
+
+      addToast('User created', 'success')
+      setShowCreateModal(false)
+      setCreateUploadFiles([])
+      if (createUploadInputRef.current) createUploadInputRef.current.value = ''
+      fetchUsers(page, debouncedSearch, roleFilter)
     } catch { addToast('Network error', 'error') }
     finally { setCreating(false) }
   }
@@ -526,6 +545,8 @@ export default function UsersPage() {
                   grade_level_id: '', subtype_id: '', section_id: '',
                   email_verified: true, id_verified: false,
                 })
+                setCreateUploadFiles([])
+                if (createUploadInputRef.current) createUploadInputRef.current.value = ''
               }}
               className="ml-auto px-4 py-2 bg-[#84050C] text-white rounded-lg text-sm font-medium hover:bg-[#6B0409]"
             >
@@ -1307,6 +1328,26 @@ export default function UsersPage() {
               <span className="text-sm text-gray-700">ID Verified</span>
             </label>
           </div>
+
+          {/* Document upload — only shown when ID Verified is checked */}
+          {createForm.id_verified && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Verification Documents <span className="text-gray-400 font-normal text-xs">(optional)</span>
+              </label>
+              <input
+                ref={createUploadInputRef}
+                type="file"
+                multiple
+                accept="image/*,application/pdf"
+                onChange={(e) => setCreateUploadFiles(Array.from(e.target.files ?? []))}
+                className="block w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[#FEE2E2] file:text-[#84050C] hover:file:bg-red-100 cursor-pointer"
+              />
+              {createUploadFiles.length > 0 && (
+                <p className="mt-1 text-xs text-gray-500">{createUploadFiles.length} file{createUploadFiles.length !== 1 ? 's' : ''} selected</p>
+              )}
+            </div>
+          )}
         </div>
       </Modal>
     </AdminLayout>

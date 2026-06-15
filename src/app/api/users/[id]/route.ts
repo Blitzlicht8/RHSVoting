@@ -137,6 +137,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (body.id_verified !== undefined && canVerify) {
     setClauses.push('id_verified = ?')
     values.push(body.id_verified ? 1 : 0)
+    if (!body.id_verified) {
+      // Revoking verification auto-reverts role to unverified (master_admin protected)
+      setClauses.push(`role = CASE WHEN role = 'master_admin' THEN role ELSE 'unverified' END`)
+    }
   }
 
   if (body.grade_level_id !== undefined && adminUser) {
