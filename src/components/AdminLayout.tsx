@@ -104,7 +104,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <path d="M7 9v6" strokeWidth="2" />
             </svg>
             <div>
-              <span className="text-white font-bold text-base block leading-tight">Community Hub</span>
+              <span className="text-white font-bold text-base block leading-tight">Rizal High School Elections</span>
               <span className="text-xs text-gray-500 group-hover:text-gray-400 transition-colors">← Back to app</span>
             </div>
           </Link>

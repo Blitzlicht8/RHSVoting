@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
 import { Position, Candidate } from '@/types'
+import { buildEligibilitySql, type EligibilityRule } from '@/lib/groups'
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   await ensureInit()
@@ -104,23 +105,15 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     const ec = await db.execute({ sql: `SELECT COUNT(*) as cnt FROM users WHERE id_verified = 1 AND active = 1`, args: [] })
     eligibleCount = Number(ec.rows[0]?.cnt ?? 0)
   } else {
-    const eligRules = await db.execute({ sql: `SELECT * FROM election_eligibility WHERE election_id = ? AND is_exclude = 0`, args: [electionId] })
+    const eligRules = await db.execute({
+      sql: `SELECT structure_id, value_id, is_all_groups, is_exclude FROM election_eligibility_rules WHERE election_id = ?`,
+      args: [electionId],
+    })
     if (eligRules.rows.length > 0) {
-      let allUsers = false
-      const conds: string[] = []
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cargs: any[] = []
-      for (const r of eligRules.rows as Record<string, unknown>[]) {
-        if (r.is_all_grade) { allUsers = true; break }
-        let cond = `grade_level_id = ?`; cargs.push(r.grade_level_id)
-        if (!r.is_all_subtype && r.subtype_id) { cond += ` AND subtype_id = ?`; cargs.push(r.subtype_id) }
-        if (!r.is_all_section && r.section_id) { cond += ` AND section_id = ?`; cargs.push(r.section_id) }
-        conds.push(`(${cond})`)
-      }
-      const whereExtra = allUsers ? '' : ` AND (${conds.join(' OR ')})`
+      const { sql: eligSql, args: eligArgs } = buildEligibilitySql(eligRules.rows as unknown as EligibilityRule[], 'u')
       const ec = await db.execute({
-        sql: `SELECT COUNT(*) as cnt FROM users WHERE id_verified = 1 AND active = 1${whereExtra}`,
-        args: allUsers ? [] : cargs,
+        sql: `SELECT COUNT(*) as cnt FROM users u WHERE u.id_verified = 1 AND u.active = 1 AND ${eligSql}`,
+        args: eligArgs,
       })
       eligibleCount = Number(ec.rows[0]?.cnt ?? 0)
     }

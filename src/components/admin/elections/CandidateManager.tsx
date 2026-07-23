@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 
 export interface StudentResult {
   id: number
@@ -41,17 +41,6 @@ export interface CandidateForm {
   mode: 'manual' | 'existing'
 }
 
-interface AcademicOption { id: number; name: string }
-interface AcademicOptions {
-  gradeLevels: AcademicOption[]
-  subtypes: AcademicOption[]
-  sections: AcademicOption[]
-  gradeLevelId: number | null
-  subtypeId: number | null
-}
-
-const emptyAcademic: AcademicOptions = { gradeLevels: [], subtypes: [], sections: [], gradeLevelId: null, subtypeId: null }
-
 interface CandidateManagerProps {
   positionIndex: number
   candidates: CandidateForm[]
@@ -90,149 +79,12 @@ export default function CandidateManager({
   onSearchStudents,
   onClearStudentSearch,
 }: CandidateManagerProps) {
-  const [academicOptions, setAcademicOptions] = useState<Record<string, AcademicOptions>>({})
-  const fetchedRef = useRef(false)
-  const [globalGradeLevels, setGlobalGradeLevels] = useState<AcademicOption[]>([])
-  const [labels, setLabels] = useState({ l1: 'Group', l2: 'Subgroup', l3: 'Unit' })
   const [uploadingPhoto, setUploadingPhoto] = useState<Record<string, boolean>>({})
   const [slotErrors, setSlotErrors] = useState<Record<number, string>>({})
-  const restoredRef = useRef<Set<string>>(new Set())
   // Track which achievement description textareas are expanded: key = `${ci}_${achIdx}`
   const [expandedAch, setExpandedAch] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    if (fetchedRef.current) return
-    fetchedRef.current = true
-    Promise.all([
-      fetch('/api/academic/grade-levels', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
-      fetch('/api/settings', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
-    ]).then(([gradesJson, settingsJson]) => {
-      const levels: AcademicOption[] = gradesJson.data?.gradeLevels ?? gradesJson.data?.grade_levels ?? gradesJson.data ?? []
-      setGlobalGradeLevels(Array.isArray(levels) ? levels : [])
-      const s: Record<string, string> = settingsJson.data ?? {}
-      setLabels({ l1: s.group_label_l1 ?? 'Group', l2: s.group_label_l2 ?? 'Subgroup', l3: s.group_label_l3 ?? 'Unit' })
-    })
-  }, [])
-
-  // When grade-levels load, restore dropdown options for all manual candidates with a grade_level set.
-  // Runs whether grade_level_id is present or not — academicOptions (the lists) are local state and
-  // always need to be re-fetched on remount (e.g. after modal close/reopen with newDraft).
-  const candidatesRef = useRef(candidates)
-  candidatesRef.current = candidates
-  useEffect(() => {
-    if (globalGradeLevels.length === 0) return
-    const cands = candidatesRef.current
-    cands.forEach((cand, ci) => {
-      const key = `${pi}-${ci}`
-      if (cand.mode !== 'manual') return
-      if (!cand.grade_level?.trim() && !cand.grade_level_id) return
-      if (restoredRef.current.has(key)) return
-      restoredRef.current.add(key)
-
-      // Use existing ID if available, otherwise look up by grade_level name
-      const glId = cand.grade_level_id ?? globalGradeLevels.find((g) => g.name === cand.grade_level)?.id
-      if (!glId) return
-
-      if (!cand.grade_level_id) onUpdateCandidate(pi, ci, { grade_level_id: glId })
-      setAcademic(ci, { gradeLevelId: glId })
-
-      fetch(`/api/academic/subtypes?gradeLevelId=${glId}`, { credentials: 'include' })
-        .then((r) => r.json())
-        .then((json) => {
-          const subtypes: AcademicOption[] = json.data?.subtypes ?? json.data ?? []
-          if (subtypes.length === 0) {
-            fetch(`/api/academic/sections?gradeLevelId=${glId}`, { credentials: 'include' })
-              .then((r) => r.json())
-              .then((json2) => {
-                const sections: AcademicOption[] = json2.data?.sections ?? json2.data ?? []
-                setAcademic(ci, { subtypes: [], sections, gradeLevelId: glId })
-                onUpdateCandidate(pi, ci, { subtype_required: false, section_required: sections.length > 0 })
-                if (!cand.section_id) {
-                  const sec = sections.find((s) => s.name === cand.section)
-                  if (sec) onUpdateCandidate(pi, ci, { section_id: sec.id })
-                }
-              })
-              .catch(() => {})
-          } else {
-            setAcademic(ci, { subtypes, sections: [], gradeLevelId: glId })
-            onUpdateCandidate(pi, ci, { subtype_required: true, section_required: false })
-            // Match subtype by ID (already set from newDraft) or by name
-            const st = cand.subtype_id
-              ? subtypes.find((s) => s.id === cand.subtype_id)
-              : subtypes.find((s) => s.name === cand.subtype)
-            if (st) {
-              if (!cand.subtype_id) onUpdateCandidate(pi, ci, { subtype_id: st.id })
-              setAcademic(ci, { subtypeId: st.id })
-              fetch(`/api/academic/sections?gradeLevelId=${glId}&subtypeId=${st.id}`, { credentials: 'include' })
-                .then((r) => r.json())
-                .then((json2) => {
-                  const sections: AcademicOption[] = json2.data?.sections ?? json2.data ?? []
-                  setAcademic(ci, { sections })
-                  onUpdateCandidate(pi, ci, { section_required: sections.length > 0 })
-                  if (!cand.section_id) {
-                    const sec = sections.find((s) => s.name === cand.section)
-                    if (sec) onUpdateCandidate(pi, ci, { section_id: sec.id })
-                  }
-                })
-                .catch(() => {})
-            }
-          }
-        })
-        .catch(() => {})
-    })
-  }, [globalGradeLevels.length, pi])
-
   const getKey = (ci: number) => `${pi}_${ci}`
-
-  const getAcademic = (ci: number): AcademicOptions =>
-    academicOptions[getKey(ci)] ?? { ...emptyAcademic, gradeLevels: globalGradeLevels }
-
-  const setAcademic = (ci: number, patch: Partial<AcademicOptions>) =>
-    setAcademicOptions((prev) => ({
-      ...prev,
-      [getKey(ci)]: { ...(prev[getKey(ci)] ?? { ...emptyAcademic, gradeLevels: globalGradeLevels }), ...patch },
-    }))
-
-  const handleGradeLevelChange = async (ci: number, glId: number, glName: string) => {
-    setAcademic(ci, { gradeLevelId: glId, subtypeId: null, subtypes: [], sections: [] })
-    onUpdateCandidate(pi, ci, { grade_level: glName, grade_level_id: glId, subtype_id: null, subtype: '', section_id: null, section: '', subtype_required: false, section_required: false, academic_loading: true })
-    try {
-      const r = await fetch(`/api/academic/subtypes?gradeLevelId=${glId}`, { credentials: 'include' })
-      const json = await r.json()
-      const subtypes: AcademicOption[] = json.data?.subtypes ?? json.data ?? []
-      if (subtypes.length === 0) {
-        const rs = await fetch(`/api/academic/sections?gradeLevelId=${glId}`, { credentials: 'include' })
-        const jsons = await rs.json()
-        const sections: AcademicOption[] = jsons.data?.sections ?? jsons.data ?? []
-        setAcademic(ci, { subtypes: [], sections, gradeLevelId: glId })
-        onUpdateCandidate(pi, ci, { subtype_required: false, section_required: sections.length > 0, academic_loading: false })
-      } else {
-        setAcademic(ci, { subtypes, sections: [], gradeLevelId: glId })
-        onUpdateCandidate(pi, ci, { subtype_required: true, section_required: false, academic_loading: false })
-      }
-    } catch {
-      onUpdateCandidate(pi, ci, { academic_loading: false })
-    }
-  }
-
-  const handleSubtypeChange = async (ci: number, stId: number, glId: number) => {
-    const subtypeName = getAcademic(ci).subtypes.find((s) => s.id === stId)?.name ?? ''
-    setAcademic(ci, { subtypeId: stId, sections: [] })
-    onUpdateCandidate(pi, ci, { subtype_id: stId, subtype: subtypeName, section_id: null, section: '', academic_loading: true })
-    try {
-      const r = await fetch(`/api/academic/sections?gradeLevelId=${glId}&subtypeId=${stId}`, { credentials: 'include' })
-      const json = await r.json()
-      const sections: AcademicOption[] = json.data?.sections ?? json.data ?? []
-      setAcademic(ci, { sections })
-      onUpdateCandidate(pi, ci, { section_required: sections.length > 0, academic_loading: false })
-    } catch {
-      onUpdateCandidate(pi, ci, { academic_loading: false })
-    }
-  }
-
-  const handleSectionChange = (ci: number, secId: number, secName: string) => {
-    onUpdateCandidate(pi, ci, { section: secName, section_id: secId })
-  }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, ci: number) => {
     const file = e.target.files?.[0]
@@ -574,77 +426,11 @@ export default function CandidateManager({
                   })}
                 </div>
 
-                {(() => {
-                  const acad = getAcademic(ci)
-                  const selectClass = 'w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white'
-                  return (
-                    <div className="space-y-2">
-                      <select
-                        value={acad.gradeLevelId ?? ''}
-                        onChange={(e) => {
-                          const id = Number(e.target.value)
-                          const list = acad.gradeLevels.length ? acad.gradeLevels : globalGradeLevels
-                          const name = list.find((g) => g.id === id)?.name ?? ''
-                          if (id) handleGradeLevelChange(ci, id, name)
-                          else onUpdateCandidate(pi, ci, { grade_level: '', grade_level_id: null, subtype_id: null, section_id: null, section: '' })
-                        }}
-                        className={selectClass}
-                      >
-                        <option value="">Select {labels.l1}</option>
-                        {(acad.gradeLevels.length ? acad.gradeLevels : globalGradeLevels).map((gl) => (
-                          <option key={gl.id} value={gl.id}>{gl.name}</option>
-                        ))}
-                      </select>
-                      {acad.subtypes.length > 0 && (
-                        <select
-                          value={acad.subtypeId ?? ''}
-                          onChange={(e) => {
-                            const id = Number(e.target.value)
-                            if (id && acad.gradeLevelId) handleSubtypeChange(ci, id, acad.gradeLevelId)
-                            else { setAcademic(ci, { subtypeId: null, sections: [] }); onUpdateCandidate(pi, ci, { subtype_id: null, section_id: null, section: '' }) }
-                          }}
-                          className={selectClass}
-                        >
-                          <option value="">Select {labels.l2}</option>
-                          {acad.subtypes.map((st) => (
-                            <option key={st.id} value={st.id}>{st.name}</option>
-                          ))}
-                        </select>
-                      )}
-                      {acad.sections.length > 0 && (
-                        <select
-                          value={cand.section_id ?? ''}
-                          onChange={(e) => {
-                            const id = Number(e.target.value)
-                            const name = acad.sections.find((s) => s.id === id)?.name ?? ''
-                            if (id) handleSectionChange(ci, id, name)
-                            else onUpdateCandidate(pi, ci, { section: '', section_id: null })
-                          }}
-                          className={selectClass}
-                        >
-                          <option value="">Select {labels.l3}</option>
-                          {acad.sections.map((sec) => (
-                            <option key={sec.id} value={sec.id}>{sec.name}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-                  )
-                })()}
-
                 {/* Save manual candidate */}
                 {(() => {
                   const missingName = !cand.name.trim()
-                  const missingGroup = !cand.grade_level_id && !cand.grade_level?.trim()
-                  const missingSubgroup = !!cand.subtype_required && !cand.subtype_id && !cand.subtype?.trim()
-                  const missingUnit = !!cand.section_required && !cand.section_id && !cand.section?.trim()
-                  const canSave = !missingName && !missingGroup && !missingSubgroup && !missingUnit && !cand.academic_loading
-                  const hint = cand.academic_loading ? 'Loading…'
-                    : missingName ? 'Name required'
-                    : missingGroup ? `${labels.l1} required`
-                    : missingSubgroup ? `${labels.l2} required`
-                    : missingUnit ? `${labels.l3} required`
-                    : ''
+                  const canSave = !missingName
+                  const hint = missingName ? 'Name required' : ''
                   return (
                     <div className="flex items-center justify-end gap-2 pt-1">
                       {!canSave && hint && (
@@ -656,12 +442,6 @@ export default function CandidateManager({
                         onClick={() => { if (canSave) onUpdateCandidate(pi, ci, { collapsed: true }) }}
                         className="text-xs font-medium text-white bg-[#84050C] hover:bg-[#6B0409] disabled:bg-gray-300 disabled:cursor-not-allowed px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5"
                       >
-                        {cand.academic_loading && (
-                          <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                        )}
                         Save Candidate
                       </button>
                     </div>

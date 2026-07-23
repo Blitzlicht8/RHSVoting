@@ -531,7 +531,7 @@ export default function ProfilePage() {
                     onChange={e => setBioInput(e.target.value.slice(0, 200))}
                     rows={3}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]/30 focus:border-[#84050C] resize-none"
-                    placeholder="Tell the community about yourself…"
+                    placeholder="Tell the school about yourself…"
                     autoFocus
                   />
                   <div className="flex items-center justify-between">

@@ -5,6 +5,28 @@ import { getAuthUser, isAdmin } from '@/lib/auth'
 import { ElectionStatus, Position, Candidate } from '@/types'
 import { InValue } from '@libsql/client'
 import { checkAutoTransition } from '@/lib/autoTransition'
+import { buildEligibilitySql, EligibilityRule } from '@/lib/groups'
+
+interface EligibilityInput {
+  structure_id?: number | null
+  value_id?: number | null
+  is_all_groups?: number | boolean
+  is_exclude?: number | boolean
+}
+
+async function loadEligibilityRules(electionId: number): Promise<EligibilityRule[]> {
+  const r = await db.execute({
+    sql: `SELECT structure_id, value_id, is_all_groups, is_exclude
+          FROM election_eligibility_rules WHERE election_id = ?`,
+    args: [electionId],
+  })
+  return r.rows.map((row) => ({
+    structure_id: row.structure_id === null ? null : Number(row.structure_id),
+    value_id: row.value_id === null ? null : Number(row.value_id),
+    is_all_groups: Number(row.is_all_groups),
+    is_exclude: Number(row.is_exclude),
+  }))
+}
 
 interface AchievementInput {
   title?: string
@@ -151,11 +173,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   })
   const hasVoted = Number(voteCountResult.rows[0]?.count ?? 0) > 0
 
-  const eligibilityResult = await db.execute({
-    sql: 'SELECT * FROM election_eligibility WHERE election_id = ?',
-    args: [electionId],
-  })
-  const eligibility = eligibilityResult.rows
+  const eligibility = await loadEligibilityRules(electionId)
 
   return NextResponse.json({
     data: { election: { ...election, positions: positionsWithCandidates, hasVoted, eligibility } },
@@ -262,14 +280,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
           const r = await db.execute({ sql: `SELECT COUNT(*) as cnt FROM users WHERE id_verified = 1 AND active = 1`, args: [] })
           eligibleCount = Number((r.rows[0] as unknown as { cnt: number }).cnt)
         } else {
+          const rules = await loadEligibilityRules(electionId)
+          const { sql: eligSql, args: eligArgs } = buildEligibilitySql(rules, 'u')
           const r = await db.execute({
-            sql: `SELECT COUNT(DISTINCT u.id) as cnt FROM users u
-                  JOIN election_eligibility ee ON ee.election_id = ?
-                  WHERE u.id_verified = 1 AND u.active = 1
-                    AND (ee.is_all_grade = 1 OR u.grade_level_id = ee.grade_level_id)
-                    AND (ee.is_all_subtype = 1 OR u.subtype_id = ee.subtype_id)
-                    AND (ee.is_all_section = 1 OR u.section_id = ee.section_id)`,
-            args: [electionId],
+            sql: `SELECT COUNT(*) as cnt FROM users u
+                  WHERE u.id_verified = 1 AND u.active = 1 AND ${eligSql}`,
+            args: eligArgs,
           })
           eligibleCount = Number((r.rows[0] as unknown as { cnt: number }).cnt)
         }
@@ -336,21 +352,18 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   if (hasEligibility) {
     await db.execute({
-      sql: 'DELETE FROM election_eligibility WHERE election_id = ?',
+      sql: 'DELETE FROM election_eligibility_rules WHERE election_id = ?',
       args: [electionId],
     })
-    for (const rule of body.eligibility) {
+    for (const rule of body.eligibility as EligibilityInput[]) {
       await db.execute({
-        sql: `INSERT INTO election_eligibility (election_id, grade_level_id, subtype_id, section_id, is_all_grade, is_all_subtype, is_all_section, is_exclude)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO election_eligibility_rules (election_id, structure_id, value_id, is_all_groups, is_exclude)
+              VALUES (?, ?, ?, ?, ?)`,
         args: [
           electionId,
-          rule.grade_level_id ?? null,
-          rule.subtype_id ?? null,
-          rule.section_id ?? null,
-          rule.is_all_grade ? 1 : 0,
-          rule.is_all_subtype ? 1 : 0,
-          rule.is_all_section ? 1 : 0,
+          rule.structure_id ?? null,
+          rule.value_id ?? null,
+          rule.is_all_groups ? 1 : 0,
           rule.is_exclude ? 1 : 0,
         ],
       })

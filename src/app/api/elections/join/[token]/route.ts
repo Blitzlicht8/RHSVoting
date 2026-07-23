@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { evaluateEligibility, getUserValueSet, type EligibilityRule } from '@/lib/groups'
 
 export async function GET(_request: NextRequest, { params }: { params: { token: string } }) {
   await ensureInit()
@@ -32,7 +33,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
   }
 
   const userResult = await db.execute({
-    sql: `SELECT id_verified, grade_level_id, subtype_id, section_id FROM users WHERE id = ?`,
+    sql: `SELECT id_verified FROM users WHERE id = ?`,
     args: [authUser.id],
   })
   const u = userResult.rows[0]
@@ -48,12 +49,12 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
     return NextResponse.json({ data: { electionId: election.id, title: election.title, eligible: true } })
   }
 
-  // Check eligibility rules
+  // Check eligibility rules (configurable group model)
   const eligibilityResult = await db.execute({
-    sql: `SELECT * FROM election_eligibility WHERE election_id = ? AND is_exclude = 0`,
+    sql: `SELECT structure_id, value_id, is_all_groups, is_exclude FROM election_eligibility_rules WHERE election_id = ?`,
     args: [election.id],
   })
-  const rules = eligibilityResult.rows
+  const rules = eligibilityResult.rows as unknown as EligibilityRule[]
 
   if (rules.length === 0) {
     return NextResponse.json({
@@ -61,15 +62,7 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
     })
   }
 
-  const eligible = rules.some((rule) => {
-    if (rule.is_all_grade) return true
-    if (rule.grade_level_id !== u.grade_level_id) return false
-    if (rule.is_all_subtype) return true
-    if (rule.subtype_id && rule.subtype_id !== u.subtype_id) return false
-    if (rule.is_all_section) return true
-    if (rule.section_id && rule.section_id !== u.section_id) return false
-    return true
-  })
+  const eligible = evaluateEligibility(rules, await getUserValueSet(Number(authUser.id)))
 
   if (!eligible) {
     return NextResponse.json({

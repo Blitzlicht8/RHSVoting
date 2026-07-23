@@ -153,62 +153,11 @@ async function _init(): Promise<void> {
         args: [],
       },
       {
-        sql: `CREATE TABLE IF NOT EXISTS grade_levels (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL UNIQUE,
-          order_index INTEGER NOT NULL DEFAULT 0,
-          active INTEGER NOT NULL DEFAULT 1,
-          created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )`,
-        args: [],
-      },
-      {
-        sql: `CREATE TABLE IF NOT EXISTS grade_subtypes (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          grade_level_id INTEGER NOT NULL,
-          name TEXT NOT NULL,
-          order_index INTEGER NOT NULL DEFAULT 0,
-          active INTEGER NOT NULL DEFAULT 1,
-          FOREIGN KEY (grade_level_id) REFERENCES grade_levels(id) ON DELETE CASCADE,
-          UNIQUE(grade_level_id, name)
-        )`,
-        args: [],
-      },
-      {
-        sql: `CREATE TABLE IF NOT EXISTS sections (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          grade_level_id INTEGER NOT NULL,
-          subtype_id INTEGER,
-          name TEXT NOT NULL,
-          order_index INTEGER NOT NULL DEFAULT 0,
-          active INTEGER NOT NULL DEFAULT 1,
-          FOREIGN KEY (grade_level_id) REFERENCES grade_levels(id) ON DELETE CASCADE,
-          FOREIGN KEY (subtype_id) REFERENCES grade_subtypes(id) ON DELETE CASCADE,
-          UNIQUE(grade_level_id, subtype_id, name)
-        )`,
-        args: [],
-      },
-      {
         sql: `CREATE TABLE IF NOT EXISTS verification_documents (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           verification_request_id INTEGER NOT NULL,
           file_path TEXT NOT NULL,
           FOREIGN KEY (verification_request_id) REFERENCES verification_requests(id) ON DELETE CASCADE
-        )`,
-        args: [],
-      },
-      {
-        sql: `CREATE TABLE IF NOT EXISTS election_eligibility (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          election_id INTEGER NOT NULL,
-          grade_level_id INTEGER,
-          subtype_id INTEGER,
-          section_id INTEGER,
-          is_all_grade INTEGER NOT NULL DEFAULT 0,
-          is_all_subtype INTEGER NOT NULL DEFAULT 0,
-          is_all_section INTEGER NOT NULL DEFAULT 0,
-          is_exclude INTEGER NOT NULL DEFAULT 0,
-          FOREIGN KEY (election_id) REFERENCES elections(id) ON DELETE CASCADE
         )`,
         args: [],
       },
@@ -344,29 +293,83 @@ async function _init(): Promise<void> {
         args: [],
       },
       {
-        sql: `CREATE TABLE IF NOT EXISTS teacher_assignments (
+        sql: `CREATE TABLE IF NOT EXISTS group_structures (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          teacher_id INTEGER NOT NULL,
-          grade_level_id INTEGER,
-          subtype_id INTEGER,
-          section_id INTEGER,
+          name TEXT NOT NULL,
+          parent_structure_id INTEGER,
+          is_required INTEGER NOT NULL DEFAULT 1,
+          order_index INTEGER NOT NULL DEFAULT 0,
+          active INTEGER NOT NULL DEFAULT 1,
           created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          UNIQUE(teacher_id, grade_level_id, subtype_id, section_id),
-          FOREIGN KEY (teacher_id) REFERENCES users(id) ON DELETE CASCADE,
-          FOREIGN KEY (grade_level_id) REFERENCES grade_levels(id) ON DELETE CASCADE,
-          FOREIGN KEY (subtype_id) REFERENCES grade_subtypes(id) ON DELETE CASCADE,
-          FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE CASCADE
+          FOREIGN KEY (parent_structure_id) REFERENCES group_structures(id) ON DELETE CASCADE
         )`,
         args: [],
       },
       {
-        sql: `CREATE TABLE IF NOT EXISTS group_verifiers (
+        sql: `CREATE TABLE IF NOT EXISTS group_values (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          grade_level_id INTEGER REFERENCES grade_levels(id) ON DELETE CASCADE,
-          subtype_id INTEGER REFERENCES grade_subtypes(id) ON DELETE CASCADE,
-          section_id INTEGER REFERENCES sections(id) ON DELETE CASCADE,
-          created_at TEXT DEFAULT (datetime('now'))
+          structure_id INTEGER NOT NULL,
+          parent_value_id INTEGER,
+          name TEXT NOT NULL,
+          order_index INTEGER NOT NULL DEFAULT 0,
+          active INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (structure_id) REFERENCES group_structures(id) ON DELETE CASCADE,
+          FOREIGN KEY (parent_value_id) REFERENCES group_values(id) ON DELETE CASCADE
+        )`,
+        args: [],
+      },
+      {
+        sql: `CREATE TABLE IF NOT EXISTS user_group_values (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          structure_id INTEGER NOT NULL,
+          value_id INTEGER NOT NULL,
+          UNIQUE(user_id, structure_id),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (structure_id) REFERENCES group_structures(id) ON DELETE CASCADE,
+          FOREIGN KEY (value_id) REFERENCES group_values(id) ON DELETE CASCADE
+        )`,
+        args: [],
+      },
+      {
+        sql: `CREATE TABLE IF NOT EXISTS candidate_group_values (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          candidate_id INTEGER NOT NULL,
+          structure_id INTEGER NOT NULL,
+          value_id INTEGER NOT NULL,
+          UNIQUE(candidate_id, structure_id),
+          FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE CASCADE,
+          FOREIGN KEY (structure_id) REFERENCES group_structures(id) ON DELETE CASCADE,
+          FOREIGN KEY (value_id) REFERENCES group_values(id) ON DELETE CASCADE
+        )`,
+        args: [],
+      },
+      {
+        sql: `CREATE TABLE IF NOT EXISTS election_eligibility_rules (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          election_id INTEGER NOT NULL,
+          structure_id INTEGER,
+          value_id INTEGER,
+          is_all_groups INTEGER NOT NULL DEFAULT 0,
+          is_exclude INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (election_id) REFERENCES elections(id) ON DELETE CASCADE,
+          FOREIGN KEY (structure_id) REFERENCES group_structures(id) ON DELETE CASCADE,
+          FOREIGN KEY (value_id) REFERENCES group_values(id) ON DELETE CASCADE
+        )`,
+        args: [],
+      },
+      {
+        sql: `CREATE TABLE IF NOT EXISTS group_verifier_values (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          structure_id INTEGER NOT NULL,
+          value_id INTEGER NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(user_id, structure_id, value_id),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (structure_id) REFERENCES group_structures(id) ON DELETE CASCADE,
+          FOREIGN KEY (value_id) REFERENCES group_values(id) ON DELETE CASCADE
         )`,
         args: [],
       },
@@ -393,15 +396,18 @@ async function _init(): Promise<void> {
   // Seed default settings
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_verify_id', 'false')`, args: [] })
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('otp_required_login', 'true')`, args: [] })
-  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('app_name', 'Community Hub')`, args: [] })
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('app_name', 'Rizal High School Elections')`, args: [] })
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('group_label_l1', 'Group')`, args: [] })
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('group_label_l2', 'Subgroup')`, args: [] })
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('group_label_l3', 'Unit')`, args: [] })
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('doc_type_labels', '["Government ID","School ID","Employee ID"]')`, args: [] })
-  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('org_type', 'community')`, args: [] })
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('org_type', 'school')`, args: [] })
   // Normalize legacy '1'/'0' values to 'true'/'false'
   await db.execute({ sql: `UPDATE settings SET value = ? WHERE key = ? AND value = ?`, args: ['true', 'otp_required_login', '1'] })
   await db.execute({ sql: `UPDATE settings SET value = ? WHERE key = ? AND value = ?`, args: ['false', 'auto_verify_id', '0'] })
+  // Rebrand: normalize legacy community-hub branding to Rizal High School Elections
+  await db.execute({ sql: `UPDATE settings SET value = ? WHERE key = 'app_name' AND value = ?`, args: ['Rizal High School Elections', 'Community Hub'] })
+  await db.execute({ sql: `UPDATE settings SET value = ? WHERE key = 'org_type' AND value = ?`, args: ['school', 'community'] })
 
   // Seed default roles
   const roleSeeds = [
@@ -414,17 +420,6 @@ async function _init(): Promise<void> {
   ]
   for (const r of roleSeeds) {
     await db.execute({ sql: `INSERT OR IGNORE INTO roles (name, is_system, permissions) VALUES (?,?,?)`, args: [r.name, r.is_system, r.perms] })
-  }
-
-  // Seed default grade levels only when table is first created (empty)
-  const glCount = await db.execute({ sql: `SELECT COUNT(*) as cnt FROM grade_levels`, args: [] })
-  if (Number(glCount.rows[0]?.cnt ?? 0) === 0) {
-    await db.execute({ sql: `INSERT INTO grade_levels (name, order_index) VALUES ('Grade 7', 0)`, args: [] })
-    await db.execute({ sql: `INSERT INTO grade_levels (name, order_index) VALUES ('Grade 8', 1)`, args: [] })
-    await db.execute({ sql: `INSERT INTO grade_levels (name, order_index) VALUES ('Grade 9', 2)`, args: [] })
-    await db.execute({ sql: `INSERT INTO grade_levels (name, order_index) VALUES ('Grade 10', 3)`, args: [] })
-    await db.execute({ sql: `INSERT INTO grade_levels (name, order_index) VALUES ('Grade 11', 4)`, args: [] })
-    await db.execute({ sql: `INSERT INTO grade_levels (name, order_index) VALUES ('Grade 12', 5)`, args: [] })
   }
 
   // Add new columns (idempotent — silently skip if column already exists)
@@ -472,6 +467,9 @@ async function _init(): Promise<void> {
   for (const sql of newColumns) {
     await db.execute({ sql, args: [] }).catch(() => {})
   }
+
+  // ── Configurable group structures: one-time migration from fixed grade/subtype/section model ──
+  await migrateGroupStructures()
 
   // Migrate votes UNIQUE constraint: old=(election_id, position_id, voter_id) blocks multi-vote.
   // New=(election_id, position_id, voter_id, candidate_id) allows multiple candidates per position per voter.
@@ -539,4 +537,188 @@ async function _init(): Promise<void> {
       args: [],
     })
   }
+}
+
+async function tableExists(name: string): Promise<boolean> {
+  const r = await db.execute({
+    sql: `SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`,
+    args: [name],
+  })
+  return r.rows.length > 0
+}
+
+/**
+ * One-time migration from the fixed grade_levels/grade_subtypes/sections model
+ * into the configurable group_structures/group_values model.
+ * Guarded by settings flag `group_migration_v1`. Idempotent.
+ *
+ * - Legacy DB (grade_levels has rows): migrates all data, preserving assignments
+ *   on users/candidates, election eligibility rules, and verifier scopes, then
+ *   drops the legacy tables.
+ * - Fresh DB: seeds a single required "Grade Level" structure with Grades 7-12.
+ */
+async function migrateGroupStructures(): Promise<void> {
+  const flag = await db.execute({
+    sql: `SELECT value FROM settings WHERE key = 'group_migration_v1'`,
+    args: [],
+  })
+  if ((flag.rows[0]?.value as string) === 'done') return
+
+  const structCount = await db.execute({ sql: `SELECT COUNT(*) as c FROM group_structures`, args: [] })
+  if (Number(structCount.rows[0]?.c ?? 0) > 0) {
+    await db.execute({ sql: `INSERT OR REPLACE INTO settings (key, value) VALUES ('group_migration_v1','done')`, args: [] })
+    return
+  }
+
+  const hasGrades = await tableExists('grade_levels')
+  const legacyGrades = hasGrades
+    ? await db.execute({ sql: `SELECT * FROM grade_levels ORDER BY order_index, id`, args: [] })
+    : { rows: [] as any[] }
+
+  if (legacyGrades.rows.length === 0) {
+    // Fresh install: seed one required Grade Level structure with default grades.
+    const s = await db.execute({
+      sql: `INSERT INTO group_structures (name, parent_structure_id, is_required, order_index) VALUES ('Grade Level', NULL, 1, 0)`,
+      args: [],
+    })
+    const sid = Number(s.lastInsertRowid)
+    const grades = ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12']
+    for (let i = 0; i < grades.length; i++) {
+      await db.execute({
+        sql: `INSERT INTO group_values (structure_id, parent_value_id, name, order_index) VALUES (?, NULL, ?, ?)`,
+        args: [sid, grades[i], i],
+      })
+    }
+    await db.execute({ sql: `INSERT OR REPLACE INTO settings (key, value) VALUES ('group_migration_v1','done')`, args: [] })
+    return
+  }
+
+  // ── Legacy migration ──
+  // 1. Create the three leveled structures: Grade Level → Strand → Section
+  const glStruct = await db.execute({
+    sql: `INSERT INTO group_structures (name, parent_structure_id, is_required, order_index) VALUES ('Grade Level', NULL, 1, 0)`,
+    args: [],
+  })
+  const glStructId = Number(glStruct.lastInsertRowid)
+  const strandStruct = await db.execute({
+    sql: `INSERT INTO group_structures (name, parent_structure_id, is_required, order_index) VALUES ('Strand', ?, 0, 1)`,
+    args: [glStructId],
+  })
+  const strandStructId = Number(strandStruct.lastInsertRowid)
+  const secStruct = await db.execute({
+    sql: `INSERT INTO group_structures (name, parent_structure_id, is_required, order_index) VALUES ('Section', ?, 0, 2)`,
+    args: [strandStructId],
+  })
+  const secStructId = Number(secStruct.lastInsertRowid)
+
+  // 2. Migrate grade levels → group_values (map old id → new value id)
+  const gradeMap = new Map<number, number>()
+  for (const row of legacyGrades.rows as any[]) {
+    const v = await db.execute({
+      sql: `INSERT INTO group_values (structure_id, parent_value_id, name, order_index, active) VALUES (?, NULL, ?, ?, ?)`,
+      args: [glStructId, row.name, Number(row.order_index ?? 0), Number(row.active ?? 1)],
+    })
+    gradeMap.set(Number(row.id), Number(v.lastInsertRowid))
+  }
+
+  // 3. Migrate subtypes → group_values (parent = mapped grade)
+  const subtypeMap = new Map<number, number>()
+  if (await tableExists('grade_subtypes')) {
+    const subs = await db.execute({ sql: `SELECT * FROM grade_subtypes ORDER BY order_index, id`, args: [] })
+    for (const row of subs.rows as any[]) {
+      const parent = gradeMap.get(Number(row.grade_level_id)) ?? null
+      const v = await db.execute({
+        sql: `INSERT INTO group_values (structure_id, parent_value_id, name, order_index, active) VALUES (?, ?, ?, ?, ?)`,
+        args: [strandStructId, parent, row.name, Number(row.order_index ?? 0), Number(row.active ?? 1)],
+      })
+      subtypeMap.set(Number(row.id), Number(v.lastInsertRowid))
+    }
+  }
+
+  // 4. Migrate sections → group_values (parent = mapped subtype, else mapped grade)
+  const sectionMap = new Map<number, number>()
+  if (await tableExists('sections')) {
+    const secs = await db.execute({ sql: `SELECT * FROM sections ORDER BY order_index, id`, args: [] })
+    for (const row of secs.rows as any[]) {
+      const parent = row.subtype_id != null
+        ? subtypeMap.get(Number(row.subtype_id)) ?? null
+        : gradeMap.get(Number(row.grade_level_id)) ?? null
+      const v = await db.execute({
+        sql: `INSERT INTO group_values (structure_id, parent_value_id, name, order_index, active) VALUES (?, ?, ?, ?, ?)`,
+        args: [secStructId, parent, row.name, Number(row.order_index ?? 0), Number(row.active ?? 1)],
+      })
+      sectionMap.set(Number(row.id), Number(v.lastInsertRowid))
+    }
+  }
+
+  // 5. Migrate user assignments
+  const users = await db.execute({ sql: `SELECT id, grade_level_id, subtype_id, section_id FROM users`, args: [] })
+  for (const u of users.rows as any[]) {
+    const uid = Number(u.id)
+    if (u.grade_level_id != null && gradeMap.has(Number(u.grade_level_id))) {
+      await db.execute({ sql: `INSERT OR IGNORE INTO user_group_values (user_id, structure_id, value_id) VALUES (?,?,?)`, args: [uid, glStructId, gradeMap.get(Number(u.grade_level_id))!] })
+    }
+    if (u.subtype_id != null && subtypeMap.has(Number(u.subtype_id))) {
+      await db.execute({ sql: `INSERT OR IGNORE INTO user_group_values (user_id, structure_id, value_id) VALUES (?,?,?)`, args: [uid, strandStructId, subtypeMap.get(Number(u.subtype_id))!] })
+    }
+    if (u.section_id != null && sectionMap.has(Number(u.section_id))) {
+      await db.execute({ sql: `INSERT OR IGNORE INTO user_group_values (user_id, structure_id, value_id) VALUES (?,?,?)`, args: [uid, secStructId, sectionMap.get(Number(u.section_id))!] })
+    }
+  }
+
+  // 6. Migrate candidate assignments
+  const cands = await db.execute({ sql: `SELECT id, grade_level_id, subtype_id, section_id FROM candidates`, args: [] })
+  for (const c of cands.rows as any[]) {
+    const cid = Number(c.id)
+    if (c.grade_level_id != null && gradeMap.has(Number(c.grade_level_id))) {
+      await db.execute({ sql: `INSERT OR IGNORE INTO candidate_group_values (candidate_id, structure_id, value_id) VALUES (?,?,?)`, args: [cid, glStructId, gradeMap.get(Number(c.grade_level_id))!] })
+    }
+    if (c.subtype_id != null && subtypeMap.has(Number(c.subtype_id))) {
+      await db.execute({ sql: `INSERT OR IGNORE INTO candidate_group_values (candidate_id, structure_id, value_id) VALUES (?,?,?)`, args: [cid, strandStructId, subtypeMap.get(Number(c.subtype_id))!] })
+    }
+    if (c.section_id != null && sectionMap.has(Number(c.section_id))) {
+      await db.execute({ sql: `INSERT OR IGNORE INTO candidate_group_values (candidate_id, structure_id, value_id) VALUES (?,?,?)`, args: [cid, secStructId, sectionMap.get(Number(c.section_id))!] })
+    }
+  }
+
+  // 7. Migrate election eligibility
+  if (await tableExists('election_eligibility')) {
+    const rules = await db.execute({ sql: `SELECT * FROM election_eligibility`, args: [] })
+    for (const r of rules.rows as any[]) {
+      const eid = Number(r.election_id)
+      const isExclude = Number(r.is_exclude ?? 0)
+      if (Number(r.is_all_grade ?? 0) === 1) {
+        await db.execute({ sql: `INSERT INTO election_eligibility_rules (election_id, structure_id, value_id, is_all_groups, is_exclude) VALUES (?, NULL, NULL, 1, ?)`, args: [eid, isExclude] })
+      } else if (r.section_id != null && sectionMap.has(Number(r.section_id))) {
+        await db.execute({ sql: `INSERT INTO election_eligibility_rules (election_id, structure_id, value_id, is_all_groups, is_exclude) VALUES (?, ?, ?, 0, ?)`, args: [eid, secStructId, sectionMap.get(Number(r.section_id))!, isExclude] })
+      } else if (r.subtype_id != null && subtypeMap.has(Number(r.subtype_id))) {
+        await db.execute({ sql: `INSERT INTO election_eligibility_rules (election_id, structure_id, value_id, is_all_groups, is_exclude) VALUES (?, ?, ?, 0, ?)`, args: [eid, strandStructId, subtypeMap.get(Number(r.subtype_id))!, isExclude] })
+      } else if (r.grade_level_id != null && gradeMap.has(Number(r.grade_level_id))) {
+        await db.execute({ sql: `INSERT INTO election_eligibility_rules (election_id, structure_id, value_id, is_all_groups, is_exclude) VALUES (?, ?, ?, 0, ?)`, args: [eid, glStructId, gradeMap.get(Number(r.grade_level_id))!, isExclude] })
+      }
+    }
+  }
+
+  // 8. Migrate verifier scopes (deepest non-null id per row)
+  if (await tableExists('group_verifiers')) {
+    const gv = await db.execute({ sql: `SELECT * FROM group_verifiers`, args: [] })
+    for (const r of gv.rows as any[]) {
+      const uid = Number(r.user_id)
+      if (r.section_id != null && sectionMap.has(Number(r.section_id))) {
+        await db.execute({ sql: `INSERT OR IGNORE INTO group_verifier_values (user_id, structure_id, value_id) VALUES (?,?,?)`, args: [uid, secStructId, sectionMap.get(Number(r.section_id))!] })
+      } else if (r.subtype_id != null && subtypeMap.has(Number(r.subtype_id))) {
+        await db.execute({ sql: `INSERT OR IGNORE INTO group_verifier_values (user_id, structure_id, value_id) VALUES (?,?,?)`, args: [uid, strandStructId, subtypeMap.get(Number(r.subtype_id))!] })
+      } else if (r.grade_level_id != null && gradeMap.has(Number(r.grade_level_id))) {
+        await db.execute({ sql: `INSERT OR IGNORE INTO group_verifier_values (user_id, structure_id, value_id) VALUES (?,?,?)`, args: [uid, glStructId, gradeMap.get(Number(r.grade_level_id))!] })
+      }
+    }
+  }
+
+  // 9. Drop legacy tables (full cutover). Dead id columns on users/candidates/
+  //    verification_requests are left in place (harmless; avoids table rebuild).
+  for (const t of ['group_verifiers', 'teacher_assignments', 'election_eligibility', 'sections', 'grade_subtypes', 'grade_levels']) {
+    await db.execute({ sql: `DROP TABLE IF EXISTS ${t}`, args: [] }).catch(() => {})
+  }
+
+  await db.execute({ sql: `INSERT OR REPLACE INTO settings (key, value) VALUES ('group_migration_v1','done')`, args: [] })
 }

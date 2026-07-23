@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AdminLayout from '@/components/AdminLayout'
 import Button from '@/components/ui/Button'
@@ -16,6 +17,26 @@ interface Requirement {
   description: string | null
   required: 0 | 1
   order_index: number
+}
+
+interface GroupValue {
+  id: number
+  structure_id: number
+  parent_value_id: number | null
+  name: string
+  order_index: number
+  active: number
+  user_count?: number
+}
+
+interface StructureWithValues {
+  id: number
+  name: string
+  parent_structure_id: number | null
+  is_required: number
+  order_index: number
+  active: number
+  values: GroupValue[]
 }
 
 interface ToggleRowProps {
@@ -95,13 +116,25 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [togglingKey, setTogglingKey] = useState<string | null>(null)
 
-  const [appName, setAppName] = useState('Community Hub')
-  const [orgType, setOrgType] = useState('community')
-  const [l1, setL1] = useState('Group')
-  const [l2, setL2] = useState('Subgroup')
-  const [l3, setL3] = useState('Unit')
+  const [appName, setAppName] = useState('Rizal High School Elections')
+  const [orgType, setOrgType] = useState('school')
   const [docTypes, setDocTypes] = useState<string[]>([])
   const [newDoc, setNewDoc] = useState('')
+
+  // Group Structures
+  const [structures, setStructures] = useState<StructureWithValues[]>([])
+  const [structuresLoading, setStructuresLoading] = useState(true)
+  const [newStructName, setNewStructName] = useState('')
+  const [newStructRequired, setNewStructRequired] = useState(true)
+  const [newStructParentId, setNewStructParentId] = useState<number | null>(null)
+  const [addingStruct, setAddingStruct] = useState(false)
+  const [showAddStruct, setShowAddStruct] = useState(false)
+  const [editingStructId, setEditingStructId] = useState<number | null>(null)
+  const [editingStructName, setEditingStructName] = useState('')
+  const [busyStructId, setBusyStructId] = useState<number | null>(null)
+  const [structDeleteConfirm, setStructDeleteConfirm] = useState<{
+    id: number; name: string; valueCount: number; userCount: number
+  } | null>(null)
 
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetConfirmText, setResetConfirmText] = useState('')
@@ -166,6 +199,93 @@ export default function SettingsPage() {
     finally { setDeletingReqId(null) }
   }
 
+  const fetchStructures = useCallback(async () => {
+    setStructuresLoading(true)
+    try {
+      const res = await fetch('/api/admin/groups?tree=1', { credentials: 'include' })
+      const json = await res.json()
+      if (res.ok) setStructures(json.data ?? [])
+    } catch { /* ignore */ }
+    finally { setStructuresLoading(false) }
+  }, [])
+
+  useEffect(() => { if (canEditSettings) fetchStructures() }, [fetchStructures, canEditSettings])
+
+  const structureName = (id: number | null): string =>
+    structures.find(s => s.id === id)?.name ?? '—'
+
+  const handleAddStructure = async () => {
+    if (!newStructName.trim()) return
+    setAddingStruct(true)
+    try {
+      const res = await fetch('/api/admin/groups', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newStructName.trim(),
+          parent_structure_id: newStructParentId,
+          is_required: newStructRequired,
+        }),
+      })
+      const json = await res.json()
+      if (res.ok) {
+        await fetchStructures()
+        setNewStructName(''); setNewStructRequired(true); setNewStructParentId(null); setShowAddStruct(false)
+        addToast('Structure added', 'success')
+      } else { addToast(json.error || 'Failed', 'error') }
+    } catch { addToast('Network error', 'error') }
+    finally { setAddingStruct(false) }
+  }
+
+  const updateStructure = async (id: number, patch: Record<string, unknown>, successMsg = 'Structure updated') => {
+    setBusyStructId(id)
+    try {
+      const res = await fetch(`/api/admin/groups/${id}`, {
+        method: 'PUT', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+      const json = await res.json()
+      if (res.ok) { await fetchStructures(); addToast(successMsg, 'success') }
+      else { addToast(json.error || 'Failed', 'error') }
+    } catch { addToast('Network error', 'error') }
+    finally { setBusyStructId(null) }
+  }
+
+  const handleRenameStructure = async (id: number) => {
+    if (!editingStructName.trim()) { setEditingStructId(null); return }
+    await updateStructure(id, { name: editingStructName.trim() }, 'Structure renamed')
+    setEditingStructId(null)
+  }
+
+  const deleteStructure = async (id: number, force = false) => {
+    setBusyStructId(id)
+    try {
+      const res = await fetch(`/api/admin/groups/${id}${force ? '?force=true' : ''}`, {
+        method: 'DELETE', credentials: 'include',
+      })
+      if (res.ok) {
+        await fetchStructures()
+        setStructDeleteConfirm(null)
+        addToast('Structure deleted', 'success')
+        return
+      }
+      const json = await res.json()
+      if (res.status === 400 && json.error === 'last_structure') {
+        addToast('At least one group structure must remain.', 'error')
+      } else if (res.status === 409 && json.error === 'has_dependencies') {
+        const st = structures.find(s => s.id === id)
+        setStructDeleteConfirm({
+          id, name: st?.name ?? 'structure',
+          valueCount: Number(json.valueCount ?? 0), userCount: Number(json.userCount ?? 0),
+        })
+      } else {
+        addToast(json.error || 'Failed', 'error')
+      }
+    } catch { addToast('Network error', 'error') }
+    finally { setBusyStructId(null) }
+  }
+
   const fetchSettings = useCallback(async () => {
     setLoading(true)
     try {
@@ -174,11 +294,8 @@ export default function SettingsPage() {
       if (res.ok) {
         setSettings(json.data ?? {})
         const s = json.data ?? {}
-        setAppName(s.app_name ?? 'Community Hub')
-        setOrgType(s.org_type ?? 'community')
-        setL1(s.group_label_l1 ?? 'Group')
-        setL2(s.group_label_l2 ?? 'Subgroup')
-        setL3(s.group_label_l3 ?? 'Unit')
+        setAppName(s.app_name ?? 'Rizal High School Elections')
+        setOrgType(s.org_type ?? 'school')
         try { setDocTypes(JSON.parse(s.doc_type_labels ?? '[]')) } catch { setDocTypes([]) }
       } else {
         addToast(json.error || 'Failed to load settings', 'error')
@@ -317,33 +434,121 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Group Labels section */}
+          {/* Group Structures section */}
           {canEditSettings && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100">
-                <h2 className="text-base font-semibold text-gray-900">Group Labels</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Labels used throughout the app for group hierarchy. Blur to save.</p>
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-gray-900">Group Structures</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Define how members are grouped (e.g. Grade Level, Section). Edit each structure&apos;s values on the{' '}
+                    <Link href="/admin/academic" className="text-[#84050C] hover:text-[#6B0409] font-medium underline">Group Structure page</Link>.
+                  </p>
+                </div>
+                <button onClick={() => setShowAddStruct(v => !v)}
+                  className="text-sm font-medium text-[#84050C] hover:text-[#6B0409] shrink-0">
+                  + Add
+                </button>
               </div>
-              <div className="px-6 py-4 space-y-3">
-                {([
-                  ['group_label_l1', 'Level 1 (e.g. Group, Grade, Department)', l1, setL1],
-                  ['group_label_l2', 'Level 2 (e.g. Subgroup, Track, Strand)', l2, setL2],
-                  ['group_label_l3', 'Level 3 (e.g. Unit, Section, Team)', l3, setL3],
-                ] as [string, string, string, (v: string) => void][]).map(([key, placeholder, val, setter]) => (
-                  <div key={key} className="flex gap-2 items-center">
-                    <label className="text-xs text-gray-500 w-8 shrink-0 font-mono">
-                      {key === 'group_label_l1' ? 'L1' : key === 'group_label_l2' ? 'L2' : 'L3'}
-                    </label>
-                    <input
-                      value={val}
-                      onChange={e => setter(e.target.value)}
-                      placeholder={placeholder}
-                      className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C] outline-none flex-1"
-                      onBlur={e => save(key, e.target.value)}
-                    />
-                    {togglingKey === key && <span className="text-xs text-gray-400 shrink-0">Saving…</span>}
+              <div className="px-6 py-4">
+                {showAddStruct && (
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+                    <input type="text" value={newStructName} onChange={e => setNewStructName(e.target.value)}
+                      placeholder="Structure name (e.g. Grade Level, Section)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]" />
+                    <div className="flex flex-col gap-2">
+                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input type="radio" name="new_struct_type" checked={newStructParentId === null}
+                          onChange={() => setNewStructParentId(null)}
+                          className="text-[#84050C] focus:ring-[#84050C]" />
+                        Standalone
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="radio" name="new_struct_type" checked={newStructParentId !== null}
+                          disabled={structures.length === 0}
+                          onChange={() => setNewStructParentId(structures[0]?.id ?? null)}
+                          className="text-[#84050C] focus:ring-[#84050C]" />
+                        <span>Level under</span>
+                        <select
+                          disabled={newStructParentId === null}
+                          value={newStructParentId ?? ''}
+                          onChange={e => setNewStructParentId(e.target.value ? Number(e.target.value) : null)}
+                          className="px-2 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] disabled:opacity-50">
+                          {structures.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input type="checkbox" checked={newStructRequired} onChange={e => setNewStructRequired(e.target.checked)}
+                          className="w-4 h-4 rounded border-gray-300 text-[#84050C] focus:ring-[#84050C]" />
+                        Required
+                      </label>
+                      <div className="flex gap-2">
+                        <button onClick={() => setShowAddStruct(false)} className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                        <button onClick={handleAddStructure} disabled={addingStruct || !newStructName.trim()}
+                          className="px-3 py-1.5 text-sm bg-[#84050C] text-white rounded-lg hover:bg-[#6B0409] disabled:opacity-50">
+                          {addingStruct ? 'Adding…' : 'Add'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                ))}
+                )}
+                {structuresLoading ? (
+                  <p className="text-sm text-gray-400">Loading…</p>
+                ) : structures.length === 0 ? (
+                  <p className="text-sm text-gray-400">No group structures yet.</p>
+                ) : (
+                  <ul className="divide-y divide-gray-100">
+                    {structures.map(s => (
+                      <li key={s.id} className="flex items-start justify-between py-3 first:pt-0 last:pb-0 gap-3">
+                        <div className="flex-1 min-w-0">
+                          {editingStructId === s.id ? (
+                            <div className="flex items-center gap-2">
+                              <input value={editingStructName} autoFocus
+                                onChange={e => setEditingStructName(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleRenameStructure(s.id); if (e.key === 'Escape') setEditingStructId(null) }}
+                                className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]" />
+                              <button onClick={() => handleRenameStructure(s.id)} disabled={busyStructId === s.id}
+                                className="text-xs text-[#84050C] hover:text-[#6B0409] font-medium">Save</button>
+                              <button onClick={() => setEditingStructId(null)} className="text-xs text-gray-500 hover:text-gray-700">Cancel</button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium text-gray-900">{s.name}</span>
+                                {s.is_required ? (
+                                  <span className="text-xs bg-[#FEE2E2] text-[#84050C] px-1.5 py-0.5 rounded font-medium">Required</span>
+                                ) : (
+                                  <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Optional</span>
+                                )}
+                                {!s.active && <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Inactive</span>}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {s.parent_structure_id === null
+                                  ? 'Standalone'
+                                  : `Level under ${structureName(s.parent_structure_id)}`}
+                                {' · '}{s.values.length} value{s.values.length !== 1 ? 's' : ''}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                        {editingStructId !== s.id && (
+                          <div className="flex items-center gap-2 shrink-0 text-xs">
+                            <button onClick={() => { setEditingStructId(s.id); setEditingStructName(s.name) }}
+                              className="text-gray-500 hover:text-gray-800">Rename</button>
+                            <button onClick={() => updateStructure(s.id, { is_required: !s.is_required })} disabled={busyStructId === s.id}
+                              className="text-gray-500 hover:text-gray-800 disabled:opacity-50">{s.is_required ? 'Make optional' : 'Make required'}</button>
+                            <button onClick={() => updateStructure(s.id, { active: !s.active })} disabled={busyStructId === s.id}
+                              className="text-gray-500 hover:text-gray-800 disabled:opacity-50">{s.active ? 'Deactivate' : 'Activate'}</button>
+                            <button onClick={() => deleteStructure(s.id)} disabled={busyStructId === s.id}
+                              className="text-red-500 hover:text-red-700 disabled:opacity-50">Delete</button>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           )}
@@ -505,6 +710,32 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+
+      {/* Structure force-delete confirmation */}
+      <Modal
+        isOpen={structDeleteConfirm !== null}
+        onClose={() => setStructDeleteConfirm(null)}
+        title={`Delete ${structDeleteConfirm?.name ?? ''}?`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setStructDeleteConfirm(null)}>Cancel</Button>
+            <Button variant="danger"
+              disabled={busyStructId === structDeleteConfirm?.id}
+              onClick={() => { if (structDeleteConfirm) deleteStructure(structDeleteConfirm.id, true) }}>
+              Delete anyway
+            </Button>
+          </>
+        }
+      >
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+          <p className="text-sm text-red-700">
+            {structDeleteConfirm
+              ? `${structDeleteConfirm.valueCount} value${structDeleteConfirm.valueCount !== 1 ? 's' : ''} and ${structDeleteConfirm.userCount} user${structDeleteConfirm.userCount !== 1 ? 's' : ''} will be affected. Affected users will need to re-verify.`
+              : ''}
+          </p>
+        </div>
+      </Modal>
 
       {/* Reset Confirmation Modal */}
       <Modal

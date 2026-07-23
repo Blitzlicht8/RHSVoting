@@ -1,4 +1,4 @@
-﻿export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
@@ -21,14 +21,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const body = await request.json()
-  const { action, notes, grade_level_id, subtype_id, section_id } = body
+  const { action, notes } = body
 
   if (!action || !['approve', 'reject'].includes(action)) {
     return NextResponse.json({ error: 'action must be "approve" or "reject"' }, { status: 400 })
-  }
-
-  if (action === 'approve' && !grade_level_id) {
-    return NextResponse.json({ error: 'Group assignment is required for approval' }, { status: 400 })
   }
 
   const verReqResult = await db.execute({
@@ -42,17 +38,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const newStatus = action === 'approve' ? 'approved' : 'rejected'
-  const idVerified = action === 'approve' ? 1 : 0
 
   if (action === 'approve') {
     await db.batch(
       [
         {
           sql: `UPDATE verification_requests
-                SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), notes = ?,
-                    grade_level_id = ?, subtype_id = ?, section_id = ?
+                SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), notes = ?
                 WHERE id = ?`,
-          args: [newStatus, authUser.id, notes ?? null, grade_level_id ?? null, subtype_id ?? null, section_id ?? null, requestId],
+          args: [newStatus, authUser.id, notes ?? null, requestId],
         },
         {
           sql: `UPDATE users SET id_verified = 1, verification_status = 'approved', updated_at = datetime('now') WHERE id = ?`,
@@ -62,10 +56,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
           // Promote unverified users to member on approval
           sql: `UPDATE users SET role = 'member' WHERE id = ? AND role = 'unverified'`,
           args: [Number(verReq.user_id)],
-        },
-        {
-          sql: `UPDATE users SET grade_level_id = ?, subtype_id = ?, section_id = ? WHERE id = ?`,
-          args: [grade_level_id ?? null, subtype_id ?? null, section_id ?? null, Number(verReq.user_id)],
         },
       ],
       'write'

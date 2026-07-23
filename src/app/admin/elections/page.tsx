@@ -8,7 +8,7 @@ import Spinner from '@/components/ui/Spinner'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 import ElectionList, { Election } from '@/components/admin/elections/ElectionList'
-import ElectionFormModal, { ElectionForm, ElectionStatus, EligibilityRule } from '@/components/admin/elections/ElectionFormModal'
+import ElectionFormModal, { ElectionForm, ElectionStatus } from '@/components/admin/elections/ElectionFormModal'
 import { PositionForm } from '@/components/admin/elections/PositionManager'
 import { CandidateForm, StudentResult, AchievementInput } from '@/components/admin/elections/CandidateManager'
 
@@ -120,37 +120,28 @@ export default function ElectionsPage() {
           status: full.status,
           is_global: !!full.is_global,
           allow_teacher_vote: !!full.allow_teacher_vote,
-          eligibility: (full.eligibility || []).map((r: { grade_level_id: number | null; subtype_id: number | null; section_id: number | null; is_all_grade: number | boolean; is_all_subtype: number | boolean; is_all_section: number | boolean; is_exclude: number | boolean }) => ({
-            grade_level_id: r.grade_level_id,
-            subtype_id: r.subtype_id,
-            section_id: r.section_id,
-            is_all_grade: !!r.is_all_grade,
-            is_all_subtype: !!r.is_all_subtype,
-            is_all_section: !!r.is_all_section,
+          eligibility: (full.eligibility || []).map((r: { structure_id: number | null; value_id: number | null; is_all_groups: number | boolean; is_exclude: number | boolean }) => ({
+            structure_id: r.structure_id,
+            value_id: r.value_id,
+            is_all_groups: !!r.is_all_groups,
             is_exclude: !!r.is_exclude,
           })),
           thumbnail_url: full.thumbnail_url ?? null,
           auto_start: !!full.auto_start,
           auto_end: !!full.auto_end,
-          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; max_votes_mode?: string; candidates: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; grade_level?: string; subtype?: string; section?: string; grade_level_id?: number | null; subtype_id?: number | null; section_id?: number | null; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
+          positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; max_votes_mode?: string; candidates: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
             id: p.id,
             name: p.name,
             max_votes: p.max_votes ?? 1,
             max_votes_mode: (p.max_votes_mode as 'custom' | 'candidates' | 'eligible_auto') ?? 'custom',
             collapsed: true,
-            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; grade_level?: string; subtype?: string; section?: string; grade_level_id?: number | null; subtype_id?: number | null; section_id?: number | null; student_user_id?: number | null; photo_url?: string | null }) => ({
+            candidates: (p.candidates || []).map((c: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; student_user_id?: number | null; photo_url?: string | null }) => ({
               id: c.id,
               name: c.name,
               bio: c.bio || '',
               platform: c.platform ?? '',
               qualifications: c.qualifications ?? '',
               achievements: (c.achievements ?? []).map(({ title, description, year }: AchievementInput) => ({ title, description, year })),
-              grade_level: c.grade_level ?? '',
-              subtype: c.subtype ?? '',
-              section: c.section ?? '',
-              grade_level_id: c.grade_level_id ?? null,
-              subtype_id: c.subtype_id ?? null,
-              section_id: c.section_id ?? null,
               student_user_id: c.student_user_id ?? null,
               photo_url: c.photo_url ?? null,
               mode: c.student_user_id ? 'existing' as const : 'manual' as const,
@@ -212,18 +203,6 @@ export default function ElectionsPage() {
           addToast('Please select a member for all "From Member Account" candidates, or switch to manual entry.', 'error')
           return
         }
-        if (cand.mode === 'manual' && !cand.grade_level_id && !cand.grade_level?.trim()) {
-          addToast('All manual candidates require a group level.', 'error')
-          return
-        }
-        if (cand.mode === 'manual' && cand.subtype_required && !cand.subtype_id && !cand.subtype?.trim()) {
-          addToast('All manual candidates require a subgroup selection.', 'error')
-          return
-        }
-        if (cand.mode === 'manual' && cand.section_required && !cand.section_id && !cand.section?.trim()) {
-          addToast('All manual candidates require a unit selection.', 'error')
-          return
-        }
       }
     }
 
@@ -250,12 +229,6 @@ export default function ElectionsPage() {
             platform: c.platform ?? null,
             qualifications: c.qualifications ?? null,
             achievements: (c.achievements ?? []).map(({ title, description, year }: AchievementInput) => ({ title, description, year })),
-            grade_level: c.grade_level || null,
-            subtype: c.subtype || null,
-            section: c.section || null,
-            grade_level_id: c.grade_level_id ?? null,
-            subtype_id: c.subtype_id ?? null,
-            section_id: c.section_id ?? null,
             student_user_id: c.student_user_id ?? null,
             photo_url: c.photo_url ?? null,
           })),

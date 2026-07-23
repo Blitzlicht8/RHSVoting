@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/providers/ToastProvider'
 import { useAuth } from '@/components/providers/AuthProvider'
+import GroupSelects, { useGroupSelections } from '@/components/GroupSelects'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,20 +86,12 @@ export default function VerifyIdPage() {
   const [uiState, setUiState] = useState<UIState>('loading')
 
   // Settings
-  const [appName, setAppName]     = useState('Community Hub')
-  const [groupL1, setGroupL1]     = useState('Group')
-  const [groupL2, setGroupL2]     = useState('Subgroup')
-  const [groupL3, setGroupL3]     = useState('Unit')
+  const [appName, setAppName]     = useState('Rizal High School Elections')
   const [docTypeOptions, setDocTypeOptions] = useState<string[]>([])
   const [docType, setDocType]     = useState('')
 
-  // Academic cascades
-  const [gradeLevels, setGradeLevels] = useState<Array<{id: number, name: string}>>([])
-  const [subtypes, setSubtypes]       = useState<Array<{id: number, name: string}>>([])
-  const [sections, setSections]       = useState<Array<{id: number, name: string}>>([])
-  const [gradeLevelId, setGradeLevelId] = useState('')
-  const [subtypeId, setSubtypeId]       = useState('')
-  const [sectionId, setSectionId]       = useState('')
+  // Configurable group structures (dynamic cascade)
+  const { structures, selected, setValue, assignments, optionsFor, firstMissingRequired } = useGroupSelections()
 
   // Upload
   const [files, setFiles]           = useState<File[]>([])
@@ -121,9 +114,6 @@ export default function VerifyIdPage() {
       .then(j => {
         const s = j.data ?? {}
         if (s.app_name)        setAppName(s.app_name)
-        if (s.group_label_l1)  setGroupL1(s.group_label_l1)
-        if (s.group_label_l2)  setGroupL2(s.group_label_l2)
-        if (s.group_label_l3)  setGroupL3(s.group_label_l3)
         if (s.doc_type_labels) {
           try {
             const arr = JSON.parse(s.doc_type_labels)
@@ -135,41 +125,7 @@ export default function VerifyIdPage() {
         }
       })
       .catch(() => {})
-
-    fetch('/api/academic/grade-levels')
-      .then(r => r.json())
-      .then(j => setGradeLevels(j.data ?? []))
-      .catch(() => {})
   }, [])
-
-  // ── Cascade: grade level → subtypes ──────────────────────────────────────────
-
-  useEffect(() => {
-    setSubtypeId('')
-    setSectionId('')
-    setSubtypes([])
-    setSections([])
-    if (!gradeLevelId) return
-    fetch(`/api/academic/subtypes?gradeLevelId=${gradeLevelId}`)
-      .then(r => r.json())
-      .then(j => setSubtypes(j.data ?? []))
-      .catch(() => {})
-  }, [gradeLevelId])
-
-  // ── Cascade: subtype → sections ───────────────────────────────────────────────
-
-  useEffect(() => {
-    setSectionId('')
-    setSections([])
-    if (!gradeLevelId) return
-    const url = subtypeId
-      ? `/api/academic/sections?gradeLevelId=${gradeLevelId}&subtypeId=${subtypeId}`
-      : `/api/academic/sections?gradeLevelId=${gradeLevelId}`
-    fetch(url)
-      .then(r => r.json())
-      .then(j => setSections(j.data ?? []))
-      .catch(() => {})
-  }, [gradeLevelId, subtypeId])
 
   // ── Fetch current user ────────────────────────────────────────────────────────
 
@@ -245,16 +201,9 @@ export default function VerifyIdPage() {
   const handleSubmit = async () => {
     setFormError(null)
 
-    if (!gradeLevelId) {
-      setFormError(`Please select your ${groupL1.toLowerCase()}.`)
-      return
-    }
-    if (subtypes.length > 0 && !subtypeId) {
-      setFormError(`Please select your ${groupL2.toLowerCase()}.`)
-      return
-    }
-    if (sections.length > 0 && !sectionId) {
-      setFormError(`Please select your ${groupL3.toLowerCase()}.`)
+    const missing = firstMissingRequired()
+    if (missing) {
+      setFormError(`Please select your ${missing.name.toLowerCase()}.`)
       return
     }
     if (docsRequired && files.length === 0) {
@@ -263,9 +212,7 @@ export default function VerifyIdPage() {
     }
 
     const formData = new FormData()
-    formData.append('grade_level_id', gradeLevelId)
-    if (subtypeId) formData.append('subtype_id', subtypeId)
-    if (sectionId) formData.append('section_id', sectionId)
+    formData.append('assignments', JSON.stringify(assignments))
     if (docsRequired) formData.append('doc_type', docType)
     for (const file of files) {
       formData.append('file', file)
@@ -303,9 +250,6 @@ export default function VerifyIdPage() {
     setFiles([])
     setFileError(null)
     setFormError(null)
-    setGradeLevelId('')
-    setSubtypeId('')
-    setSectionId('')
     setUiState('upload')
   }
 
@@ -459,60 +403,14 @@ export default function VerifyIdPage() {
               aria-label="Upload verification documents"
             />
 
-            {/* ── Group L1 ── */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {groupL1} <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={gradeLevelId}
-                onChange={e => { setGradeLevelId(e.target.value); setFormError(null) }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-              >
-                <option value="">Select {groupL1.toLowerCase()}…</option>
-                {gradeLevels.map(g => (
-                  <option key={g.id} value={String(g.id)}>{g.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* ── Group L2 — only when subtypes exist ── */}
-            {subtypes.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {groupL2} <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={subtypeId}
-                  onChange={e => { setSubtypeId(e.target.value); setFormError(null) }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                >
-                  <option value="">Select {groupL2.toLowerCase()}…</option>
-                  {subtypes.map(s => (
-                    <option key={s.id} value={String(s.id)}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* ── Group L3 — only when sections exist ── */}
-            {sections.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {groupL3} <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={sectionId}
-                  onChange={e => { setSectionId(e.target.value); setFormError(null) }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                >
-                  <option value="">Select {groupL3.toLowerCase()}…</option>
-                  {sections.map(s => (
-                    <option key={s.id} value={String(s.id)}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {/* ── Dynamic configurable group structures ── */}
+            <GroupSelects
+              structures={structures}
+              selected={selected}
+              setValue={setValue}
+              optionsFor={optionsFor}
+              onChangeSide={() => setFormError(null)}
+            />
 
             {/* ── Document upload — only when doc types configured ── */}
             {docsRequired && (

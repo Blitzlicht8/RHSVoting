@@ -2,16 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
-
-interface EligibilityRule {
-  grade_level_id: number | null
-  subtype_id: number | null
-  section_id: number | null
-  is_all_grade: boolean
-  is_all_subtype: boolean
-  is_all_section: boolean
-  is_exclude: boolean
-}
+import { buildEligibilitySql, type EligibilityRule } from '@/lib/groups'
 
 export async function GET(request: NextRequest) {
   await ensureInit()
@@ -40,38 +31,16 @@ export async function GET(request: NextRequest) {
   args.push(`%${q}%`, `%${q}%`)
 
   if (!isGlobal && eligibilityRules.length > 0) {
-    const includedRules = eligibilityRules.filter((r) => !r.is_exclude)
-    const hasAllGrade = includedRules.some((r) => r.is_all_grade)
-
-    if (!hasAllGrade && includedRules.length > 0) {
-      const orClauses: string[] = []
-      for (const r of includedRules) {
-        if (r.section_id) {
-          orClauses.push('(u.grade_level_id = ? AND u.section_id = ?)')
-          args.push(r.grade_level_id, r.section_id)
-        } else if (r.subtype_id) {
-          orClauses.push('(u.grade_level_id = ? AND u.subtype_id = ?)')
-          args.push(r.grade_level_id, r.subtype_id)
-        } else if (r.grade_level_id) {
-          orClauses.push('u.grade_level_id = ?')
-          args.push(r.grade_level_id)
-        }
-      }
-      if (orClauses.length > 0) {
-        conditions.push(`(${orClauses.join(' OR ')})`)
-      }
-    }
+    const { sql, args: eligArgs } = buildEligibilitySql(eligibilityRules, 'u')
+    conditions.push(sql)
+    args.push(...eligArgs)
   }
 
   const where = conditions.join(' AND ')
 
   const result = await db.execute({
-    sql: `SELECT u.id, u.name, u.email, u.avatar_url,
-                 gl.name as grade_name, s.name as section_name,
-                 u.grade_level_id, u.subtype_id, u.section_id
+    sql: `SELECT u.id, u.name, u.email, u.avatar_url
           FROM users u
-          LEFT JOIN grade_levels gl ON gl.id = u.grade_level_id
-          LEFT JOIN sections s ON s.id = u.section_id
           WHERE ${where}
           ORDER BY u.name ASC
           LIMIT 20`,

@@ -11,15 +11,8 @@ export async function GET() {
 
   const result = await db.execute({
     sql: `SELECT u.id, u.email, u.name, u.role, u.email_verified, u.id_verified,
-                 u.avatar_url, u.bio, u.grade_level_id, u.subtype_id, u.section_id, u.active,
-                 u.needs_academic_update,
-                 gl.name as grade_level_name,
-                 gs.name as subtype_name,
-                 s.name as section_name
+                 u.avatar_url, u.bio, u.active, u.needs_academic_update
           FROM users u
-          LEFT JOIN grade_levels gl ON gl.id = u.grade_level_id
-          LEFT JOIN grade_subtypes gs ON gs.id = u.subtype_id
-          LEFT JOIN sections s ON s.id = u.section_id
           WHERE u.id = ?`,
     args: [authUser.id],
   })
@@ -32,7 +25,18 @@ export async function GET() {
   const user = result.rows[0]
   if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  return NextResponse.json({ data: { user, achievements: achievements.rows } })
+  // Configurable group assignments (replaces grade/subtype/section names)
+  const groups = await db.execute({
+    sql: `SELECT gs.id as structure_id, gs.name as structure_name, gvv.id as value_id, gvv.name as value_name
+          FROM user_group_values ugv
+          JOIN group_structures gs ON gs.id = ugv.structure_id
+          JOIN group_values gvv ON gvv.id = ugv.value_id
+          WHERE ugv.user_id = ?
+          ORDER BY gs.order_index, gs.id`,
+    args: [authUser.id],
+  })
+
+  return NextResponse.json({ data: { user, groups: groups.rows, achievements: achievements.rows } })
 }
 
 export async function PATCH(request: NextRequest) {

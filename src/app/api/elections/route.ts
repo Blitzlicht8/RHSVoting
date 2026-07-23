@@ -1,8 +1,16 @@
-﻿export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
 import { checkAutoTransition } from '@/lib/autoTransition'
+import { evaluateEligibility, getUserValueSet, EligibilityRule } from '@/lib/groups'
+
+interface EligibilityInput {
+  structure_id?: number | null
+  value_id?: number | null
+  is_all_groups?: number | boolean
+  is_exclude?: number | boolean
+}
 
 export async function GET(request: NextRequest) {
   await ensureInit()
@@ -13,50 +21,7 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = isAdmin(authUser.role)
-  const isEligibilityScoped = !admin
-
-  let whereClause = admin ? '' : `WHERE e.status IN ('active', 'ended')`
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const queryArgs: any[] = []
-  let voterIdArg: number | null = authUser.id as number
-
-  if (isEligibilityScoped) {
-    const userResult = await db.execute({
-      sql: `SELECT email_verified, id_verified, grade_level_id, subtype_id, section_id FROM users WHERE id = ?`,
-      args: [authUser.id],
-    })
-    const u = userResult.rows[0]
-    voterIdArg = authUser.id as number
-
-    if (!u?.id_verified) {
-      // Unverified students: only global elections that are active or ended
-      whereClause = `WHERE e.status IN ('active', 'ended') AND e.is_global = 1`
-    } else {
-      // Verified students: global elections OR elections they're eligible for,
-      // minus any elections with an exclusion rule matching this user
-      whereClause = `WHERE e.status IN ('active', 'ended') AND (
-        e.is_global = 1
-        OR EXISTS (
-          SELECT 1 FROM election_eligibility ee
-          WHERE ee.election_id = e.id AND ee.is_exclude = 0 AND (
-            ee.is_all_grade = 1
-            OR ee.grade_level_id = ?
-          )
-        )
-      ) AND NOT EXISTS (
-        SELECT 1 FROM election_eligibility ee2
-        WHERE ee2.election_id = e.id AND ee2.is_exclude = 1 AND (
-          ee2.grade_level_id = ?
-          OR (ee2.section_id IS NOT NULL AND ee2.section_id = ?)
-        )
-      )`
-      queryArgs.push(
-        u.grade_level_id ?? null,
-        u.grade_level_id ?? null,
-        u.section_id ?? null,
-      )
-    }
-  }
+  const voterIdArg = authUser.id as number
 
   // Pre-flight: trigger lazy auto-transitions before building the list so clients see fresh status
   const pendingTransitions = await db.execute({
@@ -67,27 +32,63 @@ export async function GET(request: NextRequest) {
     await checkAutoTransition(Number(row.id)).catch(() => {})
   }
 
+  const whereClause = admin ? '' : `WHERE e.status IN ('active', 'ended')`
+
   // Use a scalar subquery for hasVoted — LEFT JOIN caused N duplicate rows per election
   // when a voter had cast N votes (one per position). Subquery returns one row per election always.
-  const hasVotedSelect = voterIdArg !== null
-    ? `, EXISTS(SELECT 1 FROM votes vhv WHERE vhv.election_id = e.id AND vhv.voter_id = ?) AS hasVoted`
-    : ''
-  const finalArgs = voterIdArg !== null ? [voterIdArg, ...queryArgs] : queryArgs
-
   const result = await db.execute({
     sql: `SELECT
             e.*,
             (SELECT COUNT(*) FROM positions p WHERE p.election_id = e.id) AS position_count,
             (SELECT COUNT(*) FROM candidates c WHERE c.election_id = e.id) AS candidate_count,
-            (SELECT COUNT(*) FROM votes v WHERE v.election_id = e.id) AS vote_count
-            ${hasVotedSelect}
+            (SELECT COUNT(*) FROM votes v WHERE v.election_id = e.id) AS vote_count,
+            EXISTS(SELECT 1 FROM votes vhv WHERE vhv.election_id = e.id AND vhv.voter_id = ?) AS hasVoted
           FROM elections e
           ${whereClause}
           ORDER BY e.created_at DESC`,
-    args: finalArgs,
+    args: [voterIdArg],
   })
 
-  return NextResponse.json({ data: { elections: result.rows } })
+  let elections = result.rows
+
+  if (!admin) {
+    // Non-admin visibility: an election is visible if it is global OR the user is
+    // eligible under its rules. Load the user's value set once and reuse it.
+    const valueSet = await getUserValueSet(voterIdArg)
+
+    const scopedIds = elections
+      .filter((e) => !e.is_global)
+      .map((e) => Number(e.id))
+
+    const rulesByElection = new Map<number, EligibilityRule[]>()
+    if (scopedIds.length > 0) {
+      const rulesResult = await db.execute({
+        sql: `SELECT election_id, structure_id, value_id, is_all_groups, is_exclude
+              FROM election_eligibility_rules
+              WHERE election_id IN (${scopedIds.map(() => '?').join(',')})`,
+        args: scopedIds,
+      })
+      for (const r of rulesResult.rows) {
+        const eid = Number(r.election_id)
+        const list = rulesByElection.get(eid) ?? []
+        list.push({
+          structure_id: r.structure_id === null ? null : Number(r.structure_id),
+          value_id: r.value_id === null ? null : Number(r.value_id),
+          is_all_groups: Number(r.is_all_groups),
+          is_exclude: Number(r.is_exclude),
+        })
+        rulesByElection.set(eid, list)
+      }
+    }
+
+    elections = elections.filter((e) => {
+      if (e.is_global) return true
+      const rules = rulesByElection.get(Number(e.id)) ?? []
+      return evaluateEligibility(rules, valueSet)
+    })
+  }
+
+  return NextResponse.json({ data: { elections } })
 }
 
 interface CandidateInput {
@@ -185,20 +186,17 @@ export async function POST(request: NextRequest) {
     args: [isGlobal, allowTeacherVote, autoStart, autoEnd, electionId],
   })
 
-  // Save eligibility rules
+  // Save eligibility rules into the configurable-group model
   if (Array.isArray(body.eligibility) && body.eligibility.length > 0) {
-    for (const rule of body.eligibility) {
+    for (const rule of body.eligibility as EligibilityInput[]) {
       await db.execute({
-        sql: `INSERT INTO election_eligibility (election_id, grade_level_id, subtype_id, section_id, is_all_grade, is_all_subtype, is_all_section, is_exclude)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO election_eligibility_rules (election_id, structure_id, value_id, is_all_groups, is_exclude)
+              VALUES (?, ?, ?, ?, ?)`,
         args: [
           electionId,
-          rule.grade_level_id ?? null,
-          rule.subtype_id ?? null,
-          rule.section_id ?? null,
-          rule.is_all_grade ? 1 : 0,
-          rule.is_all_subtype ? 1 : 0,
-          rule.is_all_section ? 1 : 0,
+          rule.structure_id ?? null,
+          rule.value_id ?? null,
+          rule.is_all_groups ? 1 : 0,
           rule.is_exclude ? 1 : 0,
         ],
       })

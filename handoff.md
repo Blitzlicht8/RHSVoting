@@ -5,100 +5,68 @@
 ---
 
 ## Session Date
-2026-06-15
+2026-07-24
 
 ## Version After This Session
-`0.14.2` — fix: per-position candidate check on election activation
+`1.0.0` — MAJOR: rebrand to Rizal High School Elections + configurable group structures (DB migration)
 
 ---
 
 ## What Was Done
 
-### v0.14.2 — Per-position candidate check on activation
+### Rebrand → "Rizal High School Elections"
+- UI strings swapped from "Community Hub": layout.tsx metadata title, AdminLayout, Sidebar, landing page.tsx h1, register, elections copy ("school elections"), profile placeholder.
+- Settings defaults: app_name → 'Rizal High School Elections', org_type → 'school'.
+- db.ts seeds updated + one-time normalization UPDATE (legacy 'Community Hub'→brand, 'community'→'school').
+- context.md header + intro rebranded.
+- **Version fix:** `src/lib/version.ts` now imports `package.json` version (was hardcoded '0.3.0'). Settings "App Version" now tracks package.json automatically.
 
-#### `src/app/api/elections/[id]/route.ts`
-- Replaced total candidate count check with a per-position LEFT JOIN query
-- Returns 400 with named empty positions: `Cannot start — the following positions have no candidates: "President", "VP"`
-- Old check: any candidate anywhere passed validation; new check: every position must have ≥1 candidate
+### Configurable Group Structures (full cutover — replaces fixed grade/subtype/section)
+New generic model (src/lib/db.ts):
+- `group_structures(id, name, parent_structure_id NULL, is_required, order_index, active)` — leveled (parent set) or standalone (null).
+- `group_values(id, structure_id, parent_value_id NULL, name, order_index, active)` — tree via parent_value_id.
+- `user_group_values`, `candidate_group_values`, `group_verifier_values`, `election_eligibility_rules(structure_id, value_id, is_all_groups, is_exclude)`.
 
-### v0.14.1 — Fix eligible_auto subtype matching
+**Migration** (`migrateGroupStructures()` in db.ts, guarded by settings flag `group_migration_v1`):
+- Legacy DB → creates Grade Level → Strand → Section structures, migrates grade_levels/grade_subtypes/sections → group_values (section parent = subtype else grade), migrates user/candidate assignments, election_eligibility → rules, group_verifiers → verifier_values (deepest id). Then DROPS legacy tables (grade_levels, grade_subtypes, sections, election_eligibility, group_verifiers, teacher_assignments).
+- Fresh DB → seeds one required "Grade Level" structure with Grades 7–12.
+- Dead id columns (users/candidates/verification_requests .grade_level_id/subtype_id/section_id) left in place (harmless; avoids table rebuild). DO NOT use them — read user_group_values / candidate_group_values.
 
-#### `src/app/api/elections/[id]/route.ts`
-- PATCH `status → active` eligible count query for scoped elections: added `AND (ee.is_all_subtype = 1 OR u.subtype_id = ee.subtype_id)` to the WHERE clause
-- Previously the query only matched grade and section; subtype constraint was silently ignored, causing over-counting for elections scoped to a specific subtype
+**Shared lib** `src/lib/groups.ts`: getStructures, getValues, getStructureTree, getUserAssignments, setUserAssignments, validateAssignments, getUserValueSet, evaluateEligibility, buildEligibilitySql, + types.
 
-### v0.14.0 — Position max_votes_mode: eligible_auto
+**APIs**
+- New: `/api/groups` (public tree), `/api/admin/groups` (+`?tree=1`, POST), `/api/admin/groups/[id]` (PUT, DELETE — 400 last_structure / 409 has_dependencies+force), `/api/admin/groups/[id]/values` (GET/POST), `/api/admin/groups/values/[vid]` (PUT, DELETE — 409 has_users+force), `/api/admin/verifiers` (+`[id]`).
+- Deleted: `/api/admin/academic/*`, `/api/academic/*`.
+- Rewritten to new model: elections route.ts / [id]/route.ts / eligible-count / results / join/[token]; verifications route.ts / [id]; admin/users/create; users/me; admin/members/search.
 
-#### `src/lib/db.ts`
-- Added `ALTER TABLE positions ADD COLUMN max_votes_mode TEXT NOT NULL DEFAULT 'custom'` to newColumns
-
-#### `src/components/admin/elections/PositionManager.tsx`
-- `PositionForm.max_votes_mode` and `MaxVotesMode` extended to include `'eligible_auto'`
-- Mode detection in render now uses `(pos.max_votes_mode as MaxVotesMode) ?? 'custom'`
-- Collapsed badge: shows `· auto` when mode is `eligible_auto` instead of max count
-- Segmented control: added `Auto (eligible voters)` third option
-- `eligible_auto` display block: helper text explaining calculation happens at activation; no number input shown
-
-#### `src/app/api/elections/[id]/route.ts`
-- `PositionInput`: added `max_votes_mode?: string`
-- `syncPositions` INSERT: now stores `max_votes_mode` (5 columns instead of 4)
-- PATCH `status → active`: after candidate count check, resolves `eligible_auto` positions — counts eligible voters (global: all id_verified active users; scoped: JOIN election_eligibility matching grade/section), then UPDATE positions SET max_votes = count
-
-#### `src/app/admin/elections/page.tsx`
-- `addPosition`: default includes `max_votes_mode: 'custom'`
-- `openEdit` positions map + type annotation: includes `max_votes_mode`
-- `handleSave` payload: includes `max_votes_mode: p.max_votes_mode ?? 'custom'`
-
-### v0.13.4 — Eligibility restore root-cause fix
-- `onChange` effect fired on mount with empty state, clobbering `formData.eligibility` before grade levels loaded
-- Fix: `initialValueRef` captures saved rules at mount; restoration reads from ref; `onChange` suppressed until `restoredRef` is true when saved rules exist
-
-### v0.13.3 — Eligibility restore on edit
-- `GradeTargetingBuilder`: destructured `value` prop, added restoration useEffect + key for remount on open
-
-### v0.13.2 — Candidate group ID persistence
-- `candidates` table: `grade_level_id`, `subtype_id`, `section_id` columns
-- API GET/INSERT and admin page `openEdit`/`handleSave` all thread the ID columns through
-
-### v0.13.1 — Revoke verification bugfixes
-### v0.13.0 — UX Polish: Rejection Notes + Navbar Indicator
-### v0.12.0 — Unverified role guards + visual indicators
+**UI**
+- Settings: Group Structures manager (add/remove/toggle required, standalone vs level-under-parent, force-delete confirms). Old Group Labels card removed.
+- admin/academic → generic "Group Structure" value editor + generic verifier assignment.
+- ElectionFormModal: GradeTargetingBuilder → generic `GroupEligibilityBuilder` (All groups / per-structure value checkboxes → EligibilityRule[]). Restore-once pattern kept.
+- verify-id + admin/users create: dynamic per-structure cascade via new `src/components/GroupSelects.tsx` (`useGroupSelections` hook); submits `assignments: [{structure_id,value_id}]`.
+- verifications page: group badges from `groups[]`; approve simplified (no group fields).
+- Candidate group tagging (grade/subtype/section selects) REMOVED from candidate form — see follow-ups.
 
 ---
 
 ## Current State
-
-- Build: passing
+- Build: passing (npm run build exit 0)
 - TypeScript: clean
-- Version: `0.14.2`
+- Version: `1.0.0`
 
 ---
 
 ## Key Architectural Notes
-
-- `verification_status` on `users` is source of truth for banners and verify-id state
-- `unverified` role is auto-only — PATCH guard at API level + removed from role selects in UI
-- `master_admin` role assignment requires actor to be `master_admin`
-- DELETE /api/verifications checks `users.verification_status = 'pending'`
-- Approve sets `verification_status = 'approved'` + promotes `unverified → member`
-- Reject sets `verification_status = 'rejected'` + `verification_notes` on users
-- **Revoke** sets `id_verified=0`, `role='unverified'`, `verification_status='rejected'`
-- `/api/auth/me` returns `verification_status`, `needs_academic_update`, `bio`
-- `'none'` is the `image_path` placeholder in verification_requests when no files uploaded
-- `verify-id/page.tsx` calls both local `fetchUser()` AND `refetchAuth()` on submit
-- `deriveUiState` priority: id_verified → pending → rejected → upload
-- POST /api/verifications deletes ALL prior rows for user before insert (pending guard runs first)
-- Roles page is `master_admin`-only
-- `master_admin` role: permissions display forced all-true (DB stores `{}`)
-- Rejection reason mandatory in admin verifications UI
-- Candidates store `grade_level_id`, `subtype_id`, `section_id` alongside text names
-- `GradeTargetingBuilder` uses `initialValueRef` + `restoredRef` pattern to restore eligibility on edit
-- `eligible_auto` positions: `max_votes` is computed at activation from eligible voter count, not stored ahead of time
+- Group model is fully dynamic: N structures, each leveled or standalone, each required/optional. Labels = structure.name (settings group_label_l1/l2/l3 obsolete; keys still in settings ALLOWED_KEYS but unused).
+- Eligibility: a user is eligible if they match ≥1 include rule and no exclude rule. A value_id rule matches users assigned that value; a structure_id-only rule matches any user with any value in that structure; is_all_groups matches everyone. Works for leveled + standalone uniformly.
+- eligible-count reads persisted rules by `?electionId=N` (preview reflects last save, not unsaved edits).
+- Migration is one-shot idempotent via `group_migration_v1` settings flag.
 
 ---
 
-## What's Left / Ideas
-
-- `intended_role` column in `verification_requests` unused — drop in migration
-- Achievements editor for new candidates
-- Admin UI for user-level achievements
+## What's Left / Follow-ups
+- **Candidate group tagging** not reimplemented on new model (no candidate group API/UI this session). candidate_group_values exists + migrated; add admin UI + endpoint when needed.
+- Admin user **Edit** modal cannot edit a user's group assignments (no per-user assignment read/write endpoint). Add if required.
+- profile/page.tsx + users directory previously showed grade/section names — now rely on `/api/users/me` `groups[]`; verify display wired (client shows nothing if not consumed — low priority).
+- Dead grade_level_id/subtype_id/section_id columns can be dropped in a later table-rebuild migration.
+- Consider removing obsolete group_label_l1/l2/l3 from settings ALLOWED_KEYS.

@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import LightboxModal from '@/components/ui/LightboxModal'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
+import GroupSelects, { useGroupSelections } from '@/components/GroupSelects'
 
 type Role = 'master_admin' | 'admin' | 'moderator' | 'staff' | 'member' | 'unverified'
 
@@ -24,9 +25,6 @@ interface UserRow {
   avatar_url: string | null
   active: 0 | 1
   created_at: string
-  grade_level_id?: number | null
-  subtype_id?: number | null
-  section_id?: number | null
   verification_status?: string | null
 }
 
@@ -34,9 +32,6 @@ interface EditForm {
   name: string
   email: string
   role: Role
-  grade_level_id: string
-  subtype_id: string
-  section_id: string
   email_verified: boolean
   active: boolean
 }
@@ -150,12 +145,8 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<UserRow | null>(null)
   const [editForm, setEditForm] = useState<EditForm>({
     name: '', email: '', role: 'member',
-    grade_level_id: '', subtype_id: '', section_id: '',
     email_verified: false, active: true,
   })
-  const [editGradeLevels, setEditGradeLevels] = useState<Array<{id:number,name:string}>>([])
-  const [editSubtypes, setEditSubtypes] = useState<Array<{id:number,name:string}>>([])
-  const [editSections, setEditSections] = useState<Array<{id:number,name:string}>>([])
   const [saving, setSaving] = useState(false)
 
   // Document lightbox
@@ -165,9 +156,6 @@ export default function UsersPage() {
   const [docsLoading, setDocsLoading] = useState(false)
   const [deletingDocId, setDeletingDocId] = useState<number | null>(null)
   const [nameHistory, setNameHistory] = useState<{old_name:string;new_name:string;changed_at:string}[]>([])
-  const [l1, setL1] = useState('Group')
-  const [l2, setL2] = useState('Subgroup')
-  const [l3, setL3] = useState('Unit')
 
   // Upload & verify
   const [uploadFiles, setUploadFiles] = useState<File[]>([])
@@ -183,13 +171,19 @@ export default function UsersPage() {
   const createUploadInputRef = useRef<HTMLInputElement | null>(null)
   const [createForm, setCreateForm] = useState({
     name: '', email: '', password: '', role: 'member' as Role,
-    grade_level_id: '', subtype_id: '', section_id: '',
     email_verified: true, id_verified: false,
   })
-  const [gradeLevels, setGradeLevels] = useState<Array<{id:number,name:string}>>([])
-  const [subtypes, setSubtypes] = useState<Array<{id:number,name:string}>>([])
-  const [sections, setSections] = useState<Array<{id:number,name:string}>>([])
   const [showPassword, setShowPassword] = useState(false)
+
+  // Dynamic configurable group selection for the Create modal
+  const {
+    structures: createStructures,
+    selected: createSelected,
+    setValue: createSetValue,
+    assignments: createAssignments,
+    optionsFor: createOptionsFor,
+    firstMissingRequired: createFirstMissingRequired,
+  } = useGroupSelections()
 
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -247,57 +241,6 @@ export default function UsersPage() {
     fetchUsers(page, debouncedSearch, roleFilter, pendingFilter ? 'pending' : '')
   }, [page, debouncedSearch, roleFilter, pendingFilter, fetchUsers])
 
-  // Load grade levels when create modal opens
-  useEffect(() => {
-    if (!showCreateModal) return
-    fetch('/api/academic/grade-levels', { credentials: 'include' }).then(r => r.json()).then(j => setGradeLevels(j.data ?? []))
-  }, [showCreateModal])
-
-  // Load subtypes when grade level changes
-  useEffect(() => {
-    if (!createForm.grade_level_id) { setSubtypes([]); setSections([]); return }
-    fetch(`/api/academic/subtypes?gradeLevelId=${createForm.grade_level_id}`, { credentials: 'include' }).then(r=>r.json()).then(j=>setSubtypes(j.data??[]))
-  }, [createForm.grade_level_id])
-
-  // Load sections when grade level or subtype changes
-  useEffect(() => {
-    if (!createForm.grade_level_id) { setSections([]); return }
-    const url = `/api/academic/sections?gradeLevelId=${createForm.grade_level_id}${createForm.subtype_id?`&subtypeId=${createForm.subtype_id}`:''}`
-    fetch(url, { credentials: 'include' }).then(r=>r.json()).then(j=>setSections(j.data??[]))
-  }, [createForm.grade_level_id, createForm.subtype_id])
-
-  // Edit modal — load grade levels
-  useEffect(() => {
-    if (!editUser) return
-    fetch('/api/academic/grade-levels', { credentials: 'include' }).then(r => r.json()).then(j => setEditGradeLevels(j.data ?? []))
-  }, [editUser])
-
-  // Edit modal — load subtypes on grade change
-  useEffect(() => {
-    if (!editForm.grade_level_id) { setEditSubtypes([]); setEditSections([]); return }
-    fetch(`/api/academic/subtypes?gradeLevelId=${editForm.grade_level_id}`, { credentials: 'include' }).then(r=>r.json()).then(j=>setEditSubtypes(j.data??[]))
-  }, [editForm.grade_level_id])
-
-  // Edit modal — load sections on grade/subtype change
-  useEffect(() => {
-    if (!editForm.grade_level_id) { setEditSections([]); return }
-    const url = `/api/academic/sections?gradeLevelId=${editForm.grade_level_id}${editForm.subtype_id?`&subtypeId=${editForm.subtype_id}`:''}`
-    fetch(url, { credentials: 'include' }).then(r=>r.json()).then(j=>setEditSections(j.data??[]))
-  }, [editForm.grade_level_id, editForm.subtype_id])
-
-  // Fetch dynamic group labels from settings
-  useEffect(() => {
-    fetch('/api/settings', { credentials: 'include' })
-      .then(r => r.json())
-      .then(j => {
-        const d = j.data ?? {}
-        if (d.group_label_l1) setL1(d.group_label_l1)
-        if (d.group_label_l2) setL2(d.group_label_l2)
-        if (d.group_label_l3) setL3(d.group_label_l3)
-      })
-      .catch(() => {})
-  }, [])
-
   // Edit modal — load user documents + name history
   useEffect(() => {
     if (!editUser) { setUserDocs([]); setNameHistory([]); return }
@@ -318,9 +261,6 @@ export default function UsersPage() {
       name: u.name,
       email: u.email,
       role: u.role,
-      grade_level_id: u.grade_level_id ? String(u.grade_level_id) : '',
-      subtype_id: u.subtype_id ? String(u.subtype_id) : '',
-      section_id: u.section_id ? String(u.section_id) : '',
       email_verified: !!u.email_verified,
       active: !!u.active,
     })
@@ -331,10 +271,6 @@ export default function UsersPage() {
 
   const handleSaveEdit = async () => {
     if (!editUser) return
-    if (editForm.email_verified && !editForm.grade_level_id) {
-      addToast(`${l1} is required for verified users`, 'error')
-      return
-    }
     setSaving(true)
     try {
       const patch: Record<string, unknown> = {}
@@ -343,12 +279,6 @@ export default function UsersPage() {
       if (editForm.role !== editUser.role) patch.role = editForm.role
       if (editForm.email_verified !== !!editUser.email_verified) patch.email_verified = editForm.email_verified
       if (editForm.active !== !!editUser.active) patch.active = editForm.active
-      const newGl = editForm.grade_level_id ? parseInt(editForm.grade_level_id) : null
-      const newSt = editForm.subtype_id ? parseInt(editForm.subtype_id) : null
-      const newSec = editForm.section_id ? parseInt(editForm.section_id) : null
-      if (newGl !== (editUser.grade_level_id ?? null)) patch.grade_level_id = newGl
-      if (newSt !== (editUser.subtype_id ?? null)) patch.subtype_id = newSt
-      if (newSec !== (editUser.section_id ?? null)) patch.section_id = newSec
 
       if (Object.keys(patch).length > 0) {
         const res = await fetch(`/api/users/${editUser.id}`, {
@@ -401,9 +331,6 @@ export default function UsersPage() {
     try {
       const fd = new FormData()
       uploadFiles.forEach(f => fd.append('files', f))
-      if (editForm.grade_level_id) fd.append('grade_level_id', editForm.grade_level_id)
-      if (editForm.subtype_id) fd.append('subtype_id', editForm.subtype_id)
-      if (editForm.section_id) fd.append('section_id', editForm.section_id)
       const res = await fetch(`/api/admin/users/${editUser.id}/verify-upload`, {
         method: 'POST',
         credentials: 'include',
@@ -508,9 +435,13 @@ export default function UsersPage() {
   }
 
   const handleCreateUser = async () => {
-    if (createForm.id_verified && !createForm.grade_level_id) {
-      addToast('Group is required for verified accounts', 'error')
-      return
+    // Only enforce required group structures for verified accounts
+    if (createForm.id_verified) {
+      const missing = createFirstMissingRequired()
+      if (missing) {
+        addToast(`${missing.name} is required for verified accounts`, 'error')
+        return
+      }
     }
     setCreating(true)
     try {
@@ -519,9 +450,7 @@ export default function UsersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...createForm,
-          grade_level_id: createForm.grade_level_id ? parseInt(createForm.grade_level_id) : null,
-          subtype_id: createForm.subtype_id ? parseInt(createForm.subtype_id) : null,
-          section_id: createForm.section_id ? parseInt(createForm.section_id) : null,
+          assignments: createForm.id_verified ? createAssignments : [],
         }),
       })
       const json = await res.json()
@@ -531,9 +460,6 @@ export default function UsersPage() {
       if (createForm.id_verified && createUploadFiles.length > 0) {
         const fd = new FormData()
         createUploadFiles.forEach(f => fd.append('files', f))
-        if (createForm.grade_level_id) fd.append('grade_level_id', createForm.grade_level_id)
-        if (createForm.subtype_id) fd.append('subtype_id', createForm.subtype_id)
-        if (createForm.section_id) fd.append('section_id', createForm.section_id)
         const upRes = await fetch(`/api/admin/users/${json.data.userId}/verify-upload`, {
           method: 'POST', credentials: 'include', body: fd,
         })
@@ -570,8 +496,7 @@ export default function UsersPage() {
   const assignableRoles = currentUser ? getAssignableRoles(currentUser.role as Role) : []
   const canVerify = currentUser?.role === 'master_admin' || currentUser?.role === 'admin'
   const totalPages = data ? Math.ceil(data.total / 20) : 1
-  const isStudentRole = createForm.id_verified  // show academic fields when creating a verified user
-  const isEditStudentRole = true                 // always show academic fields when editing
+  const showCreateGroups = createForm.id_verified  // show group fields when creating a verified user
 
   return (
     <AdminLayout>
@@ -590,7 +515,6 @@ export default function UsersPage() {
                 setShowCreateModal(true)
                 setCreateForm({
                   name: '', email: '', password: generatePassword(), role: 'member',
-                  grade_level_id: '', subtype_id: '', section_id: '',
                   email_verified: true, id_verified: false,
                 })
                 setCreateUploadFiles([])
@@ -1073,7 +997,7 @@ export default function UsersPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
               <select value={editForm.role}
-                onChange={(e) => setEditForm(f => ({ ...f, role: e.target.value as Role, grade_level_id: '', subtype_id: '', section_id: '' }))}
+                onChange={(e) => setEditForm(f => ({ ...f, role: e.target.value as Role }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
               >
                 {editUser?.role === 'unverified' && (
@@ -1087,50 +1011,6 @@ export default function UsersPage() {
                 <p className="mt-1 text-xs text-amber-700">Only Master Admins can assign the Master Admin role.</p>
               )}
             </div>
-            {isEditStudentRole && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{l1}</label>
-                  <select value={editForm.grade_level_id}
-                    onChange={(e) => setEditForm(f => ({ ...f, grade_level_id: e.target.value, subtype_id: '', section_id: '' }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                  >
-                    <option value="">— Select {l1.toLowerCase()} —</option>
-                    {editGradeLevels.map((gl) => (
-                      <option key={gl.id} value={String(gl.id)}>{gl.name}</option>
-                    ))}
-                  </select>
-                </div>
-                {editSubtypes.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{l2}</label>
-                    <select value={editForm.subtype_id}
-                      onChange={(e) => setEditForm(f => ({ ...f, subtype_id: e.target.value, section_id: '' }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                    >
-                      <option value="">— Select {l2.toLowerCase()} —</option>
-                      {editSubtypes.map((st) => (
-                        <option key={st.id} value={String(st.id)}>{st.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {editSections.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{l3}</label>
-                    <select value={editForm.section_id}
-                      onChange={(e) => setEditForm(f => ({ ...f, section_id: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                    >
-                      <option value="">— Select {l3.toLowerCase()} —</option>
-                      {editSections.map((sec) => (
-                        <option key={sec.id} value={String(sec.id)}>{sec.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </>
-            )}
             <div className="flex items-center gap-6 pt-1">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={editForm.email_verified}
@@ -1350,7 +1230,7 @@ export default function UsersPage() {
             </label>
             <select
               value={createForm.id_verified ? createForm.role : 'unverified'}
-              onChange={(e) => setCreateForm(f => ({ ...f, role: e.target.value as Role, grade_level_id: '', subtype_id: '', section_id: '' }))}
+              onChange={(e) => setCreateForm(f => ({ ...f, role: e.target.value as Role }))}
               disabled={!createForm.id_verified}
               className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white ${!createForm.id_verified ? 'border-gray-200 text-gray-400 cursor-not-allowed' : 'border-gray-300'}`}
             >
@@ -1364,57 +1244,14 @@ export default function UsersPage() {
             )}
           </div>
 
-          {/* Academic fields for member / moderator */}
-          {isStudentRole && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {l1} {createForm.id_verified && <span className="text-red-500">*</span>}
-                </label>
-                <select
-                  value={createForm.grade_level_id}
-                  onChange={(e) => setCreateForm(f => ({ ...f, grade_level_id: e.target.value, subtype_id: '', section_id: '' }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                >
-                  <option value="">— Select {l1.toLowerCase()} —</option>
-                  {gradeLevels.map((gl) => (
-                    <option key={gl.id} value={String(gl.id)}>{gl.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {subtypes.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{l2}</label>
-                  <select
-                    value={createForm.subtype_id}
-                    onChange={(e) => setCreateForm(f => ({ ...f, subtype_id: e.target.value, section_id: '' }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                  >
-                    <option value="">— Select {l2.toLowerCase()} —</option>
-                    {subtypes.map((st) => (
-                      <option key={st.id} value={String(st.id)}>{st.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {sections.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{l3}</label>
-                  <select
-                    value={createForm.section_id}
-                    onChange={(e) => setCreateForm(f => ({ ...f, section_id: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white"
-                  >
-                    <option value="">— Select {l3.toLowerCase()} —</option>
-                    {sections.map((sec) => (
-                      <option key={sec.id} value={String(sec.id)}>{sec.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </>
+          {/* Configurable group structures — only for verified accounts */}
+          {showCreateGroups && (
+            <GroupSelects
+              structures={createStructures}
+              selected={createSelected}
+              setValue={createSetValue}
+              optionsFor={createOptionsFor}
+            />
           )}
 
           {/* Verification flags */}

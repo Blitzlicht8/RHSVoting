@@ -224,7 +224,7 @@ export default function ElectionsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Elections</h1>
-            <p className="text-sm text-gray-500 mt-1">Browse and participate in community elections</p>
+            <p className="text-sm text-gray-500 mt-1">Browse and participate in school elections</p>
           </div>
           {isAdmin && (
             <Link

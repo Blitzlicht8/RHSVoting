@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { buildEligibilitySql, EligibilityRule } from '@/lib/groups'
 
 export async function GET(request: NextRequest) {
   await ensureInit()
@@ -28,43 +29,26 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: { count: Number(countResult.rows[0]?.count ?? 0) } })
   }
 
-  const eligibilityResult = await db.execute({
-    sql: `SELECT * FROM election_eligibility WHERE election_id = ? AND is_exclude = 0`,
+  const rulesResult = await db.execute({
+    sql: `SELECT structure_id, value_id, is_all_groups, is_exclude
+          FROM election_eligibility_rules WHERE election_id = ?`,
     args: [electionId],
   })
-  const rules = eligibilityResult.rows
+  const rules: EligibilityRule[] = rulesResult.rows.map((row) => ({
+    structure_id: row.structure_id === null ? null : Number(row.structure_id),
+    value_id: row.value_id === null ? null : Number(row.value_id),
+    is_all_groups: Number(row.is_all_groups),
+    is_exclude: Number(row.is_exclude),
+  }))
 
   if (rules.length === 0) {
     return NextResponse.json({ data: { count: 0 } })
   }
 
-  const conditions: string[] = []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const args: any[] = []
-  let allUsers = false
-
-  for (const rule of rules) {
-    if (rule.is_all_grade) {
-      allUsers = true
-      break
-    }
-    let cond = `grade_level_id = ?`
-    args.push(rule.grade_level_id)
-    if (!rule.is_all_subtype && rule.subtype_id) {
-      cond += ` AND subtype_id = ?`
-      args.push(rule.subtype_id)
-    }
-    if (!rule.is_all_section && rule.section_id) {
-      cond += ` AND section_id = ?`
-      args.push(rule.section_id)
-    }
-    conditions.push(`(${cond})`)
-  }
-
-  const whereExtra = allUsers ? '' : ` AND (${conditions.join(' OR ')})`
+  const { sql: eligSql, args: eligArgs } = buildEligibilitySql(rules, 'u')
   const countResult = await db.execute({
-    sql: `SELECT COUNT(*) as count FROM users WHERE id_verified = 1 AND active = 1${whereExtra}`,
-    args: allUsers ? [] : args,
+    sql: `SELECT COUNT(*) as count FROM users u WHERE u.id_verified = 1 AND u.active = 1 AND ${eligSql}`,
+    args: eligArgs,
   })
 
   return NextResponse.json({ data: { count: Number(countResult.rows[0]?.count ?? 0) } })

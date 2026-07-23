@@ -12,19 +12,30 @@ import { CandidateForm, StudentResult } from './CandidateManager'
 
 export type ElectionStatus = 'draft' | 'active' | 'ended'
 
-export interface GradeLevel {
-  id: number
-  name: string
+export interface EligibilityRule {
+  structure_id: number | null
+  value_id: number | null
+  is_all_groups: boolean
+  is_exclude: boolean
 }
 
-export interface EligibilityRule {
-  grade_level_id: number | null
-  subtype_id: number | null
-  section_id: number | null
-  is_all_grade: boolean
-  is_all_subtype: boolean
-  is_all_section: boolean
-  is_exclude: boolean
+export interface GroupValue {
+  id: number
+  structure_id: number
+  parent_value_id: number | null
+  name: string
+  order_index: number
+  active: boolean
+}
+
+export interface StructureWithValues {
+  id: number
+  name: string
+  parent_structure_id: number | null
+  is_required: boolean
+  order_index: number
+  active: boolean
+  values: GroupValue[]
 }
 
 export interface ElectionForm {
@@ -57,96 +68,43 @@ export interface Election {
   share_token?: string | null
 }
 
-// ── GradeTargetingBuilder ────────────────────────────────────────────────────
+// ── GroupEligibilityBuilder ──────────────────────────────────────────────────
 
-interface GradeSubtype { id: number; name: string; grade_level_id: number }
-interface Section { id: number; name: string; grade_level_id: number; subtype_id: number | null }
-
-interface GradeState {
-  subtypes: GradeSubtype[]
-  subtypesLoaded: boolean
-  sections: Record<string, Section[]>   // key: subtypeId string or 'direct'
-  sectionsLoaded: Record<string, boolean>
-}
-
-// Selection state (separate from eligibility rules for UI control)
-interface GradeSelection {
-  allGrade: boolean
-  subtypes: Record<number, { checked: boolean; allSubtype: boolean; sections: Record<number, boolean>; allSection: boolean }>
-  directSections: Record<number, boolean>
-  directAllSection: boolean
+interface StructureSelection {
+  allStructure: boolean
+  valueIds: Set<number>
 }
 
 function buildEligibility(
-  gradeLevels: GradeLevel[],
-  gradeSelections: Record<number, GradeSelection>,
-  gradeStates: Record<number, GradeState>,
-  checkedGradeIds: Set<number>,
+  structures: StructureWithValues[],
+  selections: Record<number, StructureSelection>,
 ): EligibilityRule[] {
   const rules: EligibilityRule[] = []
-
-  for (const gradeId of Array.from(checkedGradeIds)) {
-    const sel = gradeSelections[gradeId]
+  for (const s of structures) {
+    const sel = selections[s.id]
     if (!sel) continue
-    const gl = gradeLevels.find((g) => g.id === gradeId)
-    if (!gl) continue
-
-    if (sel.allGrade) {
-      rules.push({ grade_level_id: gradeId, subtype_id: null, section_id: null, is_all_grade: false, is_all_subtype: true, is_all_section: true, is_exclude: false })
+    if (sel.allStructure) {
+      rules.push({ structure_id: s.id, value_id: null, is_all_groups: false, is_exclude: false })
       continue
     }
-
-    const state = gradeStates[gradeId]
-    const hasSubtypes = state?.subtypesLoaded && state.subtypes.length > 0
-
-    if (!hasSubtypes) {
-      // direct sections
-      if (sel.directAllSection) {
-        rules.push({ grade_level_id: gradeId, subtype_id: null, section_id: null, is_all_grade: false, is_all_subtype: true, is_all_section: true, is_exclude: false })
-      } else {
-        const directSections = state?.sections['direct'] ?? []
-        for (const sec of directSections) {
-          if (sel.directSections[sec.id]) {
-            rules.push({ grade_level_id: gradeId, subtype_id: null, section_id: sec.id, is_all_grade: false, is_all_subtype: true, is_all_section: false, is_exclude: false })
-          }
-        }
-      }
-    } else {
-      for (const st of state.subtypes) {
-        const stSel = sel.subtypes[st.id]
-        if (!stSel?.checked) continue
-
-        if (stSel.allSubtype) {
-          rules.push({ grade_level_id: gradeId, subtype_id: st.id, section_id: null, is_all_grade: false, is_all_subtype: false, is_all_section: true, is_exclude: false })
-        } else {
-          const stSections = state.sections[String(st.id)] ?? []
-          for (const sec of stSections) {
-            if (stSel.sections[sec.id]) {
-              rules.push({ grade_level_id: gradeId, subtype_id: st.id, section_id: sec.id, is_all_grade: false, is_all_subtype: false, is_all_section: false, is_exclude: false })
-            }
-          }
-        }
-      }
+    for (const valueId of Array.from(sel.valueIds)) {
+      rules.push({ structure_id: s.id, value_id: valueId, is_all_groups: false, is_exclude: false })
     }
   }
-
   return rules
 }
 
-function GradeTargetingBuilder({
+function GroupEligibilityBuilder({
   value,
   onChange,
 }: {
   value: EligibilityRule[]
   onChange: (rules: EligibilityRule[]) => void
 }) {
-  const [gradeLevels, setGradeLevels] = useState<GradeLevel[]>([])
-  const [loadingGrades, setLoadingGrades] = useState(true)
-  const [isAllGrades, setIsAllGrades] = useState(false)
-  const [checkedGradeIds, setCheckedGradeIds] = useState<Set<number>>(new Set())
-  const [gradeStates, setGradeStates] = useState<Record<number, GradeState>>({})
-  const [gradeSelections, setGradeSelections] = useState<Record<number, GradeSelection>>({})
-  const [labels, setLabels] = useState({ l1: 'Group', l2: 'Subgroup', l3: 'Unit' })
+  const [structures, setStructures] = useState<StructureWithValues[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isAllGroups, setIsAllGroups] = useState(false)
+  const [selections, setSelections] = useState<Record<number, StructureSelection>>({})
   const fetchedRef = useRef(false)
   const restoredRef = useRef(false)
   const initialValueRef = useRef(value)
@@ -154,381 +112,125 @@ function GradeTargetingBuilder({
   useEffect(() => {
     if (fetchedRef.current) return
     fetchedRef.current = true
-    Promise.all([
-      fetch('/api/academic/grade-levels', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
-      fetch('/api/settings', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
-    ])
-      .then(([gradesJson, settingsJson]) => {
-        const levels: GradeLevel[] = gradesJson.data?.gradeLevels ?? gradesJson.data?.grade_levels ?? gradesJson.data ?? []
-        setGradeLevels(Array.isArray(levels) ? levels : [])
-        const s: Record<string, string> = settingsJson.data ?? {}
-        setLabels({
-          l1: s.group_label_l1 ?? 'Group',
-          l2: s.group_label_l2 ?? 'Subgroup',
-          l3: s.group_label_l3 ?? 'Unit',
-        })
+    fetch('/api/groups', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((json) => {
+        const data: StructureWithValues[] = Array.isArray(json.data) ? json.data : []
+        const active = data
+          .filter((s) => s.active)
+          .sort((a, b) => a.order_index - b.order_index)
+        setStructures(active)
       })
-      .finally(() => setLoadingGrades(false))
+      .catch(() => setStructures([]))
+      .finally(() => setLoading(false))
   }, [])
 
-  // Restore UI state from saved eligibility rules once grade levels are available
+  // Restore UI state from saved eligibility rules once structures are available.
   useEffect(() => {
     const saved = initialValueRef.current
-    if (restoredRef.current || gradeLevels.length === 0 || saved.length === 0) return
+    if (restoredRef.current || structures.length === 0 || saved.length === 0) return
     restoredRef.current = true
 
-    if (saved.some((r) => r.is_all_grade)) {
-      setIsAllGrades(true)
+    if (saved.some((r) => r.is_all_groups)) {
+      setIsAllGroups(true)
       return
     }
 
-    const byGrade = new Map<number, EligibilityRule[]>()
+    const next: Record<number, StructureSelection> = {}
     for (const rule of saved) {
-      if (rule.grade_level_id == null) continue
-      const arr = byGrade.get(rule.grade_level_id) ?? []
-      arr.push(rule)
-      byGrade.set(rule.grade_level_id, arr)
-    }
-
-    const gradeIds = Array.from(byGrade.keys())
-    setCheckedGradeIds(new Set(gradeIds))
-
-    for (const gradeId of gradeIds) {
-      const rules = byGrade.get(gradeId) ?? []
-
-      // All of this grade (is_all_subtype=true, no specific subtype/section)
-      if (rules.some((r) => r.is_all_subtype && r.subtype_id == null && r.section_id == null)) {
-        setGradeSelections((prev) => ({
-          ...prev,
-          [gradeId]: { allGrade: true, subtypes: {}, directSections: {}, directAllSection: false },
-        }))
-        setGradeStates((prev) => ({
-          ...prev,
-          [gradeId]: { ...(prev[gradeId] ?? { sections: {}, sectionsLoaded: {} }), subtypes: [], subtypesLoaded: true },
-        }))
-        continue
+      if (rule.is_exclude || rule.structure_id == null) continue
+      const cur = next[rule.structure_id] ?? { allStructure: false, valueIds: new Set<number>() }
+      if (rule.value_id == null) {
+        cur.allStructure = true
+      } else {
+        cur.valueIds.add(rule.value_id)
       }
-
-      fetch(`/api/academic/subtypes?gradeLevelId=${gradeId}`, { credentials: 'include' })
-        .then((r) => r.json())
-        .then((json) => {
-          const subtypes: GradeSubtype[] = json.data?.subtypes ?? json.data ?? []
-          setGradeStates((prev) => ({
-            ...prev,
-            [gradeId]: { ...(prev[gradeId] ?? { sections: {}, sectionsLoaded: {} }), subtypes, subtypesLoaded: true },
-          }))
-
-          if (subtypes.length === 0) {
-            const selectedIds = new Set(rules.filter((r) => r.section_id != null).map((r) => r.section_id!))
-            setGradeSelections((prev) => ({
-              ...prev,
-              [gradeId]: {
-                allGrade: false, subtypes: {}, directAllSection: false,
-                directSections: Object.fromEntries(Array.from(selectedIds).map((id) => [id, true])),
-              },
-            }))
-            fetch(`/api/academic/sections?gradeLevelId=${gradeId}`, { credentials: 'include' })
-              .then((r) => r.json())
-              .then((json2) => {
-                const sections: Section[] = json2.data?.sections ?? json2.data ?? []
-                setGradeStates((prev) => ({
-                  ...prev,
-                  [gradeId]: {
-                    ...(prev[gradeId] ?? { subtypes: [], subtypesLoaded: true, sectionsLoaded: {} }),
-                    sections: { ...(prev[gradeId]?.sections ?? {}), direct: sections },
-                    sectionsLoaded: { ...(prev[gradeId]?.sectionsLoaded ?? {}), direct: true },
-                  },
-                }))
-              })
-              .catch(() => {})
-          } else {
-            const subtypeSelMap: GradeSelection['subtypes'] = {}
-            const sectionsToFetch: number[] = []
-            for (const st of subtypes) {
-              const stRules = rules.filter((r) => r.subtype_id === st.id)
-              if (stRules.length === 0) continue
-              const allSubtype = stRules.some((r) => r.is_all_section && r.section_id == null)
-              const selectedSectionIds = new Set(stRules.filter((r) => r.section_id != null).map((r) => r.section_id!))
-              subtypeSelMap[st.id] = {
-                checked: true, allSubtype, allSection: allSubtype,
-                sections: Object.fromEntries(Array.from(selectedSectionIds).map((id) => [id, true])),
-              }
-              if (!allSubtype && selectedSectionIds.size > 0) sectionsToFetch.push(st.id)
-            }
-            setGradeSelections((prev) => ({
-              ...prev,
-              [gradeId]: { allGrade: false, subtypes: subtypeSelMap, directSections: {}, directAllSection: false },
-            }))
-            for (const stId of sectionsToFetch) {
-              fetch(`/api/academic/sections?gradeLevelId=${gradeId}&subtypeId=${stId}`, { credentials: 'include' })
-                .then((r) => r.json())
-                .then((json2) => {
-                  const sections: Section[] = json2.data?.sections ?? json2.data ?? []
-                  setGradeStates((prev) => ({
-                    ...prev,
-                    [gradeId]: {
-                      ...(prev[gradeId] ?? { subtypes, subtypesLoaded: true, sectionsLoaded: {} }),
-                      sections: { ...(prev[gradeId]?.sections ?? {}), [String(stId)]: sections },
-                      sectionsLoaded: { ...(prev[gradeId]?.sectionsLoaded ?? {}), [String(stId)]: true },
-                    },
-                  }))
-                })
-                .catch(() => {})
-            }
-          }
-        })
-        .catch(() => {})
+      next[rule.structure_id] = cur
     }
+    setSelections(next)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gradeLevels.length])
+  }, [structures.length])
 
   // Notify parent whenever selection changes.
   // Suppressed before restoration completes so the on-mount empty state
   // does not overwrite the saved eligibility in the parent's formData.
   useEffect(() => {
     if (!restoredRef.current && initialValueRef.current.length > 0) return
-    if (isAllGrades) {
-      onChange([{ grade_level_id: null, subtype_id: null, section_id: null, is_all_grade: true, is_all_subtype: true, is_all_section: true, is_exclude: false }])
+    if (isAllGroups) {
+      onChange([{ structure_id: null, value_id: null, is_all_groups: true, is_exclude: false }])
       return
     }
-    onChange(buildEligibility(gradeLevels, gradeSelections, gradeStates, checkedGradeIds))
+    onChange(buildEligibility(structures, selections))
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAllGrades, checkedGradeIds, gradeSelections, gradeStates])
+  }, [isAllGroups, selections, structures])
 
-  const fetchSubtypes = async (gradeId: number) => {
-    setGradeStates((prev) => ({
+  const toggleAllStructure = (structureId: number, checked: boolean) => {
+    setSelections((prev) => ({
       ...prev,
-      [gradeId]: { ...prev[gradeId], subtypes: [], subtypesLoaded: false, sections: prev[gradeId]?.sections ?? {}, sectionsLoaded: prev[gradeId]?.sectionsLoaded ?? {} },
+      [structureId]: { allStructure: checked, valueIds: checked ? new Set<number>() : (prev[structureId]?.valueIds ?? new Set<number>()) },
     }))
-    try {
-      const r = await fetch(`/api/academic/subtypes?gradeLevelId=${gradeId}`, { credentials: 'include' })
-      const json = await r.json()
-      const subtypes: GradeSubtype[] = json.data?.subtypes ?? json.data ?? []
-      setGradeStates((prev) => ({
-        ...prev,
-        [gradeId]: { ...(prev[gradeId] ?? { sections: {}, sectionsLoaded: {} }), subtypes, subtypesLoaded: true },
-      }))
-      if (subtypes.length === 0) {
-        // no subtypes — fetch direct sections
-        fetchDirectSections(gradeId)
-      }
-    } catch {
-      setGradeStates((prev) => ({
-        ...prev,
-        [gradeId]: { ...(prev[gradeId] ?? { sections: {}, sectionsLoaded: {} }), subtypes: [], subtypesLoaded: true },
-      }))
-    }
   }
 
-  const fetchDirectSections = async (gradeId: number) => {
-    try {
-      const r = await fetch(`/api/academic/sections?gradeLevelId=${gradeId}`, { credentials: 'include' })
-      const json = await r.json()
-      const sections: Section[] = json.data?.sections ?? json.data ?? []
-      setGradeStates((prev) => ({
-        ...prev,
-        [gradeId]: {
-          ...(prev[gradeId] ?? { subtypes: [], subtypesLoaded: false, sectionsLoaded: {} }),
-          sections: { ...(prev[gradeId]?.sections ?? {}), direct: sections },
-          sectionsLoaded: { ...(prev[gradeId]?.sectionsLoaded ?? {}), direct: true },
-        },
-      }))
-    } catch {}
-  }
-
-  const fetchSubtypeSections = async (gradeId: number, subtypeId: number) => {
-    try {
-      const r = await fetch(`/api/academic/sections?gradeLevelId=${gradeId}&subtypeId=${subtypeId}`, { credentials: 'include' })
-      const json = await r.json()
-      const sections: Section[] = json.data?.sections ?? json.data ?? []
-      setGradeStates((prev) => ({
-        ...prev,
-        [gradeId]: {
-          ...(prev[gradeId] ?? { subtypes: [], subtypesLoaded: false, sectionsLoaded: {} }),
-          sections: { ...(prev[gradeId]?.sections ?? {}), [String(subtypeId)]: sections },
-          sectionsLoaded: { ...(prev[gradeId]?.sectionsLoaded ?? {}), [String(subtypeId)]: true },
-        },
-      }))
-    } catch {}
-  }
-
-  const handleAllGradesToggle = (checked: boolean) => {
-    setIsAllGrades(checked)
-    if (checked) {
-      setCheckedGradeIds(new Set())
-      setGradeSelections({})
-    }
-  }
-
-  const handleGradeToggle = (gradeId: number, checked: boolean) => {
-    setCheckedGradeIds((prev) => {
-      const next = new Set(prev)
-      if (checked) { next.add(gradeId) } else { next.delete(gradeId) }
-      return next
+  const toggleValue = (structureId: number, valueId: number, checked: boolean) => {
+    setSelections((prev) => {
+      const cur = prev[structureId] ?? { allStructure: false, valueIds: new Set<number>() }
+      const nextIds = new Set(cur.valueIds)
+      if (checked) { nextIds.add(valueId) } else { nextIds.delete(valueId) }
+      return { ...prev, [structureId]: { allStructure: false, valueIds: nextIds } }
     })
-    if (checked) {
-      setGradeSelections((prev) => ({
-        ...prev,
-        [gradeId]: prev[gradeId] ?? { allGrade: false, subtypes: {}, directSections: {}, directAllSection: false },
-      }))
-      fetchSubtypes(gradeId)
-    }
   }
 
-  const updateGradeSel = (gradeId: number, patch: Partial<GradeSelection>) => {
-    setGradeSelections((prev) => ({ ...prev, [gradeId]: { ...(prev[gradeId] ?? { allGrade: false, subtypes: {}, directSections: {}, directAllSection: false }), ...patch } }))
-  }
-
-  if (loadingGrades) return <p className="text-sm text-gray-400">Loading {labels.l1.toLowerCase()} levels...</p>
-  if (gradeLevels.length === 0) return <p className="text-sm text-gray-400">No {labels.l1.toLowerCase()} levels found.</p>
+  if (loading) return <p className="text-sm text-gray-400">Loading groups...</p>
+  if (structures.length === 0) return <p className="text-sm text-gray-400">No groups configured.</p>
 
   return (
-    <div className="space-y-2">
-      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{labels.l1} Levels</p>
-      {/* All levels */}
+    <div className="space-y-3">
+      {/* All groups */}
       <label className="flex items-center gap-3">
-        <input type="checkbox" checked={isAllGrades} onChange={(e) => handleAllGradesToggle(e.target.checked)} className="w-4 h-4" />
-        <span className="text-sm text-gray-700 font-medium">All {labels.l1} Levels</span>
+        <input
+          type="checkbox"
+          checked={isAllGroups}
+          onChange={(e) => setIsAllGroups(e.target.checked)}
+          className="w-4 h-4 accent-[#84050C]"
+        />
+        <span className="text-sm text-gray-700 font-medium">All groups (everyone)</span>
       </label>
 
-      {!isAllGrades && (
-        <div className="ml-6 space-y-3">
-          {gradeLevels.map((gl) => {
-            const isChecked = checkedGradeIds.has(gl.id)
-            const sel = gradeSelections[gl.id]
-            const state = gradeStates[gl.id]
-
+      {!isAllGroups && (
+        <div className="ml-6 space-y-4">
+          {structures.map((s) => {
+            const sel = selections[s.id] ?? { allStructure: false, valueIds: new Set<number>() }
+            const activeValues = s.values
+              .filter((v) => v.active)
+              .sort((a, b) => a.order_index - b.order_index)
             return (
-              <div key={gl.id}>
-                {/* Grade row */}
+              <div key={s.id} className="space-y-1.5">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{s.name}</p>
                 <label className="flex items-center gap-3">
                   <input
                     type="checkbox"
-                    checked={isChecked}
-                    onChange={(e) => handleGradeToggle(gl.id, e.target.checked)}
-                    className="w-4 h-4"
+                    checked={sel.allStructure}
+                    onChange={(e) => toggleAllStructure(s.id, e.target.checked)}
+                    className="w-3.5 h-3.5 accent-[#84050C]"
                   />
-                  <span className="text-sm text-gray-700 font-medium">{gl.name}</span>
+                  <span className="text-xs text-gray-600 font-medium">All of {s.name}</span>
                 </label>
-
-                {isChecked && sel && (
-                  <div className="ml-6 mt-1.5 space-y-2">
-                    {/* All of this grade */}
-                    <label className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={sel.allGrade}
-                        onChange={(e) => updateGradeSel(gl.id, { allGrade: e.target.checked })}
-                        className="w-3.5 h-3.5"
-                      />
-                      <span className="text-xs text-gray-600 font-medium">All of {gl.name}</span>
-                    </label>
-
-                    {!sel.allGrade && state && (
-                      <>
-                        {!state.subtypesLoaded && (
-                          <p className="text-xs text-gray-400 ml-1">Loading...</p>
-                        )}
-
-                        {/* Subtypes */}
-                        {state.subtypesLoaded && state.subtypes.length > 0 && state.subtypes.map((st) => {
-                          const stSel = sel.subtypes[st.id] ?? { checked: false, allSubtype: false, sections: {}, allSection: false }
-                          return (
-                            <div key={st.id}>
-                              <label className="flex items-center gap-3">
-                                <input
-                                  type="checkbox"
-                                  checked={stSel.checked}
-                                  onChange={(e) => {
-                                    const checked = e.target.checked
-                                    updateGradeSel(gl.id, {
-                                      subtypes: { ...sel.subtypes, [st.id]: { ...stSel, checked } },
-                                    })
-                                    if (checked && !state.sectionsLoaded[String(st.id)]) {
-                                      fetchSubtypeSections(gl.id, st.id)
-                                    }
-                                  }}
-                                  className="w-3.5 h-3.5"
-                                />
-                                <span className="text-xs text-gray-700">{st.name}</span>
-                              </label>
-
-                              {stSel.checked && (
-                                <div className="ml-6 mt-1 space-y-1">
-                                  {/* All subtype sections */}
-                                  <label className="flex items-center gap-3">
-                                    <input
-                                      type="checkbox"
-                                      checked={stSel.allSubtype}
-                                      onChange={(e) => updateGradeSel(gl.id, {
-                                        subtypes: { ...sel.subtypes, [st.id]: { ...stSel, allSubtype: e.target.checked } },
-                                      })}
-                                      className="w-3 h-3"
-                                    />
-                                    <span className="text-xs text-gray-500">All {st.name} {labels.l3}s</span>
-                                  </label>
-
-                                  {!stSel.allSubtype && (
-                                    <>
-                                      {!state.sectionsLoaded[String(st.id)] && <p className="text-xs text-gray-400">Loading sections...</p>}
-                                      {(state.sections[String(st.id)] ?? []).map((sec) => (
-                                        <label key={sec.id} className="flex items-center gap-3">
-                                          <input
-                                            type="checkbox"
-                                            checked={stSel.sections[sec.id] ?? false}
-                                            onChange={(e) => updateGradeSel(gl.id, {
-                                              subtypes: {
-                                                ...sel.subtypes,
-                                                [st.id]: { ...stSel, sections: { ...stSel.sections, [sec.id]: e.target.checked } },
-                                              },
-                                            })}
-                                            className="w-3 h-3"
-                                          />
-                                          <span className="text-xs text-gray-600">{sec.name}</span>
-                                        </label>
-                                      ))}
-                                    </>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
-
-                        {/* Direct sections (no subtypes) */}
-                        {state.subtypesLoaded && state.subtypes.length === 0 && (
-                          <div className="space-y-1">
-                            <label className="flex items-center gap-3">
-                              <input
-                                type="checkbox"
-                                checked={sel.directAllSection}
-                                onChange={(e) => updateGradeSel(gl.id, { directAllSection: e.target.checked })}
-                                className="w-3 h-3"
-                              />
-                              <span className="text-xs text-gray-500">All {labels.l3}s</span>
-                            </label>
-                            {!sel.directAllSection && (
-                              <>
-                                {!state.sectionsLoaded['direct'] && <p className="text-xs text-gray-400">Loading sections...</p>}
-                                {(state.sections['direct'] ?? []).map((sec) => (
-                                  <label key={sec.id} className="flex items-center gap-3">
-                                    <input
-                                      type="checkbox"
-                                      checked={sel.directSections[sec.id] ?? false}
-                                      onChange={(e) => updateGradeSel(gl.id, {
-                                        directSections: { ...sel.directSections, [sec.id]: e.target.checked },
-                                      })}
-                                      className="w-3 h-3"
-                                    />
-                                    <span className="text-xs text-gray-600">{sec.name}</span>
-                                  </label>
-                                ))}
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </>
+                {!sel.allStructure && (
+                  <div className="ml-6 space-y-1">
+                    {activeValues.length === 0 && (
+                      <p className="text-xs text-gray-400">No values.</p>
                     )}
+                    {activeValues.map((v) => (
+                      <label key={v.id} className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={sel.valueIds.has(v.id)}
+                          onChange={(e) => toggleValue(s.id, v.id, e.target.checked)}
+                          className="w-3 h-3 accent-[#84050C]"
+                        />
+                        <span className="text-xs text-gray-600">{v.name}</span>
+                      </label>
+                    ))}
                   </div>
                 )}
               </div>
@@ -846,9 +548,9 @@ export default function ElectionFormModal({
             <span className="text-sm text-gray-700">Global Election (all verified members can vote)</span>
           </label>
 
-          {/* Grade targeting — shown when global=false */}
+          {/* Group targeting — shown when global=false */}
           {!formData.is_global && (
-            <GradeTargetingBuilder
+            <GroupEligibilityBuilder
               key={`${election?.id ?? 'new'}-${open}`}
               value={formData.eligibility}
               onChange={(eligibility) => handleFormChange({ eligibility })}

@@ -4,6 +4,7 @@ import { put } from '@vercel/blob'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
+import { setUserAssignments, validateAssignments, type Assignment } from '@/lib/groups'
 import { InValue } from '@libsql/client'
 
 const MAX_FILES = 3
@@ -38,13 +39,21 @@ export async function GET(request: NextRequest) {
 
   let where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
-  // Staff only see requests for their assigned grades/sections
-  if (role === 'staff') {
-    const teacherCondition = `(
-      vr.grade_level_id IN (SELECT grade_level_id FROM teacher_assignments WHERE teacher_id = ${authUser.id} AND grade_level_id IS NOT NULL)
-      OR vr.section_id IN (SELECT section_id FROM teacher_assignments WHERE teacher_id = ${authUser.id} AND section_id IS NOT NULL)
+  // NEW scoping: non-admin verifiers (staff/moderator) only see requests whose
+  // user shares at least one (structure_id,value_id) with the verifier's own
+  // group_verifier_values rows. Full admins see everything.
+  const isFullAdmin = ['master_admin', 'admin'].includes(role)
+  if (!isFullAdmin) {
+    const scopeCondition = `EXISTS (
+      SELECT 1
+      FROM user_group_values ugv
+      JOIN group_verifier_values gvv
+        ON gvv.structure_id = ugv.structure_id
+       AND gvv.value_id = ugv.value_id
+      WHERE ugv.user_id = vr.user_id
+        AND gvv.user_id = ${authUser.id}
     )`
-    where = where ? `${where} AND ${teacherCondition}` : `WHERE ${teacherCondition}`
+    where = where ? `${where} AND ${scopeCondition}` : `WHERE ${scopeCondition}`
   }
 
   const countResult = await db.execute({
@@ -56,13 +65,9 @@ export async function GET(request: NextRequest) {
   const requestsResult = await db.execute({
     sql: `SELECT vr.*, u.name AS user_name, u.email AS user_email, u.role AS user_role,
                  u.avatar_url AS user_avatar_url, u.grade_level, u.section,
-                 vr.grade_level_id, vr.subtype_id, vr.section_id, vr.doc_type,
-                 gl.name AS grade_level_name, gs.name AS subtype_name, s.name AS section_name
+                 vr.doc_type
           FROM verification_requests vr
           JOIN users u ON u.id = vr.user_id
-          LEFT JOIN grade_levels gl ON gl.id = vr.grade_level_id
-          LEFT JOIN grade_subtypes gs ON gs.id = vr.subtype_id
-          LEFT JOIN sections s ON s.id = vr.section_id
           ${where}
           ORDER BY vr.created_at DESC
           LIMIT ? OFFSET ?`,
@@ -71,6 +76,7 @@ export async function GET(request: NextRequest) {
 
   const requests   = requestsResult.rows
   const requestIds = requests.map(r => Number(r.id))
+  const userIds    = requests.map(r => Number(r.user_id))
 
   let documentsMap: Record<number, Array<{id: number, file_path: string}>> = {}
   if (requestIds.length > 0) {
@@ -86,9 +92,34 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // NEW: build each request's group labels from the user's assignments,
+  // ordered by the structure order_index.
+  const groupsMap: Record<number, Array<{ structure_name: string; value_name: string }>> = {}
+  if (userIds.length > 0) {
+    const placeholders = userIds.map(() => '?').join(',')
+    const groupsResult = await db.execute({
+      sql: `SELECT ugv.user_id AS user_id, gs.name AS structure_name, gv.name AS value_name
+            FROM user_group_values ugv
+            JOIN group_structures gs ON gs.id = ugv.structure_id
+            JOIN group_values gv ON gv.id = ugv.value_id
+            WHERE ugv.user_id IN (${placeholders})
+            ORDER BY gs.order_index, gs.id`,
+      args: userIds,
+    })
+    for (const g of groupsResult.rows) {
+      const uid = Number(g.user_id)
+      if (!groupsMap[uid]) groupsMap[uid] = []
+      groupsMap[uid].push({
+        structure_name: String(g.structure_name),
+        value_name: String(g.value_name),
+      })
+    }
+  }
+
   const enriched = requests.map(r => ({
     ...r,
     documents: documentsMap[Number(r.id)] ?? [],
+    groups: groupsMap[Number(r.user_id)] ?? [],
   }))
 
   return NextResponse.json({ data: { requests: enriched, total, page, limit } })
@@ -121,13 +152,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid form data.' }, { status: 400 })
   }
 
-  const grade_level_id = formData.get('grade_level_id') ? Number(formData.get('grade_level_id')) : null
-  const subtype_id     = formData.get('subtype_id')     ? Number(formData.get('subtype_id'))     : null
-  const section_id     = formData.get('section_id')     ? Number(formData.get('section_id'))     : null
-  const doc_type       = (formData.get('doc_type') as string) || null
+  const doc_type = (formData.get('doc_type') as string) || null
 
-  if (!grade_level_id) {
-    return NextResponse.json({ error: 'Group is required.' }, { status: 400 })
+  // NEW: assignments come as a JSON array under `assignments`.
+  let assignments: Assignment[] = []
+  const rawAssignments = formData.get('assignments')
+  if (rawAssignments != null) {
+    try {
+      const parsed = JSON.parse(String(rawAssignments))
+      if (Array.isArray(parsed)) {
+        assignments = parsed
+          .map((a): Assignment => ({ structure_id: Number(a.structure_id), value_id: Number(a.value_id) }))
+          .filter((a) => Number.isFinite(a.structure_id) && Number.isFinite(a.value_id))
+      }
+    } catch {
+      return NextResponse.json({ error: 'Invalid assignments.' }, { status: 400 })
+    }
+  }
+
+  const validationError = await validateAssignments(assignments)
+  if (validationError) {
+    return NextResponse.json({ error: validationError }, { status: 400 })
   }
 
   const rawFiles = formData.getAll('file') as File[]
@@ -165,9 +210,9 @@ export async function POST(request: NextRequest) {
 
   const insertResult = await db.execute({
     sql: `INSERT INTO verification_requests
-            (user_id, image_path, status, grade_level_id, subtype_id, section_id, doc_type, created_at, updated_at)
-          VALUES (?, ?, 'pending', ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-    args: [authUser.id, primaryUrl, grade_level_id, subtype_id, section_id, doc_type],
+            (user_id, image_path, status, doc_type, created_at, updated_at)
+          VALUES (?, ?, 'pending', ?, datetime('now'), datetime('now'))`,
+    args: [authUser.id, primaryUrl, doc_type],
   })
 
   const verificationRequestId = Number(insertResult.lastInsertRowid)
@@ -181,16 +226,16 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // Update user with group/section info and set pending status
+  // NEW: store the user's group assignments via the configurable model.
+  await setUserAssignments(Number(authUser.id), assignments)
+
+  // Set pending status
   await db.execute({
     sql: `UPDATE users SET
-            grade_level_id = ?,
-            subtype_id = ?,
-            section_id = ?,
             verification_status = 'pending',
             updated_at = datetime('now')
           WHERE id = ?`,
-    args: [grade_level_id, subtype_id, section_id, authUser.id],
+    args: [authUser.id],
   })
 
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
