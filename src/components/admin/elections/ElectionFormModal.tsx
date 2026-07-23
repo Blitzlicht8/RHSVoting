@@ -231,10 +231,31 @@ function GroupEligibilityBuilder({
             const scopedValues = s.values
               .filter((v) => v.active && (parentSet === null || (v.parent_value_id != null && parentSet.has(v.parent_value_id))))
               .sort((a, b) => a.order_index - b.order_index)
-            const parentName = s.parent_structure_id != null
-              ? structures.find((p) => p.id === s.parent_structure_id)?.name ?? 'parent group'
-              : ''
+            const parent = s.parent_structure_id != null
+              ? structures.find((p) => p.id === s.parent_structure_id)
+              : undefined
+            const parentName = parent?.name ?? 'parent group'
             const awaitingParent = parentSet !== null && parentSet.size === 0
+            // For leveled structures, group values under their parent value so
+            // repeated names (e.g. Section A under each Strand) stay distinct.
+            const parentGroups = parent && parentSet
+              ? parent.values
+                  .filter((pv) => pv.active && parentSet.has(pv.id))
+                  .sort((a, b) => a.order_index - b.order_index)
+                  .map((pv) => ({ pv, children: scopedValues.filter((v) => v.parent_value_id === pv.id) }))
+                  .filter((g) => g.children.length > 0)
+              : null
+            const valueCheckbox = (v: GroupValue) => (
+              <label key={v.id} className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={sel.valueIds.has(v.id)}
+                  onChange={(e) => toggleValue(s.id, v.id, e.target.checked)}
+                  className="w-3 h-3 accent-[#84050C]"
+                />
+                <span className="text-xs text-gray-600">{v.name}</span>
+              </label>
+            )
             return (
               <div key={s.id} className="space-y-1.5">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{s.name}</p>
@@ -252,21 +273,20 @@ function GroupEligibilityBuilder({
                       <span className="text-xs text-gray-600 font-medium">All of {s.name}</span>
                     </label>
                     {!sel.allStructure && (
-                      <div className="ml-6 space-y-1">
+                      <div className="ml-6 space-y-2">
                         {scopedValues.length === 0 && (
                           <p className="text-xs text-gray-400">No values.</p>
                         )}
-                        {scopedValues.map((v) => (
-                          <label key={v.id} className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              checked={sel.valueIds.has(v.id)}
-                              onChange={(e) => toggleValue(s.id, v.id, e.target.checked)}
-                              className="w-3 h-3 accent-[#84050C]"
-                            />
-                            <span className="text-xs text-gray-600">{v.name}</span>
-                          </label>
-                        ))}
+                        {parentGroups
+                          ? parentGroups.map((g) => (
+                              <div key={g.pv.id} className="space-y-1">
+                                <p className="text-[11px] font-medium text-gray-400">{g.pv.name}</p>
+                                <div className="ml-3 space-y-1">
+                                  {g.children.map((v) => valueCheckbox(v))}
+                                </div>
+                              </div>
+                            ))
+                          : <div className="space-y-1">{scopedValues.map((v) => valueCheckbox(v))}</div>}
                       </div>
                     )}
                   </>
