@@ -27,6 +27,16 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ error: 'action must be "approve" or "reject"' }, { status: 400 })
   }
 
+  // Field-level denial: admin ticks which fields are wrong (reject only).
+  const ALLOWED_DENIED = ['doc_type', 'profile_photo', 'lrn', 'groups']
+  let deniedFields: string[] = []
+  if (Array.isArray(body.denied_fields)) {
+    deniedFields = body.denied_fields.map(String).filter((f: string) => ALLOWED_DENIED.includes(f))
+  }
+  if (action === 'reject' && deniedFields.length === 0) {
+    return NextResponse.json({ error: 'Select at least one field to flag for resubmission.' }, { status: 400 })
+  }
+
   const verReqResult = await db.execute({
     sql: 'SELECT id, user_id, status FROM verification_requests WHERE id = ?',
     args: [requestId],
@@ -44,7 +54,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       [
         {
           sql: `UPDATE verification_requests
-                SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), notes = ?
+                SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), notes = ?, denied_fields = NULL
                 WHERE id = ?`,
           args: [newStatus, authUser.id, notes ?? null, requestId],
         },
@@ -65,9 +75,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       [
         {
           sql: `UPDATE verification_requests
-                SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), notes = ?
+                SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), notes = ?, denied_fields = ?
                 WHERE id = ?`,
-          args: [newStatus, authUser.id, notes ?? null, requestId],
+          args: [newStatus, authUser.id, notes ?? null, JSON.stringify(deniedFields), requestId],
         },
         {
           sql: `UPDATE users SET id_verified = 0, verification_status = 'rejected', verification_notes = ?, updated_at = datetime('now') WHERE id = ?`,
@@ -85,7 +95,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
   const userId = Number(verReq.user_id)
-  await logActivity(authUser.id, `verification_${newStatus}`, `${newStatus} verification for user ${userId}`, ip)
+  const detail = action === 'reject'
+    ? `rejected verification for user ${userId} (flagged: ${deniedFields.join(', ')})`
+    : `${newStatus} verification for user ${userId}`
+  await logActivity(authUser.id, `verification_${newStatus}`, detail, ip)
 
   return NextResponse.json({ data: { request: updated.rows[0] }, message: `Verification ${newStatus}` })
 }
