@@ -70,10 +70,21 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({
+    // Auto-login after email verification so the user can finish their
+    // profile + verification submission in one continuous account-creation flow.
+    const token = await signJWT({
+      id: Number(user.id),
+      email: user.email as string,
+      name: user.name as string,
+      role: user.role as Role,
+    }, rememberMe)
+
+    const response = NextResponse.json({
       data: { emailVerified: true, autoIdVerified: autoVerifyEnabled },
       message: 'Email verified!',
     })
+    response.headers.set('Set-Cookie', buildSetCookieHeader(token, rememberMe))
+    return response
   }
 
   if (type === 'login') {
