@@ -17,6 +17,18 @@ interface User {
   verification_status?: 'pending' | 'rejected' | null
   id_photo_url?: string | null
   verification_notes?: string | null
+  lrn?: string | null
+  submitted_lrn?: string | null
+  submitted_doc_type?: string | null
+  submitted_profile_photo_url?: string | null
+  denied_fields?: string[]
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  doc_type: 'Document Type',
+  profile_photo: 'Profile Photo',
+  lrn: 'LRN',
+  groups: 'Group Selection',
 }
 
 type UIState = 'loading' | 'verified' | 'pending' | 'rejected' | 'upload'
@@ -93,6 +105,17 @@ export default function VerifyIdPage() {
   // Configurable group structures (dynamic cascade)
   const { structures, selected, setValue, assignments, optionsFor, firstMissingRequired } = useGroupSelections()
 
+  // LRN + profile photo
+  const [lrn, setLrn] = useState('')
+  const [profilePhoto, setProfilePhoto] = useState<File | null>(null)
+  const [profilePreview, setProfilePreview] = useState<string | null>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+
+  // Field-level reverification: only flagged fields are editable.
+  const [lockedFields, setLockedFields] = useState<string[]>([])
+  const isReverify = lockedFields.length > 0
+  const locked = (f: string) => lockedFields.includes(f)
+
   // Upload
   const [files, setFiles]           = useState<File[]>([])
   const [isDragging, setIsDragging] = useState(false)
@@ -137,6 +160,17 @@ export default function VerifyIdPage() {
       if (!res.ok || !json.data) { addToast('Failed to load your profile.', 'error'); return }
       const u: User = json.data
       setUser(u)
+
+      // Field-level reverification: flagged = editable, everything else locked.
+      const flagged = Array.isArray(u.denied_fields) ? u.denied_fields : []
+      const ALL = ['doc_type', 'profile_photo', 'lrn', 'groups']
+      setLockedFields(flagged.length > 0 ? ALL.filter(f => !flagged.includes(f)) : [])
+
+      // Prefill submitted values (so locked fields show what was submitted).
+      if (u.submitted_lrn ?? u.lrn) setLrn(String(u.submitted_lrn ?? u.lrn))
+      if (u.submitted_profile_photo_url) setProfilePreview(u.submitted_profile_photo_url)
+      if (u.submitted_doc_type) setDocType(u.submitted_doc_type)
+
       deriveUiState(u)
     } catch {
       addToast('Network error while loading your profile.', 'error')
@@ -171,6 +205,30 @@ export default function VerifyIdPage() {
     setFiles(combined)
   }
 
+  // Profile photo — required, must be a real face photo.
+  // NOTE: this is a lightweight heuristic (type + size), NOT true face detection.
+  // A full face-detection library is out of scope for this session.
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormError(null)
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(f.type)) {
+      setFormError('Profile photo must be a JPEG, PNG, or WebP image.')
+      return
+    }
+    if (f.size < 3 * 1024) {
+      setFormError('That photo looks empty or too small — use a clear photo of your face.')
+      return
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      setFormError('Profile photo exceeds the 5 MB limit.')
+      return
+    }
+    setProfilePhoto(f)
+    setProfilePreview(URL.createObjectURL(f))
+  }
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files ?? [])
     if (picked.length) addFiles(picked)
@@ -201,19 +259,33 @@ export default function VerifyIdPage() {
   const handleSubmit = async () => {
     setFormError(null)
 
-    const missing = firstMissingRequired()
-    if (missing) {
-      setFormError(`Please select your ${missing.name.toLowerCase()}.`)
+    if (!locked('lrn')) {
+      if (!/^\d{12}$/.test(lrn.trim())) {
+        setFormError('LRN must be exactly 12 digits.')
+        return
+      }
+    }
+    if (!locked('groups')) {
+      const missing = firstMissingRequired()
+      if (missing) {
+        setFormError(`Please select your ${missing.name.toLowerCase()}.`)
+        return
+      }
+    }
+    if (!locked('profile_photo') && !profilePhoto) {
+      setFormError('Please upload a profile photo of your face.')
       return
     }
-    if (docsRequired && files.length === 0) {
+    if (!locked('doc_type') && docsRequired && files.length === 0) {
       setFormError('Please attach at least one document.')
       return
     }
 
     const formData = new FormData()
     formData.append('assignments', JSON.stringify(assignments))
+    formData.append('lrn', lrn.trim())
     if (docsRequired) formData.append('doc_type', docType)
+    if (profilePhoto) formData.append('profile_photo', profilePhoto)
     for (const file of files) {
       formData.append('file', file)
     }
@@ -386,13 +458,30 @@ export default function VerifyIdPage() {
         {uiState === 'upload' && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Verify your identity</h1>
+              <h1 className="text-xl font-bold text-gray-900">
+                {isReverify ? 'Fix your submission' : 'Complete your profile'}
+              </h1>
               <p className="text-sm text-gray-500 mt-1">
-                Fill in your details below to submit a verification request.
+                {isReverify
+                  ? 'Only the flagged fields below can be edited. Everything else is locked.'
+                  : 'Fill in your details below to finish creating your account.'}
               </p>
             </div>
 
-            {/* Hidden file input */}
+            {/* Reverification: which fields the admin flagged */}
+            {isReverify && (
+              <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-700">
+                <p className="font-medium mb-1">Resubmission required</p>
+                {user?.verification_notes && (
+                  <p className="text-amber-600 whitespace-pre-wrap mb-2">{user.verification_notes}</p>
+                )}
+                <p className="text-amber-600">
+                  Please fix: <strong>{['doc_type','profile_photo','lrn','groups'].filter(f => !locked(f)).map(f => FIELD_LABELS[f]).join(', ')}</strong>
+                </p>
+              </div>
+            )}
+
+            {/* Hidden file inputs */}
             <input
               ref={fileInputRef}
               type="file"
@@ -402,18 +491,92 @@ export default function VerifyIdPage() {
               onChange={handleFileChange}
               aria-label="Upload verification documents"
             />
-
-            {/* ── Dynamic configurable group structures ── */}
-            <GroupSelects
-              structures={structures}
-              selected={selected}
-              setValue={setValue}
-              optionsFor={optionsFor}
-              onChangeSide={() => setFormError(null)}
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="sr-only"
+              onChange={handlePhotoChange}
+              aria-label="Upload profile photo"
             />
 
+            {/* ── Profile photo (required, face) ── */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Profile Photo <span className="text-red-500">*</span>
+                {locked('profile_photo') && <span className="ml-1 text-xs text-gray-400">(locked)</span>}
+              </label>
+              <div className="flex items-center gap-3">
+                <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
+                  {profilePreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={profilePreview} alt="Profile preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6z" /></svg>
+                  )}
+                </div>
+                {!locked('profile_photo') && (
+                  <div>
+                    <Button variant="secondary" size="sm" type="button" onClick={() => photoInputRef.current?.click()} disabled={uploading}>
+                      {profilePreview ? 'Change photo' : 'Upload photo'}
+                    </Button>
+                    <p className="text-xs text-gray-400 mt-1">Clear photo of your face. JPEG/PNG/WebP, max 5 MB.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── LRN ── */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                LRN (Learner&apos;s Reference Number) <span className="text-red-500">*</span>
+                {locked('lrn') && <span className="ml-1 text-xs text-gray-400">(locked)</span>}
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={lrn}
+                disabled={locked('lrn') || uploading}
+                onChange={e => { setLrn(e.target.value.replace(/\D/g, '').slice(0, 12)); setFormError(null) }}
+                placeholder="12-digit LRN"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C] bg-white disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+            </div>
+
+            {/* ── Dynamic configurable group structures ── */}
+            {locked('groups') ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Group Selection <span className="ml-1 text-xs text-gray-400">(locked)</span>
+                </label>
+                <p className="text-sm text-gray-500 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
+                  Your previously submitted group selection is kept.
+                </p>
+              </div>
+            ) : (
+              <GroupSelects
+                structures={structures}
+                selected={selected}
+                setValue={setValue}
+                optionsFor={optionsFor}
+                onChangeSide={() => setFormError(null)}
+              />
+            )}
+
+            {/* ── Document upload — locked note during reverification ── */}
+            {docsRequired && locked('doc_type') && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Document Type <span className="ml-1 text-xs text-gray-400">(locked)</span>
+                </label>
+                <p className="text-sm text-gray-500 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
+                  {user?.submitted_doc_type ? `Kept: ${user.submitted_doc_type}` : 'Your previously submitted document is kept.'}
+                </p>
+              </div>
+            )}
+
             {/* ── Document upload — only when doc types configured ── */}
-            {docsRequired && (
+            {docsRequired && !locked('doc_type') && (
               <div className="space-y-3 pt-1">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

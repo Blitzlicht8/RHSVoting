@@ -33,8 +33,17 @@ interface VerifRequest {
   updated_at: string
   groups: { structure_name: string; value_name: string }[]
   doc_type: string | null
+  lrn: string | null
+  profile_photo_url: string | null
   documents: VerifDocument[]
 }
+
+const DENIABLE_FIELDS: { key: string; label: string }[] = [
+  { key: 'doc_type', label: 'Document Type' },
+  { key: 'profile_photo', label: 'Profile Photo' },
+  { key: 'lrn', label: 'LRN' },
+  { key: 'groups', label: 'Group Selection' },
+]
 
 const TAB_LABELS: Record<TabKey, string> = {
   pending: 'Pending',
@@ -92,6 +101,8 @@ export default function VerificationsPage() {
   const [selectedRejectRequest, setSelectedRejectRequest] = useState<VerifRequest | null>(null)
   const [rejectNotes, setRejectNotes] = useState('')
   const [rejectNotesError, setRejectNotesError] = useState('')
+  const [rejectFields, setRejectFields] = useState<string[]>([])
+  const [rejectFieldsError, setRejectFieldsError] = useState('')
   const [actioning, setActioning] = useState<number | null>(null)
 
   const [showApproveModal, setShowApproveModal] = useState(false)
@@ -216,11 +227,22 @@ export default function VerificationsPage() {
     setSelectedRejectRequest(req)
     setRejectNotes('')
     setRejectNotesError('')
+    setRejectFields([])
+    setRejectFieldsError('')
     setShowRejectModal(true)
+  }
+
+  const toggleRejectField = (key: string) => {
+    setRejectFieldsError('')
+    setRejectFields(prev => prev.includes(key) ? prev.filter(f => f !== key) : [...prev, key])
   }
 
   const handleReject = async () => {
     if (!selectedRejectRequest) return
+    if (rejectFields.length === 0) {
+      setRejectFieldsError('Tick at least one field that needs to be fixed.')
+      return
+    }
     if (!rejectNotes.trim()) {
       setRejectNotesError('A rejection reason is required.')
       return
@@ -233,7 +255,7 @@ export default function VerificationsPage() {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reject', notes: rejectNotes }),
+        body: JSON.stringify({ action: 'reject', notes: rejectNotes, denied_fields: rejectFields }),
       })
       const json = await res.json()
       if (res.ok) {
@@ -383,6 +405,11 @@ export default function VerificationsPage() {
                       {req.doc_type && (
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-[#FEE2E2]/60 text-[#6B0409] border border-[#FEE2E2]">
                           {req.doc_type}
+                        </span>
+                      )}
+                      {req.lrn && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600" title="LRN">
+                          LRN {req.lrn}
                         </span>
                       )}
                     </div>
@@ -627,6 +654,28 @@ export default function VerificationsPage() {
               <p className="text-amber-600 whitespace-pre-wrap">{selectedRejectRequest.notes}</p>
             </div>
           )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Fields to fix <span className="text-red-500">*</span>
+            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              Only ticked fields will be editable when the user resubmits.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {DENIABLE_FIELDS.map(f => (
+                <label key={f.key} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rejectFields.includes(f.key)}
+                    onChange={() => toggleRejectField(f.key)}
+                    className="w-4 h-4 rounded border-gray-300 text-[#84050C] focus:ring-[#84050C]"
+                  />
+                  {f.label}
+                </label>
+              ))}
+            </div>
+            {rejectFieldsError && <p className="mt-1 text-xs text-red-600">{rejectFieldsError}</p>}
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Reason / Notes <span className="text-red-500">*</span>
