@@ -152,7 +152,36 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid form data.' }, { status: 400 })
   }
 
-  const doc_type = (formData.get('doc_type') as string) || null
+  // Prior rejected request (for field-level reverification carry-forward).
+  const priorRes = await db.execute({
+    sql: `SELECT lrn, doc_type, profile_photo_url, denied_fields
+          FROM verification_requests WHERE user_id = ? ORDER BY id DESC LIMIT 1`,
+    args: [authUser.id],
+  })
+  const prior = priorRes.rows[0] ?? null
+  let deniedFields: string[] = []
+  if (prior?.denied_fields) {
+    try {
+      const parsed = JSON.parse(String(prior.denied_fields))
+      if (Array.isArray(parsed)) deniedFields = parsed.map(String)
+    } catch {}
+  }
+  // A locked field (had a field-level denial, but this field wasn't flagged) keeps its prior value.
+  const isLocked = (field: string) => deniedFields.length > 0 && !deniedFields.includes(field)
+
+  let doc_type = (formData.get('doc_type') as string) || null
+  if (isLocked('doc_type')) doc_type = (prior?.doc_type as string) ?? null
+
+  // LRN — required, 12 digits (Philippine Learner's Reference Number).
+  let lrn = ((formData.get('lrn') as string) || '').trim()
+  if (isLocked('lrn')) {
+    lrn = (prior?.lrn as string) ?? ''
+  } else {
+    if (!lrn) return NextResponse.json({ error: 'LRN is required.' }, { status: 400 })
+    if (!/^\d{12}$/.test(lrn)) {
+      return NextResponse.json({ error: 'LRN must be exactly 12 digits.' }, { status: 400 })
+    }
+  }
 
   // NEW: assignments come as a JSON array under `assignments`.
   let assignments: Assignment[] = []
@@ -170,9 +199,38 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const validationError = await validateAssignments(assignments)
-  if (validationError) {
-    return NextResponse.json({ error: validationError }, { status: 400 })
+  // Locked group selection: keep the user's existing assignments untouched.
+  const groupsLocked = isLocked('groups')
+  if (!groupsLocked) {
+    const validationError = await validateAssignments(assignments)
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 })
+    }
+  }
+
+  // ── Profile photo (required; must be a real face photo) ──
+  // NOTE: this is a lightweight heuristic, NOT true face detection. A full
+  // face-detection library (e.g. face-api.js / a vision API) is out of scope
+  // for this session — flagged here rather than faked.
+  const profilePhoto = formData.get('profile_photo') as File | null
+  let profilePhotoUrl = (prior?.profile_photo_url as string) ?? null
+  const photoLocked = isLocked('profile_photo')
+  if (!photoLocked) {
+    if (!profilePhoto || typeof (profilePhoto as File).arrayBuffer !== 'function' || profilePhoto.size === 0) {
+      return NextResponse.json({ error: 'A profile photo is required.' }, { status: 400 })
+    }
+    const imgTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!imgTypes.includes(profilePhoto.type)) {
+      return NextResponse.json({ error: 'Profile photo must be a JPEG, PNG, or WebP image.' }, { status: 400 })
+    }
+    if (profilePhoto.size < 3 * 1024) {
+      return NextResponse.json({ error: 'Profile photo looks empty or too small — upload a clear photo of your face.' }, { status: 400 })
+    }
+    if (profilePhoto.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Profile photo exceeds the 5 MB limit.' }, { status: 400 })
+    }
+    const pblob = await put(`avatars/${authUser.id}/${Date.now()}-${profilePhoto.name}`, profilePhoto, { access: 'public' })
+    profilePhotoUrl = pblob.url
   }
 
   const rawFiles = formData.getAll('file') as File[]
@@ -190,13 +248,24 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Upload files to Vercel Blob if provided
-  const uploadedUrls: string[] = []
-  for (const file of rawFiles) {
-    const blob = await put(`verifications/${authUser.id}/${Date.now()}-${file.name}`, file, {
-      access: 'public',
+  // When doc_type (and its documents) are locked, carry forward prior document urls.
+  let uploadedUrls: string[] = []
+  if (isLocked('doc_type')) {
+    const priorDocs = await db.execute({
+      sql: `SELECT file_path FROM verification_documents vd
+            JOIN verification_requests vr ON vr.id = vd.verification_request_id
+            WHERE vr.user_id = ? ORDER BY vd.id`,
+      args: [authUser.id],
     })
-    uploadedUrls.push(blob.url)
+    uploadedUrls = priorDocs.rows.map(r => String(r.file_path)).filter(p => p && p !== 'none')
+  } else {
+    // Upload files to Vercel Blob if provided
+    for (const file of rawFiles) {
+      const blob = await put(`verifications/${authUser.id}/${Date.now()}-${file.name}`, file, {
+        access: 'public',
+      })
+      uploadedUrls.push(blob.url)
+    }
   }
 
   // 'none' placeholder when no files uploaded (image_path is NOT NULL)
@@ -210,9 +279,9 @@ export async function POST(request: NextRequest) {
 
   const insertResult = await db.execute({
     sql: `INSERT INTO verification_requests
-            (user_id, image_path, status, doc_type, created_at, updated_at)
-          VALUES (?, ?, 'pending', ?, datetime('now'), datetime('now'))`,
-    args: [authUser.id, primaryUrl, doc_type],
+            (user_id, image_path, status, doc_type, lrn, profile_photo_url, denied_fields, created_at, updated_at)
+          VALUES (?, ?, 'pending', ?, ?, ?, NULL, datetime('now'), datetime('now'))`,
+    args: [authUser.id, primaryUrl, doc_type, lrn, profilePhotoUrl],
   })
 
   const verificationRequestId = Number(insertResult.lastInsertRowid)
@@ -226,16 +295,20 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  // NEW: store the user's group assignments via the configurable model.
-  await setUserAssignments(Number(authUser.id), assignments)
+  // NEW: store the user's group assignments via the configurable model (skip when locked).
+  if (!groupsLocked) {
+    await setUserAssignments(Number(authUser.id), assignments)
+  }
 
-  // Set pending status
+  // Persist LRN + profile photo on the user record, set pending status.
   await db.execute({
     sql: `UPDATE users SET
+            lrn = ?,
+            avatar_url = COALESCE(?, avatar_url),
             verification_status = 'pending',
             updated_at = datetime('now')
           WHERE id = ?`,
-    args: [authUser.id],
+    args: [lrn, profilePhotoUrl, authUser.id],
   })
 
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'

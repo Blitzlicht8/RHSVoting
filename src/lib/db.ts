@@ -463,6 +463,11 @@ async function _init(): Promise<void> {
     `ALTER TABLE elections ADD COLUMN auto_start INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE elections ADD COLUMN auto_end INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE positions ADD COLUMN max_votes_mode TEXT NOT NULL DEFAULT 'custom'`,
+    // Session 2: unified account/profile/verification flow
+    `ALTER TABLE users ADD COLUMN lrn TEXT`,
+    `ALTER TABLE verification_requests ADD COLUMN lrn TEXT`,
+    `ALTER TABLE verification_requests ADD COLUMN profile_photo_url TEXT`,
+    `ALTER TABLE verification_requests ADD COLUMN denied_fields TEXT`,
   ]
   for (const sql of newColumns) {
     await db.execute({ sql, args: [] }).catch(() => {})
