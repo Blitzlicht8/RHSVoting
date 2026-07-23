@@ -8,7 +8,7 @@
 2026-07-24
 
 ## Version After This Session
-`1.1.0` — MINOR: unified account/profile/verification flow + field-level denial (additive DB columns)
+`1.2.0` — MINOR: moved profile+verification fields into register wizard (auto-login on email verify)
 
 ---
 
@@ -40,10 +40,19 @@ Unified the profile-completion + verification step. Flow: register (credentials)
 
 ---
 
+### Register wizard (`src/app/register/page.tsx`) — fields now live on account creation
+- Rebuilt register as a 3-step single-page wizard (no navigation away):
+  1. **Credentials** (name/email/password) → `POST /api/auth/register` (sends OTP).
+  2. **OTP** → `POST /api/auth/verify-otp` type `email_verify` — now **auto-logins** (sets auth cookie).
+  3. **Profile** (LRN, profile photo, group selection, doc type + docs) → `POST /api/verifications`, then → dashboard.
+- Reuses `GroupSelects`/`useGroupSelections`; same LRN (12-digit) + photo heuristic as verify-id.
+- `verify-id` page retained for **reverification** (rejected users) with field-level locks.
+- **Auto-login change:** `POST /api/auth/verify-otp` `email_verify` branch now signs a JWT + sets cookie (was: no cookie). Enables uploading during registration. Login OTP branch unchanged.
+
 ## Current State
 - Build: passing (`npm run build` exit 0)
 - TypeScript: clean (`npx tsc --noEmit`)
-- Version: `1.1.0`
+- Version: `1.2.0`
 
 ---
 
