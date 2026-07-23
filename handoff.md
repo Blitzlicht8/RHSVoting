@@ -8,7 +8,9 @@
 2026-07-24
 
 ## Version After This Session
-`1.2.0` — MINOR: moved profile+verification fields into register wizard (auto-login on email verify)
+`1.2.1` — FIX: election eligibility builder now cascades (leveled group values show only when a parent value is selected; stale rules from deselected parents dropped)
+
+Prev: `1.2.0` — MINOR: moved profile+verification fields into register wizard (auto-login on email verify)
 
 ---
 

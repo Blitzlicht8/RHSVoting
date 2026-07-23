@@ -75,6 +75,24 @@ interface StructureSelection {
   valueIds: Set<number>
 }
 
+// For a leveled structure, the set of parent values currently selected (which
+// gate which of this structure's values are shown/valid). Returns null for a
+// standalone structure (no parent → no gating). An empty set means the parent
+// has no selection yet, so none of this structure's values apply.
+function parentSelectedValueIds(
+  structures: StructureWithValues[],
+  selections: Record<number, StructureSelection>,
+  s: StructureWithValues,
+): Set<number> | null {
+  if (s.parent_structure_id == null) return null
+  const parent = structures.find((p) => p.id === s.parent_structure_id)
+  if (!parent) return null
+  const psel = selections[parent.id]
+  if (!psel) return new Set<number>()
+  if (psel.allStructure) return new Set(parent.values.filter((v) => v.active).map((v) => v.id))
+  return new Set(psel.valueIds)
+}
+
 function buildEligibility(
   structures: StructureWithValues[],
   selections: Record<number, StructureSelection>,
@@ -83,11 +101,19 @@ function buildEligibility(
   for (const s of structures) {
     const sel = selections[s.id]
     if (!sel) continue
+    // A leveled structure only contributes rules once its parent is selected;
+    // this also drops stale selections left over from a since-deselected parent.
+    const parentSet = parentSelectedValueIds(structures, selections, s)
+    if (parentSet !== null && parentSet.size === 0) continue
     if (sel.allStructure) {
       rules.push({ structure_id: s.id, value_id: null, is_all_groups: false, is_exclude: false })
       continue
     }
     for (const valueId of Array.from(sel.valueIds)) {
+      if (parentSet !== null) {
+        const v = s.values.find((x) => x.id === valueId)
+        if (!v || v.parent_value_id == null || !parentSet.has(v.parent_value_id)) continue
+      }
       rules.push({ structure_id: s.id, value_id: valueId, is_all_groups: false, is_exclude: false })
     }
   }
@@ -200,38 +226,50 @@ function GroupEligibilityBuilder({
         <div className="ml-6 space-y-4">
           {structures.map((s) => {
             const sel = selections[s.id] ?? { allStructure: false, valueIds: new Set<number>() }
-            const activeValues = s.values
-              .filter((v) => v.active)
+            const parentSet = parentSelectedValueIds(structures, selections, s)
+            // Leveled structures only render values whose parent value is selected.
+            const scopedValues = s.values
+              .filter((v) => v.active && (parentSet === null || (v.parent_value_id != null && parentSet.has(v.parent_value_id))))
               .sort((a, b) => a.order_index - b.order_index)
+            const parentName = s.parent_structure_id != null
+              ? structures.find((p) => p.id === s.parent_structure_id)?.name ?? 'parent group'
+              : ''
+            const awaitingParent = parentSet !== null && parentSet.size === 0
             return (
               <div key={s.id} className="space-y-1.5">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{s.name}</p>
-                <label className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={sel.allStructure}
-                    onChange={(e) => toggleAllStructure(s.id, e.target.checked)}
-                    className="w-3.5 h-3.5 accent-[#84050C]"
-                  />
-                  <span className="text-xs text-gray-600 font-medium">All of {s.name}</span>
-                </label>
-                {!sel.allStructure && (
-                  <div className="ml-6 space-y-1">
-                    {activeValues.length === 0 && (
-                      <p className="text-xs text-gray-400">No values.</p>
+                {awaitingParent ? (
+                  <p className="ml-1 text-xs text-gray-400 italic">Select a {parentName} above to choose {s.name.toLowerCase()}.</p>
+                ) : (
+                  <>
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={sel.allStructure}
+                        onChange={(e) => toggleAllStructure(s.id, e.target.checked)}
+                        className="w-3.5 h-3.5 accent-[#84050C]"
+                      />
+                      <span className="text-xs text-gray-600 font-medium">All of {s.name}</span>
+                    </label>
+                    {!sel.allStructure && (
+                      <div className="ml-6 space-y-1">
+                        {scopedValues.length === 0 && (
+                          <p className="text-xs text-gray-400">No values.</p>
+                        )}
+                        {scopedValues.map((v) => (
+                          <label key={v.id} className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={sel.valueIds.has(v.id)}
+                              onChange={(e) => toggleValue(s.id, v.id, e.target.checked)}
+                              className="w-3 h-3 accent-[#84050C]"
+                            />
+                            <span className="text-xs text-gray-600">{v.name}</span>
+                          </label>
+                        ))}
+                      </div>
                     )}
-                    {activeValues.map((v) => (
-                      <label key={v.id} className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={sel.valueIds.has(v.id)}
-                          onChange={(e) => toggleValue(s.id, v.id, e.target.checked)}
-                          className="w-3 h-3 accent-[#84050C]"
-                        />
-                        <span className="text-xs text-gray-600">{v.name}</span>
-                      </label>
-                    ))}
-                  </div>
+                  </>
                 )}
               </div>
             )
