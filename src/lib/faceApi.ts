@@ -26,6 +26,13 @@ export async function loadFaceModels(): Promise<typeof FaceApiNs> {
   if (loadPromise) return loadPromise
   loadPromise = (async () => {
     const mod = await import('@vladmandic/face-api')
+    // Force the GPU (WebGL) backend — on the CPU backend detection runs at a
+    // few fps and misses fast movements like a blink. Fall back silently.
+    try {
+      const tf = mod.tf as unknown as { setBackend: (b: string) => Promise<boolean>; ready: () => Promise<void> }
+      await tf.setBackend('webgl')
+      await tf.ready()
+    } catch {}
     await Promise.all([
       mod.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
       mod.nets.faceLandmark68Net.loadFromUri(MODEL_URL),

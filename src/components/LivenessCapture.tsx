@@ -13,11 +13,11 @@ import { faceLivenessMetrics, scanFace } from '@/lib/faceApi'
 
 type Challenge = 'blink' | 'turn'
 const SEQUENCE: Challenge[] = ['blink', 'turn']
-const BLINK_CLOSED_RATIO = 0.75
-const BLINK_OPEN_RATIO = 0.90
+const BLINK_CLOSED_RATIO = 0.82  // EAR below 82% of open baseline → eyes closing
+const BLINK_OPEN_RATIO = 0.92    // EAR back above 92% → open again
 const YAW_TURN = 0.13
 const PROMPTS: Record<Challenge, string> = {
-  blink: 'Blink your eyes',
+  blink: 'Close your eyes for a second, then open',
   turn: 'Slowly turn your head to the side',
 }
 
