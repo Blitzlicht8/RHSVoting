@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   // Create approved verification request (use first URL as legacy image_path)
   const vrRes = await db.execute({
-    sql: `INSERT INTO verification_requests (user_id, image_path, status, reviewed_by, reviewed_at, created_at) VALUES (?,?,?,?,?,?)`,
+    sql: `INSERT INTO verification_requests (user_id, image_path, status, reviewed_by, reviewed_at, created_at) VALUES (?,?,?,?,?,?) RETURNING id`,
     args: [targetId, uploadedUrls[0], 'approved', authUser.id, now, now]
   })
   const vrId = Number(vrRes.lastInsertRowid)

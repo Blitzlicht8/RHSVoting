@@ -6,7 +6,7 @@
 
 ## What This Is
 
-The Rizal High School electronic elections and feed platform built on Next.js 14. Originally a school voting app — fully de-schooled. Deployed on Vercel, DB on Turso (SQLite).
+The Rizal High School electronic elections and feed platform built on Next.js 14. Originally a school voting app — fully de-schooled. Deployed on Vercel, DB on Supabase Postgres (migrated from Turso/SQLite in v2.0.0).
 
 **Repo:** `https://github.com/Blitzlicht8/RHSVoting.git` · branch: `master`
 **Deploy target:** Vercel (auto-deploys on master push)
@@ -48,7 +48,7 @@ If the token stops working, generate a new one at GitHub → Settings → Develo
 | Framework | Next.js 14 App Router (`src/app/`) |
 | Language | TypeScript (strict) |
 | Styling | Tailwind CSS |
-| Database | Turso / libsql (`@libsql/client`) |
+| Database | Supabase Postgres (`pg` / node-postgres) — migrated from Turso in v2.0.0 |
 | Auth | jose JWT — cookie `auth-token`, HttpOnly |
 | File storage | Vercel Blob (`@vercel/blob`) |
 | Email | Nodemailer |
@@ -59,8 +59,7 @@ If the token stops working, generate a new one at GitHub → Settings → Develo
 ## Required Env Vars
 
 ```
-TURSO_DATABASE_URL=
-TURSO_AUTH_TOKEN=
+POSTGRES_URL=
 JWT_SECRET=
 BLOB_READ_WRITE_TOKEN=
 SMTP_HOST=
@@ -72,12 +71,14 @@ NEXT_PUBLIC_APP_URL=
 
 Lives in `.env.local`. Never commit this file.
 
-Supabase/Postgres vars are also present in Vercel (production env) for the planned
-Turso → Supabase migration (Session 11 Part 2): `POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`,
-`POSTGRES_PRISMA_URL`, `POSTGRES_HOST/USER/PASSWORD/DATABASE`, `SUPABASE_URL`,
+The app connects via `POSTGRES_URL` (Supabase). Other Supabase vars present in Vercel:
+`POSTGRES_URL_NON_POOLING`, `POSTGRES_HOST/USER/PASSWORD/DATABASE`, `SUPABASE_URL`,
 `SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
-Pull locally with `npx vercel env pull .env.local --environment=production`. Turso is
-still the live DB — do NOT remove Turso vars until Supabase is confirmed in production.
+These are Vercel "sensitive" vars → masked as `[SENSITIVE]` on `vercel env pull`; to run
+the data-migration or scripts locally, paste real values into `.env.local` (gitignored)
+from the Supabase dashboard. For bulk/DDL from an IPv4 network use the Supabase
+**Session pooler** URL (5432), not the direct `db.<ref>` host (IPv6-only).
+Turso removed in v2.0.0.
 
 ---
 
@@ -158,14 +159,14 @@ src/
     PostCard.tsx          → blocks react/comment when !id_verified
   lib/
     auth.ts               → JWT, isAdmin, getRoleLabel, getRoleBadgeVariant
-    db.ts                 → lazy Turso client (Proxy) — do not change to eager
+    db.ts                 → lazy pg (Postgres) pool + libsql-shaped execute/batch adapter
 ```
 
 ---
 
 ## Critical Patterns (do not break)
 
-**`db.ts` is lazy** — `db` is a JS Proxy that only creates the real Turso client on first access. Changing it back to eager (`export const db = makeClient()`) breaks Vercel builds. Leave it.
+**`db.ts` is lazy** — the `pg` Pool is created on first query, not at import. Keep it lazy (eager init breaks Vercel builds when env is absent at build time). `db.execute({sql,args})` / `db.batch()` keep the old libsql shape; a `translate()` shim adapts SQLite dialect (`?`→`$n`, `datetime('now')`, `INSERT OR IGNORE/REPLACE`→`ON CONFLICT`, `LIKE`→`ILIKE`). BIGINT parsed to Number. Do not rewrite call sites to raw pg.
 
 **Every `route.ts`** must have this at the very top:
 ```typescript

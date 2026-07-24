@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
             (SELECT COUNT(*) FROM positions p WHERE p.election_id = e.id) AS position_count,
             (SELECT COUNT(*) FROM candidates c WHERE c.election_id = e.id) AS candidate_count,
             (SELECT COUNT(*) FROM votes v WHERE v.election_id = e.id) AS vote_count,
-            EXISTS(SELECT 1 FROM votes vhv WHERE vhv.election_id = e.id AND vhv.voter_id = ?) AS hasVoted
+            EXISTS(SELECT 1 FROM votes vhv WHERE vhv.election_id = e.id AND vhv.voter_id = ?) AS "hasVoted"
           FROM elections e
           ${whereClause}
           ORDER BY e.created_at DESC`,
@@ -146,7 +146,7 @@ async function syncPositions(electionId: number, positions: PositionInput[]) {
     const posName = (pos.name ?? '').trim()
     if (!posName) continue
     const posResult = await db.execute({
-      sql: `INSERT INTO positions (election_id, name, max_votes, order_index) VALUES (?, ?, ?, ?)`,
+      sql: `INSERT INTO positions (election_id, name, max_votes, order_index) VALUES (?, ?, ?, ?) RETURNING id`,
       args: [electionId, posName, pos.max_votes ?? 1, i],
     })
     const posId = Number(posResult.lastInsertRowid)
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
 
   const insertResult = await db.execute({
     sql: `INSERT INTO elections (title, description, start_date, end_date, status, created_by, share_token, thumbnail_url)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
     args: [title.trim(), description ?? null, start_date, end_date, status, authUser.id, shareToken, thumbnailUrl],
   })
 

@@ -83,7 +83,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 
   const insertResult = await db.execute({
-    sql: `INSERT INTO candidates (election_id, position_id, name, bio, photo_url, platform, qualifications) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO candidates (election_id, position_id, name, bio, photo_url, platform, qualifications) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
     args: [electionId, parseInt(position_id, 10), name.trim(), bio ?? null, photo_url ?? null, platform ?? null, qualifications ?? null],
   })
 
