@@ -9,7 +9,6 @@ import Logo from '@/components/ui/Logo'
 import { useToast } from '@/components/providers/ToastProvider'
 import GroupSelects, { useGroupSelections } from '@/components/GroupSelects'
 import { scanFaceFromFile, FACE_SCAN_MESSAGES } from '@/lib/faceApi'
-import LivenessCapture from '@/components/LivenessCapture'
 
 // ─── Password strength ─────────────────────────────────────────────────────────
 
@@ -116,9 +115,6 @@ export default function RegisterPage() {
   const [faceEnabled, setFaceEnabled] = useState(false)
   const [faceStatus, setFaceStatus] = useState<'idle' | 'scanning' | 'ok' | 'fail'>('idle')
   const [faceMsg, setFaceMsg] = useState<string | null>(null)
-  const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null)
-  const [liveDone, setLiveDone] = useState(false)
-  const [liveSkipped, setLiveSkipped] = useState(false)
 
   const [lrn, setLrn] = useState('')
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null)
@@ -243,11 +239,8 @@ export default function RegisterPage() {
     if (f.size > MAX_FILE_SIZE_BYTES) { setFormError('Profile photo exceeds the 5 MB limit.'); return }
     setProfilePhoto(f)
     setProfilePreview(URL.createObjectURL(f))
-    // Session 10: when face verification is on, scan the photo immediately and
-    // show a visible status so the check is observable (not silent-at-submit).
-    setFaceDescriptor(null)
     // Photo face-check runs only when camera face-login is OFF. When it's ON the
-    // face is registered live via the camera below and the photo isn't scanned.
+    // face is registered via the camera gate after submit; the photo isn't scanned.
     if (!faceEnabled) {
       setFaceStatus('scanning'); setFaceMsg('Checking for a face…')
       scanFaceFromFile(f).then(scan => {
@@ -288,22 +281,16 @@ export default function RegisterPage() {
     // Session 10 (experimental): client-side face check on the profile photo.
     // Descriptor was computed on photo-select (faceStatus). Re-scan here only if
     // it's still pending (e.g. slow model load).
-    let descriptor = faceDescriptor
-    if (faceEnabled) {
-      // Camera face-login ON: register the face live. If the camera was skipped,
-      // no descriptor is stored and the login gate will force enrollment.
-      if (!liveDone && !liveSkipped) {
-        setFormError('Please register your face with the camera (or skip — you’ll be asked to register at login).'); return
-      }
-    } else {
-      // Camera face-login OFF: the profile photo must pass a face check.
+    // Camera face-login OFF: the profile photo must pass a face check here.
+    // ON: face is registered once via the app-wide gate right after landing
+    // (single prompt), so nothing to do at submit.
+    if (!faceEnabled) {
       if (faceStatus !== 'ok') {
         setFaceStatus('scanning'); setFaceMsg('Checking for a face…')
         const scan = await scanFaceFromFile(profilePhoto)
         if (!scan.ok) { setFaceStatus('fail'); setFaceMsg(FACE_SCAN_MESSAGES[scan.reason]); setFormError(FACE_SCAN_MESSAGES[scan.reason]); return }
         setFaceStatus('ok'); setFaceMsg('Face detected ✓')
       }
-      descriptor = null // no face-login descriptor stored when the feature is off
     }
 
     const formData = new FormData()
@@ -311,7 +298,6 @@ export default function RegisterPage() {
     formData.append('lrn', lrn.trim())
     if (docsRequired) formData.append('doc_type', docType)
     if (profilePhoto) formData.append('profile_photo', profilePhoto)
-    if (descriptor) formData.append('face_descriptor', JSON.stringify(descriptor))
     for (const file of files) formData.append('file', file)
 
     setLoading(true)
@@ -478,33 +464,10 @@ export default function RegisterPage() {
               )}
             </div>
 
-            {/* Live face enrollment (blink + head-turn liveness) */}
             {faceEnabled && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Face Scan (Camera) <span className="text-red-500">*</span>
-                </label>
-                {liveDone ? (
-                  <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                    Face captured ✓ — this will be matched at login.
-                  </p>
-                ) : liveSkipped ? (
-                  <div className="space-y-2">
-                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                      Camera scan skipped — your uploaded photo will be used instead.
-                    </p>
-                    <button type="button" onClick={() => { setLiveSkipped(false) }}
-                      className="text-sm text-[#84050C] hover:text-[#6B0409] font-medium">
-                      Use camera instead
-                    </button>
-                  </div>
-                ) : (
-                  <LivenessCapture
-                    onComplete={(desc) => { setFaceDescriptor(desc); setLiveDone(true) }}
-                    onSkip={() => setLiveSkipped(true)}
-                  />
-                )}
-              </div>
+              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                After you finish, you&apos;ll be asked to register your face with your camera — this is used to verify you at login.
+              </p>
             )}
 
             {/* LRN */}
