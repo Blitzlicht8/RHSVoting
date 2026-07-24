@@ -2,7 +2,6 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { Mail, User, Eye, EyeOff } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
@@ -90,7 +89,6 @@ const MAX_FILES = 3
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function RegisterPage() {
-  const router = useRouter()
   const { addToast } = useToast()
 
   const [step, setStep] = useState<Step>('credentials')
@@ -316,7 +314,9 @@ export default function RegisterPage() {
       const json = await res.json()
       if (!res.ok) { addToast(json.error ?? 'Submission failed.', 'error'); return }
       addToast('Account created and submitted for verification.', 'success')
-      router.push('/dashboard')
+      // Hard navigation so AuthProvider remounts and re-fetches the now-authed
+      // session (client-side router.push keeps the stale null user → stuck spinner).
+      window.location.href = '/dashboard'
     } catch {
       addToast('Network error during submission.', 'error')
     } finally {

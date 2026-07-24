@@ -82,21 +82,16 @@ export default function LoginPage() {
   const finishLogin = async (redirect: string) => {
     setPendingRedirect(redirect)
     try {
-      const [sRes, meRes] = await Promise.all([
+      const [sRes, dRes] = await Promise.all([
         fetch('/api/settings', { credentials: 'include' }),
-        fetch('/api/auth/me', { credentials: 'include' }),
+        fetch('/api/face/descriptor', { credentials: 'include' }),
       ])
       const s = (await sRes.json())?.data ?? {}
-      const me = (await meRes.json())?.data ?? {}
-      if (s.enable_face_verification === 'true' && me.face_descriptor) {
-        try {
-          const desc = JSON.parse(me.face_descriptor)
-          if (Array.isArray(desc) && desc.length === 128) {
-            setStoredDescriptor(desc)
-            setStep('face')
-            return
-          }
-        } catch {}
+      const desc = (await dRes.json())?.data?.descriptor
+      if (s.enable_face_verification === 'true' && Array.isArray(desc) && desc.length === 128) {
+        setStoredDescriptor(desc)
+        setStep('face')
+        return
       }
     } catch {}
     window.location.href = redirect
