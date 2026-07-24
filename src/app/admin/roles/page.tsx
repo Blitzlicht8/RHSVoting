@@ -5,6 +5,7 @@ import AdminLayout from '@/components/AdminLayout'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { useUnsavedGuard } from '@/lib/useUnsavedGuard'
 import { Lock, Pencil, Trash2, Plus, Shield, Crown } from 'lucide-react'
 
 interface AppRole {
@@ -80,6 +81,11 @@ export default function RolesPage() {
   const [newPerms, setNewPerms] = useState<Record<string,boolean>>({})
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<number|null>(null)
+
+  // Guard an in-progress inline role edit or a typed-but-unsaved new role.
+  const isDirty = editingId !== null
+    || (showNew && (newName.trim() !== '' || Object.values(newPerms).some(Boolean)))
+  useUnsavedGuard(isDirty)
 
   useEffect(() => {
     if (user && user.role !== 'master_admin') { router.replace('/admin'); return }

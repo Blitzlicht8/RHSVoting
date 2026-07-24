@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { hasPermission } from '@/lib/permissions'
 import { ElectionStatus, Position, Candidate } from '@/types'
 import { InValue } from '@libsql/client'
 import { checkAutoTransition } from '@/lib/autoTransition'
@@ -186,8 +187,14 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     eligible = evaluateEligibility(eligibility, valueSet)
   }
 
+  // Direct-by-ID access must honor the same hiding the list endpoint applies:
+  // a non-eligible, non-visible-to-all viewer cannot fetch election detail.
+  if (!admin && !eligible && !election.visible_to_all) {
+    return NextResponse.json({ error: 'Election not found' }, { status: 404 })
+  }
+
   return NextResponse.json({
-    data: { election: { ...election, positions: positionsWithCandidates, hasVoted, eligibility, eligible } },
+    data: { election: { ...election, positions: positionsWithCandidates, hasVoted, eligibility: admin ? eligibility : [], eligible } },
   })
 }
 
@@ -199,6 +206,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!isAdmin(authUser.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!(await hasPermission(authUser.role, 'manageElectionVisibility'))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -312,9 +322,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     values.push(body.status)
   }
 
+  const nextIsGlobal = body.is_global !== undefined ? !!body.is_global : !!existing.is_global
+  const flippedToGlobal = body.is_global !== undefined && nextIsGlobal && !existing.is_global
+
   if (body.is_global !== undefined) {
     setClauses.push('is_global = ?')
-    values.push(body.is_global ? 1 : 0)
+    values.push(nextIsGlobal ? 1 : 0)
   }
 
   if (body.allow_teacher_vote !== undefined) {
@@ -322,9 +335,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     values.push(body.allow_teacher_vote ? 1 : 0)
   }
 
-  if (body.visible_to_all !== undefined) {
-    // Only scoped elections carry visible_to_all; a global election forces it to 0.
-    const nextIsGlobal = body.is_global !== undefined ? !!body.is_global : !!existing.is_global
+  // Only scoped elections carry visible_to_all. Normalize it to 0 whenever the
+  // election is (or becomes) global — even if the caller didn't send it — so a
+  // stale visible_to_all=1 can't survive a scoped→global flip.
+  if (body.visible_to_all !== undefined || (body.is_global !== undefined && nextIsGlobal)) {
     setClauses.push('visible_to_all = ?')
     values.push(!nextIsGlobal && body.visible_to_all ? 1 : 0)
   }
@@ -371,6 +385,16 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: 'Positions can only be modified on draft elections' }, { status: 400 })
     }
     await syncPositions(electionId, body.positions as PositionInput[])
+  }
+
+  // Flipping a scoped election to global drops its eligibility rules even when
+  // the caller didn't resend eligibility — otherwise stale rules reappear if it
+  // is later flipped back to scoped.
+  if (flippedToGlobal && !hasEligibility) {
+    await db.execute({
+      sql: 'DELETE FROM election_eligibility_rules WHERE election_id = ?',
+      args: [electionId],
+    })
   }
 
   if (hasEligibility) {
@@ -425,6 +449,9 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!isAdmin(authUser.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!(await hasPermission(authUser.role, 'manageElectionVisibility'))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

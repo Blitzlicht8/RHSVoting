@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { hasPermission } from '@/lib/permissions'
 import { logActivity } from '@/lib/logger'
 import { Role } from '@/types'
 import { InValue } from '@libsql/client'
@@ -178,6 +179,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   // Timeout / penalty: admin sets timeout_days (>0 sets timeout_until N days out; 0/null clears)
   let timeoutLogMsg: string | null = null
   if (body.timeout_days !== undefined && adminUser) {
+    if (!(await hasPermission(authUser.role as Role, 'manageUserPenalties'))) {
+      return NextResponse.json({ error: 'Forbidden — missing user penalty permission' }, { status: 403 })
+    }
     const days = Number(body.timeout_days)
     if (!Number.isFinite(days) || days < 0 || days > 3650) {
       return NextResponse.json({ error: 'timeout_days must be between 0 and 3650' }, { status: 400 })

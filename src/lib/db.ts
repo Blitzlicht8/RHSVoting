@@ -425,6 +425,24 @@ async function _init(): Promise<void> {
     await db.execute({ sql: `INSERT OR IGNORE INTO roles (name, is_system, permissions) VALUES (?,?,?)`, args: [r.name, r.is_system, r.perms] })
   }
 
+  // Backfill Session-8 granular scopes on system roles so existing DBs (seeded
+  // with '{}') keep current admin/moderator access. json_insert only adds a key
+  // when absent — it never overwrites a master_admin edit that later set it false.
+  const scopeBackfill: { role: string; scope: string }[] = [
+    { role: 'admin', scope: 'reviewVerificationFields' },
+    { role: 'admin', scope: 'manageElectionVisibility' },
+    { role: 'admin', scope: 'manageUserPenalties' },
+    { role: 'admin', scope: 'managePostApproval' },
+    { role: 'moderator', scope: 'reviewVerificationFields' },
+    { role: 'moderator', scope: 'managePostApproval' },
+  ]
+  for (const b of scopeBackfill) {
+    await db.execute({
+      sql: `UPDATE roles SET permissions = json_insert(permissions, '$.' || ?, json('true')) WHERE name = ?`,
+      args: [b.scope, b.role],
+    })
+  }
+
   // Add new columns (idempotent — silently skip if column already exists)
   const newColumns: string[] = [
     `ALTER TABLE users ADD COLUMN grade_level TEXT`,

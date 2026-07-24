@@ -13,12 +13,6 @@ const IMAGE_TYPES: Record<string, string> = {
   'image/heif': 'heif',
 }
 
-const ID_TYPES: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-}
-
 const VIDEO_TYPES: Record<string, string> = {
   'video/mp4': 'mp4',
   'video/webm': 'webm',
@@ -86,15 +80,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: { url: postBlob.url } })
   }
 
-  // â”€â”€ School ID upload (default / purpose='id') â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const ext = ID_TYPES[file.type]
-  if (!ext) {
-    return NextResponse.json({ error: 'Invalid file type. Allowed: jpeg, png, webp' }, { status: 400 })
-  }
-  if (file.size > 5 * 1024 * 1024) {
-    return NextResponse.json({ error: 'File size exceeds 5 MB limit' }, { status: 400 })
-  }
-
   if (purpose === 'candidate') {
     const ext = IMAGE_TYPES[file.type]
     if (!ext) {
@@ -113,49 +98,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: { url: candidateBlob.url } })
   }
 
-  const intendedRole = (formData.get('intended_role') as string | null) ?? null
-  const gradeLevel = (formData.get('grade_level') as string | null) ?? null
-  const section = (formData.get('section') as string | null) ?? null
-
-  const filename = `school-ids/${authUser.id}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}.${ext}`
-  const buffer = Buffer.from(await file.arrayBuffer())
-
-  const blob = await put(filename, buffer, { access: 'public', contentType: file.type })
-  const imagePath = blob.url
-
-  await db.execute({
-    sql: `UPDATE users SET id_image = ?, intended_role = ?, grade_level = ?, section = ?, updated_at = datetime('now') WHERE id = ?`,
-    args: [imagePath, intendedRole, gradeLevel, section, authUser.id],
-  })
-
-  await db.execute({
-    sql: `INSERT OR REPLACE INTO verification_requests (user_id, image_path, status, intended_role) VALUES (?, ?, 'pending', ?)`,
-    args: [authUser.id, imagePath, intendedRole],
-  })
-
-  const settingResult = await db.execute({
-    sql: `SELECT value FROM settings WHERE key = 'auto_verify_id'`,
-    args: [],
-  })
-  const autoVerify = settingResult.rows[0]?.value === 'true'
-
-  let finalStatus = 'pending'
-  if (autoVerify) {
-    await db.batch(
-      [
-        {
-          sql: `UPDATE verification_requests SET status = 'approved', reviewed_at = datetime('now') WHERE user_id = ?`,
-          args: [authUser.id],
-        },
-        {
-          sql: `UPDATE users SET id_verified = 1, updated_at = datetime('now') WHERE id = ?`,
-          args: [authUser.id],
-        },
-      ],
-      'write'
-    )
-    finalStatus = 'approved'
-  }
-
-  return NextResponse.json({ data: { imagePath, status: finalStatus } })
+  // Legacy default/`purpose=id` verification-upload branch removed in the v1.8.1
+  // QA pass: it predated the reverification refactor, wrote legacy
+  // users.grade_level/section, and did INSERT OR REPLACE INTO verification_requests
+  // bypassing lrn/profile_photo_url/doc_type/denied_fields — reachable by any
+  // authenticated request and able to 409-lock users out of the real flow.
+  // All ID/verification uploads now go through POST /api/verifications.
+  return NextResponse.json({ error: 'Unsupported upload purpose' }, { status: 400 })
 }

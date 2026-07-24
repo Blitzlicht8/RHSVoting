@@ -8,7 +8,9 @@
 2026-07-24
 
 ## Version After This Session
-`1.8.0` — MINOR: Roles & Permissions gains 4 new granular scopes; Activity Logs records + badges new event types (election visibility changes, settings changes, reverification). New log actions `election_visibility_changed`, `settings_changed`, `verification_reverified`.
+`1.8.1` — FIX: post-launch QA fix pass (`fix/qa-pass-v1.8`). See "Session 9" below.
+
+Prev: `1.8.0` — MINOR: Roles & Permissions gains 4 new granular scopes; Activity Logs records + badges new event types (election visibility changes, settings changes, reverification). New log actions `election_visibility_changed`, `settings_changed`, `verification_reverified`.
 
 Prev: `1.7.0` — MINOR: Admin layout tweaks (top pill "Admin Dashboard") + post approval workflow. New `posts.status` column, `require_post_approval`/`auto_approve_posts` settings, `/admin/posts` moderation page, `PATCH /api/posts/[id]`.
 
@@ -29,6 +31,28 @@ Prev: `1.3.0` — MINOR: Settings Save bar (staged changes applied on Save) + un
 Prev: `1.2.2` — FIX: eligibility builder groups leveled values under their parent value (repeated child names like Section A/B/C now shown under each Strand caption)
 
 Prev: `1.2.1` — FIX: election eligibility builder now cascades (leveled group values show only when a parent value is selected; stale rules from deselected parents dropped)
+
+---
+
+## What Was Done (Session 9 — Post-Launch QA Fix Pass, v1.8.1)
+
+**New:** `src/lib/permissions.ts` — `hasPermission(role, scope)`: master_admin always true; else reads `roles.permissions` JSON and returns `!!perms[scope]` (deny on any error). db.ts backfills the 4 Session-8 scopes on system roles via `json_insert` (admin gets all 4; moderator gets reviewVerificationFields + managePostApproval) so existing `{}`-seeded DBs keep current access; `json_insert` never overwrites a later master_admin edit.
+
+Fixed (priority order):
+1. **Granular scopes now enforced.** `reviewVerificationFields` → `verifications/[id]` PATCH; `managePostApproval` → `posts/[id]` PATCH; `manageUserPenalties` → the `timeout_days` branch in `users/[id]` PATCH; `manageElectionVisibility` → `elections/[id]` PATCH + DELETE. Each gates on `isAdmin` AND `hasPermission`.
+2. **Election detail GET eligibility gate.** `GET /api/elections/[id]` now 404s when viewer is not admin, not eligible, and election is not `visible_to_all` — closes direct-by-ID bypass of list hiding.
+3. **Upload legacy branch removed.** Deleted the default/`purpose=id` branch in `api/upload` (+ unused `ID_TYPES`); it bypassed the reverification flow and could 409-lock users. Confirmed no caller (verify-id/register post to `/api/verifications`). Unknown purpose now 400s.
+4. **Roles page unsaved-guard.** `admin/roles` now uses `useUnsavedGuard` (dirty on inline edit or typed-but-unsaved new role). Audit: elections/users/verifications edits are modal-based (state discarded on close) and posts page has no staged form — no route-level guard needed; academic/settings/roles are the only page-level staged editors, all now guarded.
+5. **auto_approve_posts wired + atomic pair.** POST gate now: pending only when `require_post_approval && !auto_approve_posts && !admin`. Settings PATCH enforces mutual exclusivity server-side (setting one 'true' writes the other 'false' in one batch) so non-atomic client saves can't leave both 'true'.
+6. **is_global→global normalizes visible_to_all** even when caller omits it (no stale `visible_to_all=1`).
+7. **is_global flip to global clears eligibility rules** even when `eligibility` not resent.
+8. **Eligibility rules admin-only** in election GET response (`eligibility: admin ? rules : []`).
+9. **getVisibleElectionIds honors visible_to_all** — posts for visible-to-all elections now visible to non-eligible viewers, matching election-page visibility.
+10. **Pending-posts badge total.** `GET /api/posts?status=…` (admin) returns unpaginated `total`; AdminLayout badge uses it (no longer capped at 20).
+12. **Warning color standardized** to `text-amber-700 bg-amber-50 border-amber-200`: `Badge.tsx` warning variant, `PostCard.tsx` pending pill, `ConfirmDialog.tsx` non-destructive icon.
+
+**Deferred:**
+- **11. Legacy dead columns** (`users.grade_level`/`section`, `candidates.grade_level`/`subtype`/`section` + `_id` variants) — still read/written inert. Dropping needs a DB migration + confirming UI doesn't present them as authoritative; left as a follow-up migration to keep this a low-risk fix pass.
 
 ---
 
