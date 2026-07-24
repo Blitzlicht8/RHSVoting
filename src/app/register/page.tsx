@@ -115,6 +115,9 @@ export default function RegisterPage() {
   const [docType, setDocType] = useState('')
   const docsRequired = docTypeOptions.length > 0
   const [faceEnabled, setFaceEnabled] = useState(false)
+  const [faceStatus, setFaceStatus] = useState<'idle' | 'scanning' | 'ok' | 'fail'>('idle')
+  const [faceMsg, setFaceMsg] = useState<string | null>(null)
+  const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null)
 
   const [lrn, setLrn] = useState('')
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null)
@@ -139,7 +142,7 @@ export default function RegisterPage() {
   // Load settings (doc types) when reaching profile step.
   useEffect(() => {
     if (step !== 'profile') return
-    fetch('/api/settings')
+    fetch('/api/settings', { credentials: 'include' })
       .then(r => r.json())
       .then(j => {
         const s = j.data ?? {}
@@ -239,6 +242,18 @@ export default function RegisterPage() {
     if (f.size > MAX_FILE_SIZE_BYTES) { setFormError('Profile photo exceeds the 5 MB limit.'); return }
     setProfilePhoto(f)
     setProfilePreview(URL.createObjectURL(f))
+    // Session 10: when face verification is on, scan the photo immediately and
+    // show a visible status so the check is observable (not silent-at-submit).
+    setFaceDescriptor(null)
+    if (faceEnabled) {
+      setFaceStatus('scanning'); setFaceMsg('Checking for a face…')
+      scanFaceFromFile(f).then(scan => {
+        if (scan.ok) { setFaceDescriptor(scan.descriptor); setFaceStatus('ok'); setFaceMsg('Face detected ✓') }
+        else { setFaceStatus('fail'); setFaceMsg(FACE_SCAN_MESSAGES[scan.reason]) }
+      })
+    } else {
+      setFaceStatus('idle'); setFaceMsg(null)
+    }
   }
 
   const addFiles = (incoming: File[]) => {
@@ -268,14 +283,17 @@ export default function RegisterPage() {
     if (docsRequired && files.length === 0) { setFormError('Please attach at least one document.'); return }
 
     // Session 10 (experimental): client-side face check on the profile photo.
-    // Rejects non-face / multi-face at the client; computes a descriptor to store.
-    let faceDescriptor: number[] | null = null
+    // Descriptor was computed on photo-select (faceStatus). Re-scan here only if
+    // it's still pending (e.g. slow model load).
+    let descriptor = faceDescriptor
     if (faceEnabled) {
-      setLoading(true)
-      const scan = await scanFaceFromFile(profilePhoto)
-      setLoading(false)
-      if (!scan.ok) { setFormError(FACE_SCAN_MESSAGES[scan.reason]); return }
-      faceDescriptor = scan.descriptor
+      if (faceStatus === 'scanning' || (faceStatus !== 'ok' && !descriptor)) {
+        setFaceStatus('scanning'); setFaceMsg('Checking for a face…')
+        const scan = await scanFaceFromFile(profilePhoto)
+        if (!scan.ok) { setFaceStatus('fail'); setFaceMsg(FACE_SCAN_MESSAGES[scan.reason]); setFormError(FACE_SCAN_MESSAGES[scan.reason]); return }
+        descriptor = scan.descriptor
+        setFaceDescriptor(descriptor); setFaceStatus('ok'); setFaceMsg('Face detected ✓')
+      }
     }
 
     const formData = new FormData()
@@ -283,7 +301,7 @@ export default function RegisterPage() {
     formData.append('lrn', lrn.trim())
     if (docsRequired) formData.append('doc_type', docType)
     if (profilePhoto) formData.append('profile_photo', profilePhoto)
-    if (faceDescriptor) formData.append('face_descriptor', JSON.stringify(faceDescriptor))
+    if (descriptor) formData.append('face_descriptor', JSON.stringify(descriptor))
     for (const file of files) formData.append('file', file)
 
     setLoading(true)
@@ -437,6 +455,15 @@ export default function RegisterPage() {
                   <p className="text-xs text-gray-400 mt-1">Clear photo of your face. JPEG/PNG/WebP, max 5 MB.</p>
                 </div>
               </div>
+              {faceEnabled && faceMsg && (
+                <p className={`mt-2 text-xs font-medium ${
+                  faceStatus === 'ok' ? 'text-green-700'
+                  : faceStatus === 'fail' ? 'text-amber-700'
+                  : 'text-gray-500'
+                }`}>
+                  {faceStatus === 'scanning' && '⏳ '}{faceMsg}
+                </p>
+              )}
             </div>
 
             {/* LRN */}

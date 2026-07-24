@@ -82,7 +82,7 @@ export default function LoginPage() {
     setPendingRedirect(redirect)
     try {
       const [sRes, meRes] = await Promise.all([
-        fetch('/api/settings'),
+        fetch('/api/settings', { credentials: 'include' }),
         fetch('/api/auth/me', { credentials: 'include' }),
       ])
       const s = (await sRes.json())?.data ?? {}
