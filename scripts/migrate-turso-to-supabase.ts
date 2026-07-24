@@ -59,15 +59,12 @@ async function main() {
   })
 
   // Build the Postgres schema (tables/columns/seeds) via the app's own init.
-  const { ensureInit } = await import('../src/lib/db')
+  const { ensureInit, parsePgUrl } = await import('../src/lib/db')
   await ensureInit()
   console.log('✓ Postgres schema ensured')
 
-  const pool = new pg.Pool({
-    connectionString: process.env.POSTGRES_URL,
-    ssl: { rejectUnauthorized: false },
-    max: 4,
-  })
+  const pgCfg = parsePgUrl(process.env.POSTGRES_URL!)
+  const pool = new pg.Pool({ ...pgCfg, ssl: { rejectUnauthorized: false }, max: 4 })
   const client = await pool.connect()
 
   // Which Turso tables actually exist
@@ -110,7 +107,7 @@ async function main() {
           return `(${ph.join(', ')})`
         })
         await client.query(
-          `INSERT INTO ${table} (${colList}) VALUES ${tuples.join(', ')} ON CONFLICT (id) DO NOTHING`,
+          `INSERT INTO ${table} (${colList}) VALUES ${tuples.join(', ')} ON CONFLICT DO NOTHING`,
           values
         )
       }

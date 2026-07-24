@@ -52,7 +52,16 @@ Done (build + typecheck green):
 - `scripts/migrate-turso-to-supabase.ts` — one-time data copy: id-preserving, FK deferred (`session_replication_role=replica`), identity-sequence fixup, Turso-vs-PG row-count verify. `--wipe` for clean re-run; otherwise idempotent (`ON CONFLICT (id) DO NOTHING`).
 - `pg` + `@types/pg` added. `@libsql/client` kept (script reads Turso + `InValue` type imports).
 
-**BLOCKER — could not run/verify locally:** Turso + Postgres creds are Vercel **"sensitive"** env vars; `vercel env pull` returns them as `[SENSITIVE]` (values exist only at runtime on Vercel, not pullable). So the data migration was never executed and the pg adapter's runtime SQL is UNVERIFIED — the script run is itself the first real test.
+**MIGRATION RAN + VERIFIED (2026-07-25):** creds put in local `.env.local` manually (Vercel masks them as `[SENSITIVE]`; used Supabase **Session pooler** 5432 URL — direct `db.<ref>` host is IPv6-only, unreachable here).
+- `scripts/migrate-turso-to-supabase.ts --wipe` → **all 27 tables copied, every Turso↔PG row count matches** (users 11, roles 6, settings 12, otps 46, user_logs 360, posts 9, group_values 36, election_eligibility_rules 8, etc.).
+- `scripts/smoke-pg.ts` (9/9) — reads: settings, elections complex query (`?`→`$n`, subqueries, `AS "hasVoted"`), ILIKE search, `IN(...)`, group tree, FK integrity (candidates→positions/elections, user_group_values→users/values), identity-sequence advanced, roles JSON.
+- `scripts/smoke-write-pg.ts` (pass) — writes: `RETURNING id`→lastInsertRowid, `datetime('now')` text format, batch transaction, `OR IGNORE`→DO NOTHING (no overwrite), `OR REPLACE settings`→DO UPDATE (upsert).
+- **Runtime fixes found via smoke:** pg returns int8/BIGINT (incl. ids + COUNT) as strings → registered `types.setTypeParser(20, parseInt)` so ids/counts are numbers like libsql (else `lastInsertRowid` was NaN + `===` type bugs). Robust `parsePgUrl()` splits on last `@` (Supabase passwords have special chars that break connection-string parsing) — exported + used by db.ts and the script.
+
+**Still required before merge (per prompt's non-auto-merge rule):**
+- Interactive regression on `npm run dev` against Postgres: register → OTP → verify → vote → post → admin actions (smoke covered the SQL paths, not full UI flows).
+- Env swap on Vercel: app now reads `POSTGRES_URL` (present at runtime). Keep Turso vars one full deploy cycle before removing. Update `context.md` Tech Stack (Database) + Required Env Vars when stable.
+- Merge `feat/supabase-migration` only after you confirm prod behaves on Postgres.
 
 **RUNBOOK to finish Part 2 (Rhen):**
 1. Put the REAL creds in local `.env.local` (gitignored): `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` (Turso dashboard), and `POSTGRES_URL` (Supabase dashboard → Connect → prefer the direct/non-pooling 5432 URL for the bulk load). Do NOT commit `.env.local`.

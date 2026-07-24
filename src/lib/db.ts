@@ -1,5 +1,11 @@
-import { Pool, PoolClient } from 'pg'
+import { Pool, PoolClient, types } from 'pg'
 import bcrypt from 'bcryptjs'
+
+// pg returns BIGINT (int8, incl. COUNT() and our BIGINT ids) as strings to avoid
+// precision loss. libsql returned them as JS numbers and the whole app assumes
+// numbers — parse int8 back to Number (ids here are far below 2^53). This keeps
+// id/count comparisons and JSON output types identical to the Turso behavior.
+types.setTypeParser(20, (v: string) => (v === null ? null : parseInt(v, 10)))
 
 // ── Turso → Supabase Postgres migration (Session 11 Part 2) ──
 // db.ts now runs on node-postgres (`pg`) against Supabase Postgres, but preserves
@@ -101,19 +107,41 @@ function toResult(res: { rows: DbRow[]; rowCount: number | null }): DbResult {
 }
 
 // ── Lazy pg Pool (mirrors the old lazy-Proxy rule: never eager-init at import) ──
+// Parse postgresql://user:pass@host:port/db?params into discrete fields WITHOUT
+// URL-decoding — Supabase passwords often contain characters (@, /, etc.) that
+// break connection-string parsing when unencoded. Split on the LAST '@' (the
+// host has none) so a raw password is passed through verbatim.
+export function parsePgUrl(url: string): {
+  user: string; password: string; host: string; port: number; database: string
+} {
+  const scheme = url.indexOf('://')
+  const rest = url.slice(scheme + 3)
+  const at = rest.lastIndexOf('@')
+  const creds = rest.slice(0, at)
+  const hostPart = rest.slice(at + 1)
+  const ci = creds.indexOf(':')
+  const user = ci === -1 ? creds : creds.slice(0, ci)
+  const password = ci === -1 ? '' : creds.slice(ci + 1)
+  const slash = hostPart.indexOf('/')
+  const hostPort = slash === -1 ? hostPart : hostPart.slice(0, slash)
+  const dbAndParams = slash === -1 ? '' : hostPart.slice(slash + 1)
+  const database = dbAndParams.split('?')[0] || 'postgres'
+  const colon = hostPort.lastIndexOf(':')
+  const host = colon === -1 ? hostPort : hostPort.slice(0, colon)
+  const port = colon === -1 ? 5432 : parseInt(hostPort.slice(colon + 1), 10) || 5432
+  return { user, password, host, port, database }
+}
+
 let _pool: Pool | null = null
 function getPool(): Pool {
   if (!_pool) {
-    const connectionString =
+    const url =
       process.env.POSTGRES_URL ||
-      process.env.POSTGRES_PRISMA_URL ||
+      process.env.POSTGRES_URL_NON_POOLING ||
       process.env.DATABASE_URL
-    if (!connectionString) throw new Error('POSTGRES_URL is not set')
-    _pool = new Pool({
-      connectionString,
-      ssl: { rejectUnauthorized: false },
-      max: 5,
-    })
+    if (!url) throw new Error('POSTGRES_URL is not set')
+    const cfg = parsePgUrl(url)
+    _pool = new Pool({ ...cfg, ssl: { rejectUnauthorized: false }, max: 5 })
   }
   return _pool
 }
