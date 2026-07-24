@@ -18,6 +18,7 @@ import {
   Settings,
   Shield,
   LogOut,
+  MessageSquare,
 } from 'lucide-react'
 
 interface AdminNavItem {
@@ -32,6 +33,7 @@ const ADMIN_NAV: AdminNavItem[] = [
   { href: '/admin/users', label: 'Members', icon: <Users className="w-5 h-5" /> },
   { href: '/admin/academic', label: 'Group Structure', icon: <BookOpen className="w-5 h-5" /> },
   { href: '/admin/elections', label: 'Manage Elections', icon: <ListChecks className="w-5 h-5" /> },
+  { href: '/admin/posts', label: "Post Approvals", icon: <MessageSquare className="w-5 h-5" /> },
   { href: '/admin/reports', label: 'Reports', icon: <Flag className="w-5 h-5" />, roles: ['master_admin', 'admin'] },
   { href: '/admin/logs', label: 'Activity Logs', icon: <FileText className="w-5 h-5" />, roles: ['master_admin', 'admin'] },
   { href: '/admin/settings', label: 'Settings', icon: <Settings className="w-5 h-5" />, roles: ['master_admin', 'admin'] },
@@ -52,6 +54,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
+  const [pendingPostCount, setPendingPostCount] = useState(0)
 
   useEffect(() => {
     if (!loading && !user) router.push('/')
@@ -66,6 +69,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         const count = Array.isArray(res.data) ? res.data.length : (res.data?.total ?? 0)
         setPendingCount(count)
       })
+      .catch(() => {})
+    fetch('/api/posts?status=pending', { credentials: 'include' })
+      .then(r => r.json())
+      .then(res => setPendingPostCount(Array.isArray(res.data?.posts) ? res.data.posts.length : 0))
       .catch(() => {})
   }, [user])
 
@@ -133,6 +140,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               <span className="flex-1">{item.label}</span>
               {item.href === '/admin/verifications' && pendingCount > 0 && (
                 <Badge variant="warning" size="sm">{pendingCount}</Badge>
+              )}
+              {item.href === '/admin/posts' && pendingPostCount > 0 && (
+                <Badge variant="warning" size="sm">{pendingPostCount}</Badge>
               )}
             </Link>
           ))}

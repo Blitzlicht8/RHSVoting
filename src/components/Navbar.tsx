@@ -80,7 +80,7 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
             href="/admin/users"
             className="hidden md:flex items-center px-3 py-1.5 bg-[#84050C] text-white text-xs font-semibold rounded-full hover:bg-[#6B0409] transition-colors"
           >
-            Admin
+            Admin Dashboard
           </Link>
         )}
 

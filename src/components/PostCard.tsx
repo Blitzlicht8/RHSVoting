@@ -16,6 +16,7 @@ interface Post {
   is_public: number
   election_id: number | null
   election_title?: string | null
+  status?: string
 }
 
 interface Comment {
@@ -190,6 +191,11 @@ export default function PostCard({ post, currentUserId, currentUserRole, current
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {post.status && post.status !== 'approved' && (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${post.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'}`}>
+              {post.status === 'pending' ? 'Pending approval' : 'Rejected'}
+            </span>
+          )}
           {post.election_title && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#FEE2E2] text-[#84050C] text-xs font-medium">
               🗳 {post.election_title}

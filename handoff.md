@@ -8,7 +8,9 @@
 2026-07-24
 
 ## Version After This Session
-`1.6.0` — MINOR: Feed/posting overhaul — election-scoped post visibility, unified media upload (button + plus-menu + paste + drop), blob-URL persistence bug fixed, profile Recent Posts filtered + JSON-leak fixed.
+`1.7.0` — MINOR: Admin layout tweaks (top pill "Admin Dashboard") + post approval workflow. New `posts.status` column, `require_post_approval`/`auto_approve_posts` settings, `/admin/posts` moderation page, `PATCH /api/posts/[id]`.
+
+Prev: `1.6.0` — MINOR: Feed/posting overhaul — election-scoped post visibility, unified media upload (button + plus-menu + paste + drop), blob-URL persistence bug fixed, profile Recent Posts filtered + JSON-leak fixed.
 
 Prev: `1.5.0` — MINOR: Election deadline reminders on dashboard + user timeout/penalty system. New columns `elections.warn_non_voters`, `users.timeout_until`.
 
@@ -25,6 +27,20 @@ Prev: `1.3.0` — MINOR: Settings Save bar (staged changes applied on Save) + un
 Prev: `1.2.2` — FIX: eligibility builder groups leveled values under their parent value (repeated child names like Section A/B/C now shown under each Strand caption)
 
 Prev: `1.2.1` — FIX: election eligibility builder now cascades (leveled group values show only when a parent value is selected; stale rules from deselected parents dropped)
+
+---
+
+## What Was Done (Session 7 — Admin Layout + Post Approval)
+
+- **Layout**: Navbar top admin pill relabeled `Admin` → `Admin Dashboard`. Profile menu already top-right (avatar dropdown in `Navbar`, used by both `Layout` and `AdminLayout`) — no move needed. Added `Post Approvals` item to `AdminLayout` sidebar (`/admin/posts`) with pending-count badge.
+- **DB (`db.ts`)**: `posts.status TEXT NOT NULL DEFAULT 'approved'` (additive). Seeded settings `require_post_approval='false'`, `auto_approve_posts='true'`.
+- **Settings (`admin/settings`)**: new "Feed & Posting" card with two mutually-exclusive toggles (turning one on forces the other off, enforced in `toggleRequireApproval`/`toggleAutoApprove`). Persisted via staged Save bar. `/api/settings` ALLOWED_KEYS extended.
+- **Posts API (`api/posts`)**:
+  - POST reads `require_post_approval`; non-admin posts → `status='pending'` (admins auto-approve). Returns `status`.
+  - GET approval gate: non-admins see only `status='approved'` OR their own posts. Admins bypass; `?status=pending|approved|rejected` filter for moderation.
+  - `PATCH /api/posts/[id]` (admin only): set status approved/rejected, logs `post_approved`/`post_rejected`.
+- **Moderation page (`admin/posts/page.tsx`)**: pending/approved/rejected tabs, approve/reject actions, content excerpt.
+- **`PostCard`**: shows "Pending approval"/"Rejected" pill when `status !== 'approved'` (author sees own pending in feed).
 
 ---
 
