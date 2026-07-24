@@ -5,7 +5,7 @@ import { getAuthUser, isAdmin } from '@/lib/auth'
 import { ElectionStatus, Position, Candidate } from '@/types'
 import { InValue } from '@libsql/client'
 import { checkAutoTransition } from '@/lib/autoTransition'
-import { buildEligibilitySql, EligibilityRule } from '@/lib/groups'
+import { buildEligibilitySql, EligibilityRule, getUserValueSet, evaluateEligibility } from '@/lib/groups'
 
 interface EligibilityInput {
   structure_id?: number | null
@@ -175,8 +175,18 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
   const eligibility = await loadEligibilityRules(electionId)
 
+  // Whether this user is eligible to vote: admins and global elections always
+  // eligible; scoped elections evaluate the rules against the user's group values.
+  let eligible: boolean
+  if (admin || election.is_global) {
+    eligible = true
+  } else {
+    const valueSet = await getUserValueSet(authUser.id as number)
+    eligible = evaluateEligibility(eligibility, valueSet)
+  }
+
   return NextResponse.json({
-    data: { election: { ...election, positions: positionsWithCandidates, hasVoted, eligibility } },
+    data: { election: { ...election, positions: positionsWithCandidates, hasVoted, eligibility, eligible } },
   })
 }
 
@@ -309,6 +319,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (body.allow_teacher_vote !== undefined) {
     setClauses.push('allow_teacher_vote = ?')
     values.push(body.allow_teacher_vote ? 1 : 0)
+  }
+
+  if (body.visible_to_all !== undefined) {
+    // Only scoped elections carry visible_to_all; a global election forces it to 0.
+    const nextIsGlobal = body.is_global !== undefined ? !!body.is_global : !!existing.is_global
+    setClauses.push('visible_to_all = ?')
+    values.push(!nextIsGlobal && body.visible_to_all ? 1 : 0)
   }
 
   if (body.thumbnail_url !== undefined) {

@@ -37,6 +37,7 @@ const EMPTY_FORM: ElectionForm = {
   status: 'draft',
   positions: [],
   is_global: false,
+  visible_to_all: false,
   allow_teacher_vote: false,
   eligibility: [],
   auto_start: false,
@@ -119,6 +120,7 @@ export default function ElectionsPage() {
           end_date: toDatetimeLocal(full.end_date),
           status: full.status,
           is_global: !!full.is_global,
+          visible_to_all: !!full.visible_to_all,
           allow_teacher_vote: !!full.allow_teacher_vote,
           eligibility: (full.eligibility || []).map((r: { structure_id: number | null; value_id: number | null; is_all_groups: number | boolean; is_exclude: number | boolean }) => ({
             structure_id: r.structure_id,
@@ -214,6 +216,7 @@ export default function ElectionsPage() {
         start_date: new Date(formData.start_date).toISOString(),
         end_date: new Date(formData.end_date).toISOString(),
         is_global: formData.is_global,
+        visible_to_all: formData.is_global ? false : formData.visible_to_all,
         allow_teacher_vote: formData.allow_teacher_vote,
         auto_start: formData.auto_start,
         auto_end: formData.auto_end,

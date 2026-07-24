@@ -49,44 +49,57 @@ export async function GET(request: NextRequest) {
     args: [voterIdArg],
   })
 
-  let elections = result.rows
+  let elections: Record<string, unknown>[] = result.rows as unknown as Record<string, unknown>[]
 
-  if (!admin) {
-    // Non-admin visibility: an election is visible if it is global OR the user is
-    // eligible under its rules. Load the user's value set once and reuse it.
-    const valueSet = await getUserValueSet(voterIdArg)
+  // Load eligibility rules for all scoped (non-global) elections so we can both
+  // compute per-user eligibility and expose which group structures each election
+  // is scoped to (used by the elections-page group filter).
+  const scopedIds = elections
+    .filter((e) => !e.is_global)
+    .map((e) => Number(e.id))
 
-    const scopedIds = elections
-      .filter((e) => !e.is_global)
-      .map((e) => Number(e.id))
-
-    const rulesByElection = new Map<number, EligibilityRule[]>()
-    if (scopedIds.length > 0) {
-      const rulesResult = await db.execute({
-        sql: `SELECT election_id, structure_id, value_id, is_all_groups, is_exclude
-              FROM election_eligibility_rules
-              WHERE election_id IN (${scopedIds.map(() => '?').join(',')})`,
-        args: scopedIds,
-      })
-      for (const r of rulesResult.rows) {
-        const eid = Number(r.election_id)
-        const list = rulesByElection.get(eid) ?? []
-        list.push({
-          structure_id: r.structure_id === null ? null : Number(r.structure_id),
-          value_id: r.value_id === null ? null : Number(r.value_id),
-          is_all_groups: Number(r.is_all_groups),
-          is_exclude: Number(r.is_exclude),
-        })
-        rulesByElection.set(eid, list)
-      }
-    }
-
-    elections = elections.filter((e) => {
-      if (e.is_global) return true
-      const rules = rulesByElection.get(Number(e.id)) ?? []
-      return evaluateEligibility(rules, valueSet)
+  const rulesByElection = new Map<number, EligibilityRule[]>()
+  if (scopedIds.length > 0) {
+    const rulesResult = await db.execute({
+      sql: `SELECT election_id, structure_id, value_id, is_all_groups, is_exclude
+            FROM election_eligibility_rules
+            WHERE election_id IN (${scopedIds.map(() => '?').join(',')})`,
+      args: scopedIds,
     })
+    for (const r of rulesResult.rows) {
+      const eid = Number(r.election_id)
+      const list = rulesByElection.get(eid) ?? []
+      list.push({
+        structure_id: r.structure_id === null ? null : Number(r.structure_id),
+        value_id: r.value_id === null ? null : Number(r.value_id),
+        is_all_groups: Number(r.is_all_groups),
+        is_exclude: Number(r.is_exclude),
+      })
+      rulesByElection.set(eid, list)
+    }
   }
+
+  // Distinct structure ids each election's include rules reference (for the filter).
+  const structureIdsFor = (eid: number): number[] => {
+    const rules = rulesByElection.get(eid) ?? []
+    const ids = new Set<number>()
+    for (const r of rules) {
+      if (!Number(r.is_exclude) && r.structure_id != null) ids.add(Number(r.structure_id))
+    }
+    return Array.from(ids)
+  }
+
+  const valueSet = admin ? null : await getUserValueSet(voterIdArg)
+
+  elections = elections
+    .map((e): Record<string, unknown> => {
+      const eid = Number(e.id)
+      const eligible = admin || !!e.is_global || evaluateEligibility(rulesByElection.get(eid) ?? [], valueSet!)
+      return { ...e, eligible: eligible ? 1 : 0, structure_ids: structureIdsFor(eid) }
+    })
+    // Non-admins only see an election if they are eligible OR it is marked
+    // visible to non-eligible groups (read-only). Admins see everything.
+    .filter((e) => admin || e.eligible || !!e.visible_to_all)
 
   return NextResponse.json({ data: { elections } })
 }
@@ -181,9 +194,12 @@ export async function POST(request: NextRequest) {
   const allowTeacherVote = body.allow_teacher_vote ? 1 : 0
   const autoStart = body.auto_start ? 1 : 0
   const autoEnd = body.auto_end ? 1 : 0
+  // Global elections are inherently visible to everyone; only scoped elections
+  // carry a meaningful visible_to_all flag.
+  const visibleToAll = !isGlobal && body.visible_to_all ? 1 : 0
   await db.execute({
-    sql: `UPDATE elections SET is_global = ?, allow_teacher_vote = ?, auto_start = ?, auto_end = ? WHERE id = ?`,
-    args: [isGlobal, allowTeacherVote, autoStart, autoEnd, electionId],
+    sql: `UPDATE elections SET is_global = ?, allow_teacher_vote = ?, auto_start = ?, auto_end = ?, visible_to_all = ? WHERE id = ?`,
+    args: [isGlobal, allowTeacherVote, autoStart, autoEnd, visibleToAll, electionId],
   })
 
   // Save eligibility rules into the configurable-group model

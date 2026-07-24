@@ -4,6 +4,7 @@ import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
 import { InValue } from '@libsql/client'
+import { getUserValueSet, evaluateEligibility, EligibilityRule } from '@/lib/groups'
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   await ensureInit()
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 
   const electionResult = await db.execute({
-    sql: 'SELECT id, status FROM elections WHERE id = ?',
+    sql: 'SELECT id, status, is_global FROM elections WHERE id = ?',
     args: [electionId],
   })
   const election = electionResult.rows[0]
@@ -90,6 +91,27 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
   if (election.status !== 'active') {
     return NextResponse.json({ error: 'Election is not currently active' }, { status: 400 })
+  }
+
+  // Eligibility gate: for scoped elections, only members in the eligible group(s)
+  // may vote. A visible_to_all election is viewable by everyone but this check
+  // still blocks non-eligible viewers from casting a vote.
+  if (!election.is_global) {
+    const rulesResult = await db.execute({
+      sql: `SELECT structure_id, value_id, is_all_groups, is_exclude
+            FROM election_eligibility_rules WHERE election_id = ?`,
+      args: [electionId],
+    })
+    const rules: EligibilityRule[] = rulesResult.rows.map((r) => ({
+      structure_id: r.structure_id === null ? null : Number(r.structure_id),
+      value_id: r.value_id === null ? null : Number(r.value_id),
+      is_all_groups: Number(r.is_all_groups),
+      is_exclude: Number(r.is_exclude),
+    }))
+    const valueSet = await getUserValueSet(authUser.id as number)
+    if (!evaluateEligibility(rules, valueSet)) {
+      return NextResponse.json({ error: 'You are not eligible to vote in this election' }, { status: 403 })
+    }
   }
 
   const body = await request.json()

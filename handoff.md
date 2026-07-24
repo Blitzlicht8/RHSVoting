@@ -8,11 +8,36 @@
 2026-07-24
 
 ## Version After This Session
-`1.2.2` — FIX: eligibility builder groups leveled values under their parent value (repeated child names like Section A/B/C now shown under each Strand caption)
+`1.4.0` — MINOR: Election group-structure filter on elections page + "Visible to non-eligible groups" toggle (read-only visibility with server-side vote gate). Adds `elections.visible_to_all` column.
+
+Prev: `1.3.0` — MINOR: Settings Save bar (staged changes applied on Save) + unsaved-changes guard; confirmed App Version reads live from package.json
+
+Prev: `1.2.2` — FIX: eligibility builder groups leveled values under their parent value (repeated child names like Section A/B/C now shown under each Strand caption)
 
 Prev: `1.2.1` — FIX: election eligibility builder now cascades (leveled group values show only when a parent value is selected; stale rules from deselected parents dropped)
 
-Prev: `1.2.0` — MINOR: moved profile+verification fields into register wizard (auto-login on email verify)
+---
+
+## What Was Done (Session 4 — Election Filters + Group-Scoped Visibility Toggle)
+
+- **DB (`db.ts`)**: `elections.visible_to_all INTEGER NOT NULL DEFAULT 0` (additive, idempotent).
+- **Visibility model**: `is_global` = everyone eligible. Scoped election (`is_global=0`): eligibility rules gate voting. New `visible_to_all` (scoped only): when 1 everyone SEES it read-only but only eligible vote; when 0 only eligible see it. Global forces `visible_to_all=0`.
+- **List API (`GET /api/elections`)**: rewrote visibility — loads eligibility rules for all scoped elections, annotates each row with `eligible` (0/1) and `structure_ids` (distinct include-rule structure ids). Non-admin keeps election if `eligible || visible_to_all`. Admin sees all (`eligible=1`).
+- **Detail API (`GET /api/elections/[id]`)**: returns `eligible` for the user (admin/global → true, else evaluate rules).
+- **Vote API (`POST /api/elections/[id]/vote`)**: NEW server-side eligibility gate — scoped elections reject non-eligible voters with 403 (previously unenforced; only list hid them).
+- **POST/PATCH**: persist `visible_to_all` (coerced to 0 when global).
+- **`elections/page.tsx`**: group-structure `<select>` filter next to All/Active/Upcoming/Ended tabs (only lists structures used by visible elections). Cards show "View only — not eligible" for non-eligible (`canVote` gate).
+- **`elections/[id]/page.tsx`**: `canVote` gates voting view; read-only gray banner + candidate preview (`UpcomingView hideOpensBanner`) for non-eligible active viewers.
+- **`ElectionFormModal` + `admin/elections`**: `visible_to_all` added to `ElectionForm`, EMPTY_FORM, openEdit, handleSave payload; toggle rendered in Eligibility section (shown when !is_global).
+
+---
+
+## What Was Done (Session 3 — Settings Save Bar + Unsaved Changes Guard)
+
+- **`src/lib/useUnsavedGuard.ts`** (new hook): `useUnsavedGuard(dirty, message?)`. Installs a `beforeunload` handler (tab close/refresh/external nav → native prompt) + a capture-phase `document` click interceptor for internal same-origin `<a>` links (App Router has no cancelable route-change event) → `window.confirm` before allowing the jump. Refs keep listeners reading fresh `dirty`.
+- **`admin/settings`**: converted App Identity (app_name, org_type), Verification Document Types, and the two toggles (auto_verify_id, otp_required_login) from per-field immediate save to a staged `draft`/`baseline` model. A sticky amber **Save bar** appears when `draft !== baseline`, with Save changes (PATCHes only changed keys, then updates baseline) + Discard (reverts to baseline). `useUnsavedGuard(isDirty)` wired in. CRUD sections (Group Structures, Verification Requirements) stay immediate — discrete add/delete actions, not staged fields.
+- **`admin/academic`**: `useUnsavedGuard` wired to `editingValue !== null || newValueName` non-empty (guards a mid-rename / typed-but-unadded value). Its value/verifier CRUD stays immediate.
+- **App Version fix**: already resolved — `src/lib/version.ts` imports `pkg.version`; Settings shows `v${APP_VERSION}` = live package.json version (1.3.0). No stale DB row / hardcode found. Nothing to change.
 
 ---
 
