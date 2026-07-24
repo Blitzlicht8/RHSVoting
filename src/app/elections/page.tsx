@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Layout from '@/components/Layout'
 import { useAuth } from '@/components/providers/AuthProvider'
@@ -30,6 +30,7 @@ interface GroupValue {
   id: number
   name: string
   active: boolean
+  parent_value_id: number | null
 }
 
 interface GroupStructure {
@@ -212,6 +213,19 @@ export default function ElectionsPage() {
   const [activeTab, setActiveTab] = useState<FilterTab>('all')
   const [structures, setStructures] = useState<GroupStructure[]>([])
   const [groupFilter, setGroupFilter] = useState<GroupFilter>('all')
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const filterRef = useRef<HTMLDivElement>(null)
+
+  // Close the filter popover on outside click.
+  useEffect(() => {
+    if (!filterOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [filterOpen])
 
   const adminRoles = ['master_admin', 'admin', 'moderator']
   const isAdmin = user ? adminRoles.includes(user.role) : false
@@ -267,6 +281,30 @@ export default function ElectionsPage() {
       values: (s.values ?? []).filter((v) => v.active && usedValueIds.has(v.id)),
     }))
     .filter((g) => g.structureWide || g.values.length > 0)
+
+  // Lookup every value by id so we can render a value with its parent context
+  // (e.g. Section "A" under Strand "STEM" → "STEM · A"), disambiguating the
+  // repeated child names that made the flat list confusing.
+  const valueById = new Map<number, GroupValue>()
+  for (const s of structures) for (const v of s.values ?? []) valueById.set(v.id, v)
+  const valuePath = (id: number): string => {
+    const parts: string[] = []
+    let cur = valueById.get(id)
+    let guard = 0
+    while (cur && guard++ < 6) {
+      parts.unshift(cur.name)
+      cur = cur.parent_value_id != null ? valueById.get(cur.parent_value_id) : undefined
+    }
+    return parts.join(' · ')
+  }
+
+  const structureName = (id: number) => structures.find((s) => s.id === id)?.name ?? 'Group'
+  let selectedLabel = ''
+  if (groupFilter !== 'all') {
+    const [kind, idStr] = groupFilter.split(':')
+    const id = Number(idStr)
+    selectedLabel = kind === 'v' ? valuePath(id) : `All ${structureName(id)}`
+  }
 
   const filtered = elections.filter((e) => {
     if (activeTab === 'active' && e.status !== 'active') return false
@@ -341,23 +379,107 @@ export default function ElectionsPage() {
           </div>
 
           {groupOptionGroups.length > 0 && (
-            <select
-              value={groupFilter}
-              onChange={(e) => setGroupFilter(e.target.value as GroupFilter)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#84050C]"
-            >
-              <option value="all">All groups</option>
-              {groupOptionGroups.map((g) => (
-                <optgroup key={g.structure.id} label={g.structure.name}>
-                  {g.structureWide && (
-                    <option value={`s:${g.structure.id}`}>All of {g.structure.name}</option>
-                  )}
-                  {g.values.map((v) => (
-                    <option key={v.id} value={`v:${v.id}`}>{v.name}</option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+            <div className="relative" ref={filterRef}>
+              <button
+                type="button"
+                onClick={() => setFilterOpen((o) => !o)}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
+                  groupFilter !== 'all'
+                    ? 'border-[#84050C] text-[#84050C] bg-[#FEE2E2]'
+                    : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L14 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 018 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+                </svg>
+                {groupFilter === 'all' ? 'Filter' : selectedLabel}
+                {groupFilter !== 'all' && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); setGroupFilter('all') }}
+                    className="ml-0.5 -mr-1 rounded hover:bg-[#84050C]/10 p-0.5"
+                    aria-label="Clear filter"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </span>
+                )}
+              </button>
+
+              {filterOpen && (
+                <div className="absolute right-0 z-30 mt-2 w-64 max-h-96 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg py-1">
+                  <button
+                    type="button"
+                    onClick={() => { setGroupFilter('all'); setFilterOpen(false) }}
+                    className={`w-full text-left px-4 py-2 text-sm ${groupFilter === 'all' ? 'text-[#84050C] font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    All groups
+                  </button>
+                  {groupOptionGroups.map((g) => {
+                    const isOpen = expanded.has(g.structure.id)
+                    // Group leveled values under their parent context so repeated
+                    // child names (Section A/B/C) read clearly, e.g. under "STEM".
+                    const byParent = new Map<string, GroupValue[]>()
+                    for (const v of g.values) {
+                      const key = v.parent_value_id != null ? valuePath(v.parent_value_id) : ''
+                      const arr = byParent.get(key) ?? []
+                      arr.push(v)
+                      byParent.set(key, arr)
+                    }
+                    return (
+                      <div key={g.structure.id} className="border-t border-gray-100 first:border-t-0">
+                        <button
+                          type="button"
+                          onClick={() => setExpanded((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(g.structure.id)) next.delete(g.structure.id); else next.add(g.structure.id)
+                            return next
+                          })}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                        >
+                          <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                          {g.structure.name}
+                        </button>
+                        {isOpen && (
+                          <div className="pb-1">
+                            {g.structureWide && (
+                              <button
+                                type="button"
+                                onClick={() => { setGroupFilter(`s:${g.structure.id}`); setFilterOpen(false) }}
+                                className={`w-full text-left pl-9 pr-4 py-1.5 text-sm ${groupFilter === `s:${g.structure.id}` ? 'text-[#84050C] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                              >
+                                All {g.structure.name}
+                              </button>
+                            )}
+                            {Array.from(byParent.entries()).map(([parentKey, vals]) => (
+                              <div key={parentKey || '_'}>
+                                {parentKey && (
+                                  <p className="pl-9 pr-4 pt-1.5 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">{parentKey}</p>
+                                )}
+                                {vals.map((v) => (
+                                  <button
+                                    key={v.id}
+                                    type="button"
+                                    onClick={() => { setGroupFilter(`v:${v.id}`); setFilterOpen(false) }}
+                                    className={`w-full text-left ${parentKey ? 'pl-12' : 'pl-9'} pr-4 py-1.5 text-sm ${groupFilter === `v:${v.id}` ? 'text-[#84050C] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                                  >
+                                    {v.name}
+                                  </button>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
