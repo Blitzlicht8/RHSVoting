@@ -19,6 +19,7 @@ import {
   Shield,
   LogOut,
   MessageSquare,
+  ScanFace,
 } from 'lucide-react'
 
 interface AdminNavItem {
@@ -31,6 +32,7 @@ interface AdminNavItem {
 const ADMIN_NAV: AdminNavItem[] = [
   { href: '/admin/verifications', label: 'Verifications', icon: <ShieldCheck className="w-5 h-5" /> },
   { href: '/admin/users', label: 'Members', icon: <Users className="w-5 h-5" /> },
+  { href: '/admin/face-verification', label: 'Face Verification', icon: <ScanFace className="w-5 h-5" />, roles: ['master_admin', 'admin'] },
   { href: '/admin/academic', label: 'Group Structure', icon: <BookOpen className="w-5 h-5" /> },
   { href: '/admin/elections', label: 'Manage Elections', icon: <ListChecks className="w-5 h-5" /> },
   { href: '/admin/posts', label: "Post Approvals", icon: <MessageSquare className="w-5 h-5" /> },

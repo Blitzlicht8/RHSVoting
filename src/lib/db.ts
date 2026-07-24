@@ -501,6 +501,12 @@ async function _init(): Promise<void> {
     // Session 10 (experimental): client-side face verification — stored 128-float descriptor (JSON array)
     `ALTER TABLE users ADD COLUMN face_descriptor TEXT`,
     `ALTER TABLE verification_requests ADD COLUMN face_descriptor TEXT`,
+    // Session 10b: admin face-verification controls + report flow
+    `ALTER TABLE users ADD COLUMN face_skip INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN face_reverify_required INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN face_enroll_required INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN face_report_pending INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN face_reported_at TEXT`,
   ]
   for (const sql of newColumns) {
     await db.execute({ sql, args: [] }).catch(() => {})

@@ -10,6 +10,7 @@ import OTPInput from '@/components/ui/OTPInput'
 import Logo from '@/components/ui/Logo'
 import { useToast } from '@/components/providers/ToastProvider'
 import FaceCapture from '@/components/FaceCapture'
+import LivenessCapture from '@/components/LivenessCapture'
 import { faceDistance, isFaceMatch } from '@/lib/faceApi'
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -42,6 +43,9 @@ export default function LoginPage() {
   const [faceError, setFaceError] = useState<string | null>(null)
   const [faceMatching, setFaceMatching] = useState(false)
   const [faceAttempt, setFaceAttempt] = useState(0)
+  const [faceMode, setFaceMode] = useState<'enroll' | 'verify' | 'blocked'>('verify')
+  const [faceFails, setFaceFails] = useState(0)
+  const MAX_FACE_FAILS = 3
 
   // Countdown for resend
   const [countdown, setCountdown] = useState(0)
@@ -74,44 +78,56 @@ export default function LoginPage() {
     }
   }, [countdown])
 
-  // ── Post-auth: optionally insert the experimental face step ──────────────────
-  // Runs only after credentials (and OTP) already succeeded. If the face-
-  // verification setting is on AND the user has a stored descriptor, show the
-  // capture step; otherwise redirect straight through. Any failure falls back to
-  // a normal redirect — the face step never hard-blocks login.
+  // ── Post-auth: face verification gate ────────────────────────────────────────
+  // Credentials (and OTP) already succeeded. Query the server for this account's
+  // face state and branch: enroll (register face), verify (match), or blocked.
   const finishLogin = async (redirect: string) => {
     setPendingRedirect(redirect)
     try {
-      const [sRes, dRes] = await Promise.all([
-        fetch('/api/settings', { credentials: 'include' }),
-        fetch('/api/face/descriptor', { credentials: 'include' }),
-      ])
-      const s = (await sRes.json())?.data ?? {}
-      const desc = (await dRes.json())?.data?.descriptor
-      if (s.enable_face_verification === 'true' && Array.isArray(desc) && desc.length === 128) {
-        setStoredDescriptor(desc)
-        setStep('face')
-        return
+      const res = await fetch('/api/face/status', { credentials: 'include' })
+      const d = (await res.json())?.data
+      if (d && d.enabled && !d.skip) {
+        if (d.reportPending) { setFaceMode('blocked'); setStep('face'); return }
+        if (d.mustEnroll) { setFaceMode('enroll'); setStep('face'); return }
+        if (Array.isArray(d.descriptor) && d.descriptor.length === 128) {
+          setStoredDescriptor(d.descriptor); setFaceMode('verify'); setStep('face'); return
+        }
       }
     } catch {}
     window.location.href = redirect
   }
 
-  const recordFace = async (payload: { matched?: boolean; distance?: number; skipped?: boolean }) => {
+  const recordFace = async (payload: { matched?: boolean; distance?: number }) => {
     try {
       await fetch('/api/auth/face-verify', {
-        method: 'POST',
-        credentials: 'include',
+        method: 'POST', credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
     } catch {}
   }
 
+  // Enrollment (register-face-at-login) — store descriptor, then continue.
+  const handleEnrollComplete = async (descriptor: number[]) => {
+    setFaceMatching(true)
+    try {
+      const res = await fetch('/api/face/enroll', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descriptor }),
+      })
+      if (!res.ok) { addToast('Could not save your face. Try again.', 'error'); setFaceMatching(false); setFaceAttempt((n) => n + 1); return }
+      addToast('Face registered.', 'success')
+      window.location.href = pendingRedirect
+    } catch {
+      addToast('Network error.', 'error'); setFaceMatching(false); setFaceAttempt((n) => n + 1)
+    }
+  }
+
+  // Verify — compare live capture to the stored descriptor.
   const handleFaceCaptured = async (descriptor: number[]) => {
     if (!storedDescriptor) return
-    setFaceMatching(true)
-    setFaceError(null)
+    setFaceMatching(true); setFaceError(null)
     const dist = faceDistance(descriptor, storedDescriptor)
     const matched = isFaceMatch(descriptor, storedDescriptor)
     await recordFace({ matched, distance: dist })
@@ -120,15 +136,21 @@ export default function LoginPage() {
       addToast('Face verified.', 'success')
       window.location.href = pendingRedirect
     } else {
-      setFaceError("That doesn't look like your registered face. Try again, or Skip to continue.")
-      setFaceAttempt((n) => n + 1) // remount capture to retry the challenges
+      const fails = faceFails + 1
+      setFaceFails(fails)
+      setFaceError(`That doesn't match your registered face (${fails}/${MAX_FACE_FAILS}). Try again.`)
+      setFaceAttempt((n) => n + 1)
     }
   }
 
-  const handleFaceSkip = async (reason: string) => {
-    await recordFace({ skipped: true })
-    void reason
-    window.location.href = pendingRedirect
+  const handleReport = async () => {
+    try { await fetch('/api/face/report', { method: 'POST', credentials: 'include' }) } catch {}
+    setFaceMode('blocked')
+  }
+
+  const signOut = async () => {
+    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }) } catch {}
+    window.location.href = '/'
   }
 
   // ── Step 1: login ──────────────────────────────────────────────────────────
@@ -395,16 +417,44 @@ export default function LoginPage() {
         {/* ── Step 3: Face verification (experimental, additive) ── */}
         {step === 'face' && (
           <div className="space-y-4">
-            <p className="text-center text-sm text-gray-500">
-              Extra security check — look at your camera and verify it&apos;s you.
-            </p>
-            <FaceCapture
-              key={faceAttempt}
-              onCaptured={handleFaceCaptured}
-              onSkip={handleFaceSkip}
-              matching={faceMatching}
-              error={faceError}
-            />
+            {faceMode === 'blocked' ? (
+              <div className="text-center space-y-4">
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                  Your face verification problem has been reported. An admin must review your account before you can sign in.
+                </p>
+                <Button variant="secondary" size="lg" onClick={signOut} className="w-full">Back to sign in</Button>
+              </div>
+            ) : faceMode === 'enroll' ? (
+              <>
+                <p className="text-center text-sm text-gray-500">
+                  Register your face — follow the prompts. This is required for your account.
+                </p>
+                <LivenessCapture key={faceAttempt} onComplete={handleEnrollComplete} />
+              </>
+            ) : (
+              <>
+                <p className="text-center text-sm text-gray-500">
+                  Extra security check — look at your camera and verify it&apos;s you.
+                </p>
+                <FaceCapture
+                  key={faceAttempt}
+                  onCaptured={handleFaceCaptured}
+                  matching={faceMatching}
+                  error={faceError}
+                />
+                {faceFails >= MAX_FACE_FAILS && (
+                  <div className="space-y-2 text-center">
+                    <p className="text-sm text-gray-600">Still not working?</p>
+                    <Button variant="secondary" size="lg" onClick={handleReport} className="w-full">
+                      Report a problem to admins
+                    </Button>
+                  </div>
+                )}
+                <button type="button" onClick={signOut} className="w-full text-sm text-gray-500 hover:text-gray-700">
+                  Cancel and sign out
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

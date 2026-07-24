@@ -12,7 +12,7 @@ import { scanFace, FACE_SCAN_MESSAGES } from '@/lib/faceApi'
 
 type Props = {
   onCaptured: (descriptor: number[]) => void
-  onSkip: (reason: string) => void
+  onSkip?: (reason: string) => void   // omit to hide Skip (gate mode)
   matching?: boolean
   error?: string | null
 }
@@ -76,11 +76,15 @@ export default function FaceCapture({ onCaptured, onSkip, matching, error }: Pro
     return (
       <div className="space-y-4 text-center">
         <p className="text-sm text-gray-600">
-          Camera unavailable or permission denied. You can continue signing in without the face check.
+          {onSkip
+            ? 'Camera unavailable or permission denied. You can continue signing in without the face check.'
+            : 'A working camera is required for face verification. Enable camera access and reload.'}
         </p>
-        <Button variant="secondary" size="lg" onClick={() => onSkip('camera-unavailable')} className="w-full">
-          Continue without face check
-        </Button>
+        {onSkip && (
+          <Button variant="secondary" size="lg" onClick={() => onSkip('camera-unavailable')} className="w-full">
+            Continue without face check
+          </Button>
+        )}
       </div>
     )
   }
@@ -114,10 +118,12 @@ export default function FaceCapture({ onCaptured, onSkip, matching, error }: Pro
           {shown ? <RefreshCw className="w-4 h-4 mr-1" /> : <Camera className="w-4 h-4 mr-1" />}
           {shown ? 'Retry face scan' : 'Verify my face'}
         </Button>
-        <Button variant="ghost" size="lg" onClick={() => { stopStream(); onSkip('user-skipped') }} disabled={matching}>
-          <SkipForward className="w-4 h-4 mr-1" />
-          Skip
-        </Button>
+        {onSkip && (
+          <Button variant="ghost" size="lg" onClick={() => { stopStream(); onSkip('user-skipped') }} disabled={matching}>
+            <SkipForward className="w-4 h-4 mr-1" />
+            Skip
+          </Button>
+        )}
       </div>
       <p className="text-xs text-gray-400 text-center">
         Your face is compared on this device only — no image or face data is sent to the server.

@@ -8,6 +8,7 @@ import Modal from '@/components/ui/Modal'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
+import { scanFaceFromFile, FACE_SCAN_MESSAGES } from '@/lib/faceApi'
 
 interface Achievement {
   id: number
@@ -100,7 +101,7 @@ export default function ProfilePage() {
   const [bioSaving, setBioSaving] = useState(false)
 
   // Settings (group labels)
-  const [settings, setSettings] = useState<{group_label_l1?:string;group_label_l2?:string;group_label_l3?:string}>({})
+  const [settings, setSettings] = useState<{group_label_l1?:string;group_label_l2?:string;group_label_l3?:string;enable_face_verification?:string}>({})
 
   // Achievement state
   const [showAddAchievement, setShowAddAchievement] = useState(false)
@@ -233,6 +234,12 @@ export default function ProfilePage() {
     if (!file.type.startsWith('image/')) { addToast('Only image files allowed', 'error'); return }
     if (file.size > 5 * 1024 * 1024) { addToast('File too large — max 5 MB', 'error'); return }
     setAvatarUploading(true)
+    // Session 10: when camera face-login is OFF, a profile photo must be a real
+    // face (client-side check). When ON, the face is handled by the camera flow.
+    if (settings.enable_face_verification !== 'true') {
+      const scan = await scanFaceFromFile(file)
+      if (!scan.ok) { addToast(FACE_SCAN_MESSAGES[scan.reason], 'error'); setAvatarUploading(false); return }
+    }
     try {
       const fd = new FormData()
       fd.append('file', file)
