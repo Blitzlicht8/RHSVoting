@@ -9,6 +9,7 @@ import Input from '@/components/ui/Input'
 import Logo from '@/components/ui/Logo'
 import { useToast } from '@/components/providers/ToastProvider'
 import GroupSelects, { useGroupSelections } from '@/components/GroupSelects'
+import { scanFaceFromFile, FACE_SCAN_MESSAGES } from '@/lib/faceApi'
 
 // ─── Password strength ─────────────────────────────────────────────────────────
 
@@ -113,6 +114,7 @@ export default function RegisterPage() {
   const [docTypeOptions, setDocTypeOptions] = useState<string[]>([])
   const [docType, setDocType] = useState('')
   const docsRequired = docTypeOptions.length > 0
+  const [faceEnabled, setFaceEnabled] = useState(false)
 
   const [lrn, setLrn] = useState('')
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null)
@@ -141,6 +143,7 @@ export default function RegisterPage() {
       .then(r => r.json())
       .then(j => {
         const s = j.data ?? {}
+        setFaceEnabled(s.enable_face_verification === 'true')
         if (s.doc_type_labels) {
           try {
             const arr = JSON.parse(s.doc_type_labels)
@@ -264,11 +267,23 @@ export default function RegisterPage() {
     if (!profilePhoto) { setFormError('Please upload a profile photo of your face.'); return }
     if (docsRequired && files.length === 0) { setFormError('Please attach at least one document.'); return }
 
+    // Session 10 (experimental): client-side face check on the profile photo.
+    // Rejects non-face / multi-face at the client; computes a descriptor to store.
+    let faceDescriptor: number[] | null = null
+    if (faceEnabled) {
+      setLoading(true)
+      const scan = await scanFaceFromFile(profilePhoto)
+      setLoading(false)
+      if (!scan.ok) { setFormError(FACE_SCAN_MESSAGES[scan.reason]); return }
+      faceDescriptor = scan.descriptor
+    }
+
     const formData = new FormData()
     formData.append('assignments', JSON.stringify(assignments))
     formData.append('lrn', lrn.trim())
     if (docsRequired) formData.append('doc_type', docType)
     if (profilePhoto) formData.append('profile_photo', profilePhoto)
+    if (faceDescriptor) formData.append('face_descriptor', JSON.stringify(faceDescriptor))
     for (const file of files) formData.append('file', file)
 
     setLoading(true)

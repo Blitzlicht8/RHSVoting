@@ -9,10 +9,12 @@ import Input from '@/components/ui/Input'
 import OTPInput from '@/components/ui/OTPInput'
 import Logo from '@/components/ui/Logo'
 import { useToast } from '@/components/providers/ToastProvider'
+import FaceCapture from '@/components/FaceCapture'
+import { faceDistance, isFaceMatch } from '@/lib/faceApi'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-type Step = 'creds' | 'otp'
+type Step = 'creds' | 'otp' | 'face'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -33,6 +35,12 @@ export default function LoginPage() {
 
   // Shared
   const [loading, setLoading] = useState(false)
+
+  // Face verification (experimental, additive factor after credential auth)
+  const [storedDescriptor, setStoredDescriptor] = useState<number[] | null>(null)
+  const [pendingRedirect, setPendingRedirect] = useState('/dashboard')
+  const [faceError, setFaceError] = useState<string | null>(null)
+  const [faceMatching, setFaceMatching] = useState(false)
 
   // Countdown for resend
   const [countdown, setCountdown] = useState(0)
@@ -64,6 +72,67 @@ export default function LoginPage() {
       if (countdownRef.current) clearInterval(countdownRef.current)
     }
   }, [countdown])
+
+  // ── Post-auth: optionally insert the experimental face step ──────────────────
+  // Runs only after credentials (and OTP) already succeeded. If the face-
+  // verification setting is on AND the user has a stored descriptor, show the
+  // capture step; otherwise redirect straight through. Any failure falls back to
+  // a normal redirect — the face step never hard-blocks login.
+  const finishLogin = async (redirect: string) => {
+    setPendingRedirect(redirect)
+    try {
+      const [sRes, meRes] = await Promise.all([
+        fetch('/api/settings'),
+        fetch('/api/auth/me', { credentials: 'include' }),
+      ])
+      const s = (await sRes.json())?.data ?? {}
+      const me = (await meRes.json())?.data ?? {}
+      if (s.enable_face_verification === 'true' && me.face_descriptor) {
+        try {
+          const desc = JSON.parse(me.face_descriptor)
+          if (Array.isArray(desc) && desc.length === 128) {
+            setStoredDescriptor(desc)
+            setStep('face')
+            return
+          }
+        } catch {}
+      }
+    } catch {}
+    window.location.href = redirect
+  }
+
+  const recordFace = async (payload: { matched?: boolean; distance?: number; skipped?: boolean }) => {
+    try {
+      await fetch('/api/auth/face-verify', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+    } catch {}
+  }
+
+  const handleFaceCaptured = async (descriptor: number[]) => {
+    if (!storedDescriptor) return
+    setFaceMatching(true)
+    setFaceError(null)
+    const dist = faceDistance(descriptor, storedDescriptor)
+    const matched = isFaceMatch(descriptor, storedDescriptor)
+    await recordFace({ matched, distance: dist })
+    setFaceMatching(false)
+    if (matched) {
+      addToast('Face verified.', 'success')
+      window.location.href = pendingRedirect
+    } else {
+      setFaceError("That doesn't look like your registered face. Try again, or Skip to continue.")
+    }
+  }
+
+  const handleFaceSkip = async (reason: string) => {
+    await recordFace({ skipped: true })
+    void reason
+    window.location.href = pendingRedirect
+  }
 
   // ── Step 1: login ──────────────────────────────────────────────────────────
 
@@ -99,12 +168,12 @@ export default function LoginPage() {
       }
 
       if (json.data?.redirectTo) {
-        window.location.href = json.data.redirectTo
+        await finishLogin(json.data.redirectTo)
         return
       }
 
       // Fully authenticated (fallback)
-      window.location.href = '/dashboard'
+      await finishLogin('/dashboard')
     } catch {
       addToast('Network error. Please check your connection.', 'error')
     } finally {
@@ -142,7 +211,7 @@ export default function LoginPage() {
         return
       }
 
-      window.location.href = '/dashboard'
+      await finishLogin('/dashboard')
     } catch {
       addToast('Network error. Please check your connection.', 'error')
     } finally {
@@ -183,7 +252,7 @@ export default function LoginPage() {
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900">Rizal High School Elections</h1>
             <p className="text-sm text-gray-500 mt-1">
-              {step === 'creds' ? 'Sign in to your account' : 'Two-factor authentication'}
+              {step === 'creds' ? 'Sign in to your account' : step === 'face' ? 'Face verification' : 'Two-factor authentication'}
             </p>
           </div>
         </div>
@@ -324,6 +393,21 @@ export default function LoginPage() {
               Verify code
             </Button>
           </form>
+        )}
+
+        {/* ── Step 3: Face verification (experimental, additive) ── */}
+        {step === 'face' && (
+          <div className="space-y-4">
+            <p className="text-center text-sm text-gray-500">
+              Extra security check — look at your camera and verify it&apos;s you.
+            </p>
+            <FaceCapture
+              onCaptured={handleFaceCaptured}
+              onSkip={handleFaceSkip}
+              matching={faceMatching}
+              error={faceError}
+            />
+          </div>
         )}
       </div>
     </main>
