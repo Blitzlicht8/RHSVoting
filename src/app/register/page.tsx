@@ -10,6 +10,7 @@ import Logo from '@/components/ui/Logo'
 import { useToast } from '@/components/providers/ToastProvider'
 import GroupSelects, { useGroupSelections } from '@/components/GroupSelects'
 import { scanFaceFromFile, FACE_SCAN_MESSAGES } from '@/lib/faceApi'
+import LivenessCapture from '@/components/LivenessCapture'
 
 // ─── Password strength ─────────────────────────────────────────────────────────
 
@@ -118,6 +119,8 @@ export default function RegisterPage() {
   const [faceStatus, setFaceStatus] = useState<'idle' | 'scanning' | 'ok' | 'fail'>('idle')
   const [faceMsg, setFaceMsg] = useState<string | null>(null)
   const [faceDescriptor, setFaceDescriptor] = useState<number[] | null>(null)
+  const [liveDone, setLiveDone] = useState(false)
+  const [liveSkipped, setLiveSkipped] = useState(false)
 
   const [lrn, setLrn] = useState('')
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null)
@@ -287,6 +290,9 @@ export default function RegisterPage() {
     // it's still pending (e.g. slow model load).
     let descriptor = faceDescriptor
     if (faceEnabled) {
+      if (!liveDone && !liveSkipped) {
+        setFormError('Please complete the live face scan (or skip it to use your photo).'); return
+      }
       if (faceStatus === 'scanning' || (faceStatus !== 'ok' && !descriptor)) {
         setFaceStatus('scanning'); setFaceMsg('Checking for a face…')
         const scan = await scanFaceFromFile(profilePhoto)
@@ -465,6 +471,39 @@ export default function RegisterPage() {
                 </p>
               )}
             </div>
+
+            {/* Live face enrollment (blink + head-turn liveness) */}
+            {faceEnabled && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Live Face Scan <span className="text-red-500">*</span>
+                </label>
+                {liveDone ? (
+                  <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    Live face verified ✓
+                  </p>
+                ) : liveSkipped ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      Live scan skipped — your uploaded photo will be used instead.
+                    </p>
+                    <button type="button" onClick={() => { setLiveSkipped(false) }}
+                      className="text-sm text-[#84050C] hover:text-[#6B0409] font-medium">
+                      Try live scan again
+                    </button>
+                  </div>
+                ) : (
+                  <LivenessCapture
+                    mode="enroll"
+                    onComplete={(desc) => {
+                      setFaceDescriptor(desc); setLiveDone(true)
+                      setFaceStatus('ok'); setFaceMsg('Live face verified ✓')
+                    }}
+                    onSkip={() => setLiveSkipped(true)}
+                  />
+                )}
+              </div>
+            )}
 
             {/* LRN */}
             <div>

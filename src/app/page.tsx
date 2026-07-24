@@ -9,7 +9,7 @@ import Input from '@/components/ui/Input'
 import OTPInput from '@/components/ui/OTPInput'
 import Logo from '@/components/ui/Logo'
 import { useToast } from '@/components/providers/ToastProvider'
-import FaceCapture from '@/components/FaceCapture'
+import LivenessCapture from '@/components/LivenessCapture'
 import { faceDistance, isFaceMatch } from '@/lib/faceApi'
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -41,6 +41,7 @@ export default function LoginPage() {
   const [pendingRedirect, setPendingRedirect] = useState('/dashboard')
   const [faceError, setFaceError] = useState<string | null>(null)
   const [faceMatching, setFaceMatching] = useState(false)
+  const [faceAttempt, setFaceAttempt] = useState(0)
 
   // Countdown for resend
   const [countdown, setCountdown] = useState(0)
@@ -125,6 +126,7 @@ export default function LoginPage() {
       window.location.href = pendingRedirect
     } else {
       setFaceError("That doesn't look like your registered face. Try again, or Skip to continue.")
+      setFaceAttempt((n) => n + 1) // remount capture to retry the challenges
     }
   }
 
@@ -399,12 +401,14 @@ export default function LoginPage() {
         {step === 'face' && (
           <div className="space-y-4">
             <p className="text-center text-sm text-gray-500">
-              Extra security check — look at your camera and verify it&apos;s you.
+              Extra security check — follow the prompts to verify it&apos;s you.
             </p>
-            <FaceCapture
-              onCaptured={handleFaceCaptured}
+            <LivenessCapture
+              key={faceAttempt}
+              mode="verify"
+              onComplete={handleFaceCaptured}
               onSkip={handleFaceSkip}
-              matching={faceMatching}
+              busy={faceMatching}
               error={faceError}
             />
           </div>

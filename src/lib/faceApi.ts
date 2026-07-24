@@ -64,6 +64,53 @@ export async function scanFace(
   }
 }
 
+export type FaceMetrics = {
+  ok: true
+  ear: number        // eye aspect ratio (low = eyes closed → blink)
+  yawRatio: number   // 0.5 = frontal, <0.4 turned right, >0.6 turned left (mirror-agnostic magnitude)
+  descriptor: number[]
+}
+export type FaceMetricsFail = { ok: false; reason: 'no-face' | 'multiple-faces' | 'error' }
+
+function eyeAspectRatio(eye: { x: number; y: number }[]): number {
+  const d = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y)
+  // 6-point eye: EAR = (|p2-p6| + |p3-p5|) / (2 |p1-p4|)
+  const vertical = d(eye[1], eye[5]) + d(eye[2], eye[4])
+  const horizontal = 2 * d(eye[0], eye[3])
+  return horizontal === 0 ? 0 : vertical / horizontal
+}
+
+/**
+ * Single-face detection returning liveness metrics + descriptor in one pass.
+ * Used by the realtime capture loop (blink / head-turn challenges + enrollment).
+ */
+export async function analyzeFace(
+  input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement
+): Promise<FaceMetrics | FaceMetricsFail> {
+  try {
+    const api = await loadFaceModels()
+    const opts = new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 })
+    const results = await api.detectAllFaces(input, opts).withFaceLandmarks().withFaceDescriptors()
+    if (results.length === 0) return { ok: false, reason: 'no-face' }
+    if (results.length > 1) return { ok: false, reason: 'multiple-faces' }
+    const r = results[0]
+    const lm = r.landmarks
+    const ear = (eyeAspectRatio(lm.getLeftEye()) + eyeAspectRatio(lm.getRightEye())) / 2
+    const leftEye = lm.getLeftEye()
+    const rightEye = lm.getRightEye()
+    const nose = lm.getNose()
+    const cx = (pts: { x: number }[]) => pts.reduce((s, p) => s + p.x, 0) / pts.length
+    const leftX = cx(leftEye)
+    const rightX = cx(rightEye)
+    const noseX = nose[nose.length - 1].x // nose tip
+    const span = rightX - leftX
+    const yawRatio = span === 0 ? 0.5 : (noseX - leftX) / span
+    return { ok: true, ear, yawRatio, descriptor: Array.from(r.descriptor) }
+  } catch {
+    return { ok: false, reason: 'error' }
+  }
+}
+
 /** Load a File into an <img> element and scan it. */
 export async function scanFaceFromFile(file: File): Promise<FaceScan> {
   const url = URL.createObjectURL(file)
