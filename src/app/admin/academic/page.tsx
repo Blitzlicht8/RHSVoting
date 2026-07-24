@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import AdminLayout from '@/components/AdminLayout'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useRouter } from 'next/navigation'
+import { useUnsavedGuard } from '@/lib/useUnsavedGuard'
 
 interface GroupValue {
   id: number
@@ -94,6 +95,10 @@ export default function GroupStructurePage() {
   useEffect(() => {
     if (user && !requireAdmin(user.role)) router.replace('/dashboard')
   }, [user, router])
+
+  // Guard against navigating away mid-edit (unsaved value rename or typed-but-unadded value)
+  const hasPendingEdit = editingValue !== null || newValueName.trim() !== ''
+  useUnsavedGuard(hasPendingEdit)
 
   const selectedStructure = structures.find(s => s.id === selectedStructureId) ?? null
   const parentStructure = selectedStructure?.parent_structure_id != null

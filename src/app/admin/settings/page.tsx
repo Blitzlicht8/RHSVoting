@@ -9,7 +9,29 @@ import Modal from '@/components/ui/Modal'
 import Spinner from '@/components/ui/Spinner'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
+import { useUnsavedGuard } from '@/lib/useUnsavedGuard'
 import { APP_VERSION } from '@/lib/version'
+
+// Flat key-value settings edited through the Save bar (staged, applied on Save).
+interface SettingsDraft {
+  app_name: string
+  org_type: string
+  doc_type_labels: string // JSON array string
+  auto_verify_id: string  // 'true' | 'false'
+  otp_required_login: string
+}
+const DRAFT_KEYS: (keyof SettingsDraft)[] = [
+  'app_name', 'org_type', 'doc_type_labels', 'auto_verify_id', 'otp_required_login',
+]
+function draftFromSettings(s: Record<string, string>): SettingsDraft {
+  return {
+    app_name: s.app_name ?? 'Rizal High School Elections',
+    org_type: s.org_type ?? 'school',
+    doc_type_labels: s.doc_type_labels ?? '[]',
+    auto_verify_id: s.auto_verify_id ?? 'false',
+    otp_required_login: s.otp_required_login ?? 'false',
+  }
+}
 
 interface Requirement {
   id: number
@@ -114,12 +136,21 @@ export default function SettingsPage() {
 
   const [settings, setSettings] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
-  const [togglingKey, setTogglingKey] = useState<string | null>(null)
 
-  const [appName, setAppName] = useState('Rizal High School Elections')
-  const [orgType, setOrgType] = useState('school')
-  const [docTypes, setDocTypes] = useState<string[]>([])
+  // Staged draft + saved baseline for the Save bar
+  const [draft, setDraft] = useState<SettingsDraft>(draftFromSettings({}))
+  const [baseline, setBaseline] = useState<SettingsDraft>(draftFromSettings({}))
+  const [saving, setSaving] = useState(false)
   const [newDoc, setNewDoc] = useState('')
+
+  const dirtyKeys = DRAFT_KEYS.filter(k => draft[k] !== baseline[k])
+  const isDirty = dirtyKeys.length > 0
+
+  const docTypes: string[] = (() => {
+    try { return JSON.parse(draft.doc_type_labels) } catch { return [] }
+  })()
+  const setDraftKey = (k: keyof SettingsDraft, v: string) => setDraft(d => ({ ...d, [k]: v }))
+  const setDocTypes = (types: string[]) => setDraftKey('doc_type_labels', JSON.stringify(types))
 
   // Group Structures
   const [structures, setStructures] = useState<StructureWithValues[]>([])
@@ -292,11 +323,11 @@ export default function SettingsPage() {
       const res = await fetch('/api/settings', { credentials: 'include' })
       const json = await res.json()
       if (res.ok) {
-        setSettings(json.data ?? {})
         const s = json.data ?? {}
-        setAppName(s.app_name ?? 'Rizal High School Elections')
-        setOrgType(s.org_type ?? 'school')
-        try { setDocTypes(JSON.parse(s.doc_type_labels ?? '[]')) } catch { setDocTypes([]) }
+        setSettings(s)
+        const d = draftFromSettings(s)
+        setDraft(d)
+        setBaseline(d)
       } else {
         addToast(json.error || 'Failed to load settings', 'error')
       }
@@ -311,50 +342,40 @@ export default function SettingsPage() {
     fetchSettings()
   }, [fetchSettings])
 
-  const toggleSetting = async (key: string) => {
-    const current = settings[key]
-    const next = current === 'true' ? 'false' : 'true'
-    setTogglingKey(key)
+  const toggleDraft = (key: keyof SettingsDraft) =>
+    setDraftKey(key, draft[key] === 'true' ? 'false' : 'true')
+
+  // Apply all staged changes on Save (only the keys that actually changed).
+  const handleSaveAll = async () => {
+    if (!isDirty || saving) return
+    setSaving(true)
     try {
-      const res = await fetch('/api/settings', {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value: next }),
-      })
-      const json = await res.json()
-      if (res.ok) {
-        setSettings((s) => ({ ...s, [key]: next }))
-        addToast('Setting updated', 'success')
-      } else {
-        addToast(json.error || 'Update failed', 'error')
+      for (const key of dirtyKeys) {
+        const res = await fetch('/api/settings', {
+          method: 'PATCH', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, value: draft[key] }),
+        })
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}))
+          addToast(json.error ?? `Failed to save ${key}`, 'error')
+          setSaving(false)
+          return
+        }
       }
+      setSettings(s => ({ ...s, ...Object.fromEntries(dirtyKeys.map(k => [k, draft[k]])) }))
+      setBaseline(draft)
+      addToast('Changes saved', 'success')
     } catch {
       addToast('Network error', 'error')
     } finally {
-      setTogglingKey(null)
+      setSaving(false)
     }
   }
 
-  const save = async (key: string, value: string) => {
-    setTogglingKey(key)
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'PATCH', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, value }),
-      })
-      const json = await res.json()
-      if (res.ok) addToast('Saved', 'success')
-      else addToast(json.error ?? 'Failed to save', 'error')
-    } catch { addToast('Network error', 'error') }
-    finally { setTogglingKey(null) }
-  }
+  const handleDiscard = () => setDraft(baseline)
 
-  const saveDocTypes = (types: string[]) => {
-    setDocTypes(types)
-    save('doc_type_labels', JSON.stringify(types))
-  }
+  useUnsavedGuard(isDirty)
 
   const handleResetConfirm = () => {
     setShowResetModal(false)
@@ -386,13 +407,32 @@ export default function SettingsPage() {
     )
   }
 
-  const isMaster = user.role === 'master_admin'
   const canToggle = ['master_admin', 'admin'].includes(user.role)
-  const autoVerifyOn = settings['auto_verify_id'] === 'true'
-  const otpRequiredOn = settings['otp_required_login'] === 'true'
+  const autoVerifyOn = draft.auto_verify_id === 'true'
+  const otpRequiredOn = draft.otp_required_login === 'true'
 
   return (
     <AdminLayout>
+      {/* Persistent Save bar — applies staged changes on Save */}
+      {isDirty && (
+        <div className="sticky top-0 z-30 bg-amber-50 border-b border-amber-200 shadow-sm">
+          <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+            <span className="text-sm text-amber-800 font-medium">
+              You have unsaved changes.
+            </span>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={handleDiscard} disabled={saving}
+                className="px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-white disabled:opacity-50">
+                Discard
+              </button>
+              <button onClick={handleSaveAll} disabled={saving}
+                className="px-4 py-1.5 text-sm bg-[#84050C] text-white rounded-lg font-medium hover:bg-[#6B0409] disabled:opacity-50">
+                {saving ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="p-6 max-w-2xl mx-auto">
         {/* Header */}
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
@@ -409,12 +449,10 @@ export default function SettingsPage() {
                   <label className="text-sm font-medium text-gray-700 block mb-1">App Name</label>
                   <div className="flex gap-2 items-center">
                     <input
-                      value={appName}
-                      onChange={e => setAppName(e.target.value)}
+                      value={draft.app_name}
+                      onChange={e => setDraftKey('app_name', e.target.value)}
                       className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C] outline-none flex-1"
-                      onBlur={e => save('app_name', e.target.value)}
                     />
-                    {togglingKey === 'app_name' && <span className="text-xs text-gray-400">Saving…</span>}
                   </div>
                 </div>
                 <div>
@@ -422,8 +460,8 @@ export default function SettingsPage() {
                   <div className="flex gap-4 flex-wrap">
                     {['community', 'school', 'corporate', 'nonprofit'].map(type => (
                       <label key={type} className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="radio" name="org_type" value={type} checked={orgType === type}
-                          onChange={() => { setOrgType(type); save('org_type', type) }}
+                        <input type="radio" name="org_type" value={type} checked={draft.org_type === type}
+                          onChange={() => setDraftKey('org_type', type)}
                           className="text-[#84050C]" />
                         <span className="capitalize">{type}</span>
                       </label>
@@ -566,7 +604,7 @@ export default function SettingsPage() {
                     : docTypes.map((t, i) => (
                       <span key={i} className="flex items-center gap-1 bg-[#FEE2E2] text-[#84050C] rounded-full px-3 py-1 text-xs font-medium">
                         {t}
-                        <button onClick={() => saveDocTypes(docTypes.filter((_, j) => j !== i))} className="hover:opacity-70 ml-0.5 text-[#84050C]">×</button>
+                        <button onClick={() => setDocTypes(docTypes.filter((_, j) => j !== i))} className="hover:opacity-70 ml-0.5 text-[#84050C]">×</button>
                       </span>
                     ))
                   }
@@ -577,10 +615,10 @@ export default function SettingsPage() {
                     onChange={e => setNewDoc(e.target.value)}
                     placeholder="Add document type…"
                     className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C] outline-none flex-1"
-                    onKeyDown={e => { if (e.key === 'Enter' && newDoc.trim()) { saveDocTypes([...docTypes, newDoc.trim()]); setNewDoc('') } }}
+                    onKeyDown={e => { if (e.key === 'Enter' && newDoc.trim()) { setDocTypes([...docTypes, newDoc.trim()]); setNewDoc('') } }}
                   />
                   <button
-                    onClick={() => { if (newDoc.trim()) { saveDocTypes([...docTypes, newDoc.trim()]); setNewDoc('') } }}
+                    onClick={() => { if (newDoc.trim()) { setDocTypes([...docTypes, newDoc.trim()]); setNewDoc('') } }}
                     className="bg-[#84050C] text-white rounded-xl px-4 py-2 text-sm font-medium hover:bg-[#6b0409] transition-colors shrink-0"
                   >
                     Add
@@ -663,8 +701,7 @@ export default function SettingsPage() {
                   label="Auto-Approve Document Submissions"
                   description="Automatically verify accounts when they upload documents. If disabled, admins must manually approve each submission."
                   isOn={autoVerifyOn}
-                  disabled={togglingKey === 'auto_verify_id'}
-                  onToggle={() => toggleSetting('auto_verify_id')}
+                  onToggle={() => toggleDraft('auto_verify_id')}
                 />
               </SectionCard>
 
@@ -673,8 +710,7 @@ export default function SettingsPage() {
                   label="Require OTP on Login"
                   description="Users receive an OTP email each time they sign in. Adds an extra layer of security."
                   isOn={otpRequiredOn}
-                  disabled={togglingKey === 'otp_required_login'}
-                  onToggle={() => toggleSetting('otp_required_login')}
+                  onToggle={() => toggleDraft('otp_required_login')}
                 />
               </SectionCard>
 
