@@ -312,10 +312,14 @@ export async function POST(request: NextRequest) {
   })
 
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  const isReverification = deniedFields.length > 0
   const docLabel = rawFiles.length > 0
     ? `Submitted ${rawFiles.length} document(s) for verification`
     : 'Submitted verification request without documents'
-  await logActivity(authUser.id, 'verification_submitted', docLabel, ip)
+  const reverifyLabel = isReverification
+    ? `Resubmitted verification (fixed: ${deniedFields.join(', ')})`
+    : docLabel
+  await logActivity(authUser.id, isReverification ? 'verification_reverified' : 'verification_submitted', reverifyLabel, ip)
 
   return NextResponse.json({
     data: { id: verificationRequestId },

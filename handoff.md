@@ -8,7 +8,9 @@
 2026-07-24
 
 ## Version After This Session
-`1.7.0` — MINOR: Admin layout tweaks (top pill "Admin Dashboard") + post approval workflow. New `posts.status` column, `require_post_approval`/`auto_approve_posts` settings, `/admin/posts` moderation page, `PATCH /api/posts/[id]`.
+`1.8.0` — MINOR: Roles & Permissions gains 4 new granular scopes; Activity Logs records + badges new event types (election visibility changes, settings changes, reverification). New log actions `election_visibility_changed`, `settings_changed`, `verification_reverified`.
+
+Prev: `1.7.0` — MINOR: Admin layout tweaks (top pill "Admin Dashboard") + post approval workflow. New `posts.status` column, `require_post_approval`/`auto_approve_posts` settings, `/admin/posts` moderation page, `PATCH /api/posts/[id]`.
 
 Prev: `1.6.0` — MINOR: Feed/posting overhaul — election-scoped post visibility, unified media upload (button + plus-menu + paste + drop), blob-URL persistence bug fixed, profile Recent Posts filtered + JSON-leak fixed.
 
@@ -27,6 +29,19 @@ Prev: `1.3.0` — MINOR: Settings Save bar (staged changes applied on Save) + un
 Prev: `1.2.2` — FIX: eligibility builder groups leveled values under their parent value (repeated child names like Section A/B/C now shown under each Strand caption)
 
 Prev: `1.2.1` — FIX: election eligibility builder now cascades (leveled group values show only when a parent value is selected; stale rules from deselected parents dropped)
+
+---
+
+## What Was Done (Session 8 — Roles & Permissions + Activity Logs)
+
+- **Roles (`admin/roles`)**: added 4 new permission scopes to `PERMISSION_KEYS` + `PERM_LABELS`: `reviewVerificationFields` (Review / Deny Verification Fields), `manageElectionVisibility` (Manage Election Visibility & Warnings), `manageUserPenalties` (Timeout / Penalize Users), `managePostApproval` (Approve / Reject Posts). Group-structure management continues to map to existing `manageAcademic`. Roles API stores permissions as free-form JSON — new keys pass through, no server whitelist change needed.
+- **New log events wired into code**:
+  - `election_visibility_changed` — `PATCH /api/elections/[id]` now logs when `visible_to_all` or `warn_non_voters` toggle actually changes (compares against prior row; message names which toggle + ON/OFF). Added `logActivity` import.
+  - `settings_changed` — `PATCH /api/settings` logs old value → new value for the changed key (only when value differs). Added `logActivity` import.
+  - `verification_reverified` — `POST /api/verifications` distinguishes reverification (prior `denied_fields` present) from first submit; logs fixed fields.
+  - Already-logged events reused as-is: `group_structure_created/deleted`, `group_value_created/deleted`, `verification_approved/rejected` (rejected already includes flagged fields), `user_timeout`, `post_approved/rejected`.
+- **Logs page (`admin/logs`)**: added `ACTION_BADGE` entries (colored pills) for all new + previously-raw event types: group structure/value created+removed, verification submitted/reverified/approved/denied, election visibility changed, user timed out, post approved/rejected, settings changed.
+- context.md left unchanged (no explicit request; role hierarchy table unaffected — additions are permission scopes, not roles).
 
 ---
 

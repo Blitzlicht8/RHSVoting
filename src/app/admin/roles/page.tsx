@@ -25,6 +25,10 @@ const PERMISSION_KEYS = [
   'manageRoles',
   'viewLogs',
   'manageFeed',
+  'reviewVerificationFields',
+  'manageElectionVisibility',
+  'manageUserPenalties',
+  'managePostApproval',
 ] as const
 
 const PERM_LABELS: Record<string, string> = {
@@ -38,6 +42,10 @@ const PERM_LABELS: Record<string, string> = {
   manageRoles: 'Manage Roles',
   viewLogs: 'View Activity Logs',
   manageFeed: 'Manage Feed',
+  reviewVerificationFields: 'Review / Deny Verification Fields',
+  manageElectionVisibility: 'Manage Election Visibility & Warnings',
+  manageUserPenalties: 'Timeout / Penalize Users',
+  managePostApproval: 'Approve / Reject Posts',
 }
 
 const ROLE_DESCRIPTIONS: Record<string, string> = {

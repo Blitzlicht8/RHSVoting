@@ -5,6 +5,7 @@ import { getAuthUser, isAdmin } from '@/lib/auth'
 import { ElectionStatus, Position, Candidate } from '@/types'
 import { InValue } from '@libsql/client'
 import { checkAutoTransition } from '@/lib/autoTransition'
+import { logActivity } from '@/lib/logger'
 import { buildEligibilitySql, EligibilityRule, getUserValueSet, evaluateEligibility } from '@/lib/groups'
 
 interface EligibilityInput {
@@ -394,6 +395,19 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   // Immediate auto-transition check — handles "start/end time already in the past" on save
   await checkAutoTransition(electionId).catch(() => {})
+
+  // Log visibility / warning toggle changes (Session 8 activity logging).
+  const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+  const changes: string[] = []
+  if (body.visible_to_all !== undefined && !!body.visible_to_all !== !!existing.visible_to_all) {
+    changes.push(`visible to non-eligible groups ${body.visible_to_all ? 'ON' : 'OFF'}`)
+  }
+  if (body.warn_non_voters !== undefined && !!body.warn_non_voters !== !!existing.warn_non_voters) {
+    changes.push(`non-voter penalty warning ${body.warn_non_voters ? 'ON' : 'OFF'}`)
+  }
+  if (changes.length > 0) {
+    await logActivity(authUser.id, 'election_visibility_changed', `Election ${electionId} "${existing.title as string}": ${changes.join(', ')}`, ip)
+  }
 
   const updated = await db.execute({ sql: 'SELECT * FROM elections WHERE id = ?', args: [electionId] })
   return NextResponse.json({ data: { election: updated.rows[0] } })
