@@ -333,6 +333,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     values.push(typeof body.thumbnail_url === 'string' ? body.thumbnail_url : null)
   }
 
+  if (body.warn_non_voters !== undefined) {
+    setClauses.push('warn_non_voters = ?')
+    values.push(body.warn_non_voters ? 1 : 0)
+  }
+
   if (body.auto_start !== undefined) {
     setClauses.push('auto_start = ?')
     values.push(body.auto_start ? 1 : 0)

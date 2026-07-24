@@ -42,7 +42,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
   const result = await db.execute({
     sql: `SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at, updated_at,
-                 grade_level_id, subtype_id, section_id, avatar_url, bio
+                 grade_level_id, subtype_id, section_id, avatar_url, bio, timeout_until
           FROM users WHERE id = ?`,
     args: [targetId],
   })
@@ -175,6 +175,24 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     values.push(body.email.trim())
   }
 
+  // Timeout / penalty: admin sets timeout_days (>0 sets timeout_until N days out; 0/null clears)
+  let timeoutLogMsg: string | null = null
+  if (body.timeout_days !== undefined && adminUser) {
+    const days = Number(body.timeout_days)
+    if (!Number.isFinite(days) || days < 0 || days > 3650) {
+      return NextResponse.json({ error: 'timeout_days must be between 0 and 3650' }, { status: 400 })
+    }
+    if (days > 0) {
+      const until = new Date(Date.now() + days * 86400000).toISOString()
+      setClauses.push('timeout_until = ?')
+      values.push(until)
+      timeoutLogMsg = `Timed out ${existingUser.email as string} for ${days} day(s) (until ${until})`
+    } else {
+      setClauses.push('timeout_until = NULL')
+      timeoutLogMsg = `Cleared timeout for ${existingUser.email as string}`
+    }
+  }
+
   if (setClauses.length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
   }
@@ -230,10 +248,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       `${body.id_verified ? 'Approved' : 'Revoked'} ID verification for ${targetEmail}`, ip)
   }
 
+  if (timeoutLogMsg) {
+    await logActivity(authUser.id, 'user_timeout', timeoutLogMsg, ip)
+  }
+
   await logActivity(authUser.id, 'user_edited', `Admin edited user ${targetId}: ${Object.keys(body).join(', ')}`, ip)
 
   const updated = await db.execute({
-    sql: `SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at, updated_at, avatar_url, bio
+    sql: `SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at, updated_at, avatar_url, bio, timeout_until
           FROM users WHERE id = ?`,
     args: [targetId],
   })

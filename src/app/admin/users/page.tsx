@@ -26,6 +26,7 @@ interface UserRow {
   active: 0 | 1
   created_at: string
   verification_status?: string | null
+  timeout_until?: string | null
 }
 
 interface EditForm {
@@ -164,6 +165,9 @@ export default function UsersPage() {
 
   const [resettingPassword, setResettingPassword] = useState(false)
   const [resetPasswordResult, setResetPasswordResult] = useState<string | null>(null)
+
+  const [timeoutDays, setTimeoutDays] = useState(7)
+  const [savingTimeout, setSavingTimeout] = useState(false)
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -431,6 +435,32 @@ export default function UsersPage() {
       addToast('Network error', 'error')
     } finally {
       setResettingPassword(false)
+    }
+  }
+
+  const handleSetTimeout = async (days: number) => {
+    if (!editUser) return
+    setSavingTimeout(true)
+    try {
+      const res = await fetch(`/api/users/${editUser.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timeout_days: days }),
+      })
+      const json = await res.json()
+      if (!res.ok) { addToast(json.error || 'Failed', 'error'); return }
+      const nextUntil = (json.data?.user?.timeout_until as string | null) ?? null
+      setEditUser(u => u ? { ...u, timeout_until: nextUntil } : u)
+      setData(prev => prev ? {
+        ...prev,
+        users: prev.users.map(u => u.id === editUser.id ? { ...u, timeout_until: nextUntil } : u),
+      } : prev)
+      addToast(days > 0 ? 'User timed out' : 'Timeout cleared', 'success')
+    } catch {
+      addToast('Network error', 'error')
+    } finally {
+      setSavingTimeout(false)
     }
   }
 
@@ -1048,6 +1078,40 @@ export default function UsersPage() {
                 </Button>
               )}
             </div>
+
+            {/* Timeout / penalty */}
+            {canVerify && (
+              <div className="border-t pt-4">
+                <div className="text-sm font-medium text-gray-700 mb-2">Timeout (Penalty)</div>
+                {editUser.timeout_until && new Date(editUser.timeout_until).getTime() > Date.now() ? (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
+                    <p className="text-xs text-red-700">
+                      Timed out until <strong>{new Date(editUser.timeout_until).toLocaleString()}</strong>. Cannot post or vote.
+                    </p>
+                    <Button variant="secondary" size="sm" loading={savingTimeout} disabled={savingTimeout}
+                      onClick={() => handleSetTimeout(0)}>
+                      Lift Timeout
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-end gap-2">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Days</label>
+                      <input
+                        type="number" min={1} max={3650} value={timeoutDays}
+                        onChange={(e) => setTimeoutDays(Math.max(1, parseInt(e.target.value || '1', 10)))}
+                        className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#84050C]"
+                      />
+                    </div>
+                    <Button variant="danger" size="sm" loading={savingTimeout}
+                      disabled={savingTimeout} onClick={() => handleSetTimeout(timeoutDays)}>
+                      Timeout User
+                    </Button>
+                  </div>
+                )}
+                <p className="text-xs text-gray-400 mt-1">While timed out, the user cannot create posts or vote in elections.</p>
+              </div>
+            )}
 
             {/* Verification documents */}
             <div className="border-t pt-4">

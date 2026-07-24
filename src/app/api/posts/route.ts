@@ -42,9 +42,16 @@ export async function POST(request: NextRequest) {
   const authUser = await getAuthUser()
   if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const vRow = await db.execute({ sql: `SELECT id_verified FROM users WHERE id = ?`, args: [authUser.id] })
+  const vRow = await db.execute({ sql: `SELECT id_verified, timeout_until FROM users WHERE id = ?`, args: [authUser.id] })
   if (!Number(vRow.rows[0]?.id_verified)) {
     return NextResponse.json({ error: 'Account not yet verified. Verify your identity to post.' }, { status: 403 })
+  }
+  const timeoutUntil = vRow.rows[0]?.timeout_until as string | null
+  if (timeoutUntil && new Date(timeoutUntil).getTime() > Date.now()) {
+    return NextResponse.json(
+      { error: `You are timed out until ${new Date(timeoutUntil).toLocaleString()} and cannot create posts.` },
+      { status: 403 }
+    )
   }
 
   const body = await request.json()

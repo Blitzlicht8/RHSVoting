@@ -42,6 +42,7 @@ const EMPTY_FORM: ElectionForm = {
   eligibility: [],
   auto_start: false,
   auto_end: false,
+  warn_non_voters: false,
 }
 
 export default function ElectionsPage() {
@@ -131,6 +132,7 @@ export default function ElectionsPage() {
           thumbnail_url: full.thumbnail_url ?? null,
           auto_start: !!full.auto_start,
           auto_end: !!full.auto_end,
+          warn_non_voters: !!full.warn_non_voters,
           positions: (full.positions || []).map((p: { id: number; name: string; max_votes: number; max_votes_mode?: string; candidates: { id: number; name: string; bio: string; platform?: string | null; qualifications?: string | null; achievements?: AchievementInput[]; student_user_id?: number | null; photo_url?: string | null }[] }) => ({
             id: p.id,
             name: p.name,
@@ -220,6 +222,7 @@ export default function ElectionsPage() {
         allow_teacher_vote: formData.allow_teacher_vote,
         auto_start: formData.auto_start,
         auto_end: formData.auto_end,
+        warn_non_voters: formData.warn_non_voters,
         eligibility: formData.is_global ? [] : formData.eligibility,
         thumbnail_url: formData.thumbnail_url ?? null,
         positions: formData.positions.map((p) => ({

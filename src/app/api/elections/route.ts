@@ -202,9 +202,10 @@ export async function POST(request: NextRequest) {
   // Global elections are inherently visible to everyone; only scoped elections
   // carry a meaningful visible_to_all flag.
   const visibleToAll = !isGlobal && body.visible_to_all ? 1 : 0
+  const warnNonVoters = body.warn_non_voters ? 1 : 0
   await db.execute({
-    sql: `UPDATE elections SET is_global = ?, allow_teacher_vote = ?, auto_start = ?, auto_end = ?, visible_to_all = ? WHERE id = ?`,
-    args: [isGlobal, allowTeacherVote, autoStart, autoEnd, visibleToAll, electionId],
+    sql: `UPDATE elections SET is_global = ?, allow_teacher_vote = ?, auto_start = ?, auto_end = ?, visible_to_all = ?, warn_non_voters = ? WHERE id = ?`,
+    args: [isGlobal, allowTeacherVote, autoStart, autoEnd, visibleToAll, warnNonVoters, electionId],
   })
 
   // Save eligibility rules into the configurable-group model

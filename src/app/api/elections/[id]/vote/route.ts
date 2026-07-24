@@ -66,13 +66,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 
   const userResult = await db.execute({
-    sql: 'SELECT email_verified, id_verified, active FROM users WHERE id = ?',
+    sql: 'SELECT email_verified, id_verified, active, timeout_until FROM users WHERE id = ?',
     args: [authUser.id],
   })
   const user = userResult.rows[0]
 
   if (!user || !user.active) {
     return NextResponse.json({ error: 'Account is inactive' }, { status: 403 })
+  }
+  if (user.timeout_until && new Date(user.timeout_until as string).getTime() > Date.now()) {
+    return NextResponse.json(
+      { error: `You are timed out until ${new Date(user.timeout_until as string).toLocaleString()} and cannot vote.` },
+      { status: 403 }
+    )
   }
   if (!user.email_verified) {
     return NextResponse.json({ error: 'Email must be verified before voting' }, { status: 403 })

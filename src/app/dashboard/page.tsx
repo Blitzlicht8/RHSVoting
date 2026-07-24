@@ -18,6 +18,8 @@ interface Election {
   candidate_count: number
   vote_count: number
   hasVoted?: boolean
+  eligible?: number | boolean
+  warn_non_voters?: number | boolean
 }
 
 interface StatCard {
@@ -193,6 +195,16 @@ export default function DashboardPage() {
   const activeElections = elections.filter((e) => e.status === 'active')
   const endedElections = elections.filter((e) => e.status === 'ended')
 
+  // Deadline reminders: active elections the user is eligible for and hasn't voted in,
+  // within 7 days of the end date. ≤3 days escalates to a penalty warning when the
+  // election has "Warn non-voters" enabled.
+  const now = Date.now()
+  const voteReminders = activeElections
+    .filter((e) => !e.hasVoted && !!e.eligible)
+    .map((e) => ({ election: e, days: Math.ceil((new Date(e.end_date).getTime() - now) / 86400000) }))
+    .filter((r) => r.days >= 0 && r.days <= 7)
+    .sort((a, b) => a.days - b.days)
+
   const statCards: StatCard[] = [
     {
       label: 'Active Elections',
@@ -264,6 +276,58 @@ export default function DashboardPage() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
+
+        {/* Election deadline reminders */}
+        {voteReminders.length > 0 && (
+          <div className="space-y-3">
+            {voteReminders.map(({ election, days }) => {
+              const dayLabel = days === 0 ? 'today' : `in ${days} day${days !== 1 ? 's' : ''}`
+              const penalty = days <= 3 && !!election.warn_non_voters
+              if (penalty) {
+                return (
+                  <Link key={election.id} href={`/elections/${election.id}`}>
+                    <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 flex items-center gap-4 hover:bg-red-100 transition-colors cursor-pointer">
+                      <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-bold text-red-800">FAILURE TO COMPLY WILL LEAD TO PENALTY</p>
+                        <p className="text-sm text-red-700">
+                          Voting on <strong>{election.title}</strong> closes {dayLabel}. You have not voted yet.
+                        </p>
+                      </div>
+                      <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </Link>
+                )
+              }
+              return (
+                <Link key={election.id} href={`/elections/${election.id}`}>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-4 hover:bg-amber-100 transition-colors cursor-pointer">
+                    <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-amber-800">
+                        You have {days === 0 ? 'until today' : `${days} day${days !== 1 ? 's' : ''}`} to vote on {election.title}.
+                      </p>
+                      <p className="text-sm text-amber-600">Cast your vote before the election closes.</p>
+                    </div>
+                    <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
 
         {/* Pending Verifications Alert */}
         {isAdmin && pendingVerifications > 0 && (

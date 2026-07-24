@@ -52,6 +52,7 @@ export interface ElectionForm {
   thumbnail_url?: string | null
   auto_start: boolean
   auto_end: boolean
+  warn_non_voters: boolean
 }
 
 export interface Election {
@@ -637,6 +638,26 @@ export default function ElectionFormModal({
               </div>
             </>
           )}
+
+          {/* Warn non-voters — deadline penalty warning */}
+          <div className="mt-4 flex items-start gap-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={formData.warn_non_voters}
+              onClick={() => handleFormChange({ warn_non_voters: !formData.warn_non_voters })}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C] focus:ring-offset-1 mt-0.5 ${formData.warn_non_voters ? 'bg-[#84050C]' : 'bg-gray-300'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${formData.warn_non_voters ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+            <div>
+              <p className="text-sm font-medium text-gray-700">Warn non-voters</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                When on, eligible members who have not voted see an escalated penalty warning on their
+                dashboard within 3 days of the deadline.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Positions */}
