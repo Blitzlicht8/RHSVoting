@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   const total = Number(countResult.rows[0]?.count ?? 0)
 
   const usersResult = await db.execute({
-    sql: `SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at, updated_at, avatar_url, bio, grade_level_id, subtype_id, section_id, verification_status
+    sql: `SELECT id, email, name, role, email_verified, id_verified, id_image, active, created_at, updated_at, avatar_url, bio, grade_level_id, subtype_id, section_id, verification_status, timeout_until
           FROM users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
     args: [...params, limit, offset],
   })

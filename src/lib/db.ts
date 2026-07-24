@@ -470,6 +470,9 @@ async function _init(): Promise<void> {
     `ALTER TABLE verification_requests ADD COLUMN denied_fields TEXT`,
     // Session 4: election visible to non-eligible groups (read-only view, cannot vote)
     `ALTER TABLE elections ADD COLUMN visible_to_all INTEGER NOT NULL DEFAULT 0`,
+    // Session 5: deadline warning toggle + user timeout/penalty
+    `ALTER TABLE elections ADD COLUMN warn_non_voters INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN timeout_until TEXT`,
   ]
   for (const sql of newColumns) {
     await db.execute({ sql, args: [] }).catch(() => {})

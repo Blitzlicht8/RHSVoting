@@ -8,7 +8,9 @@
 2026-07-24
 
 ## Version After This Session
-`1.4.3` — FIX: election filter is now multi-select (checkboxes, OR semantics across chosen scopes). Button shows count badge + Clear. `groupFilters: Set<'v:id'|'s:id'>`; popover stays open on toggle.
+`1.5.0` — MINOR: Election deadline reminders on dashboard + user timeout/penalty system. New columns `elections.warn_non_voters`, `users.timeout_until`.
+
+Prev: `1.4.3` — FIX: election filter is now multi-select (checkboxes, OR semantics across chosen scopes). Button shows count badge + Clear. `groupFilters: Set<'v:id'|'s:id'>`; popover stays open on toggle.
 
 Prev: `1.4.2` — FIX: election filter is now a "Filter" popover button (funnel icon) with expandable per-structure categories (accordion) instead of a native select. Leveled values grouped under parent context header + parent-prefixed selected label (e.g. "STEM · A") so repeated child names (Section A/B/C) read clearly. Active filter shown as chip with clear (×).
 
@@ -21,6 +23,18 @@ Prev: `1.3.0` — MINOR: Settings Save bar (staged changes applied on Save) + un
 Prev: `1.2.2` — FIX: eligibility builder groups leveled values under their parent value (repeated child names like Section A/B/C now shown under each Strand caption)
 
 Prev: `1.2.1` — FIX: election eligibility builder now cascades (leveled group values show only when a parent value is selected; stale rules from deselected parents dropped)
+
+---
+
+## What Was Done (Session 5 — Deadline Notifications + Penalty System)
+
+- **DB (`db.ts`)**: `elections.warn_non_voters INTEGER NOT NULL DEFAULT 0`, `users.timeout_until TEXT` (additive, idempotent).
+- **Dashboard (`dashboard/page.tsx`)**: deadline reminder cards for active elections the user is eligible for + hasn't voted, within 7 days of end. ≤3 days + `warn_non_voters` on → red "FAILURE TO COMPLY WILL LEAD TO PENALTY" card; otherwise amber "You have N days to vote on {title}." card. Uses `eligible`/`hasVoted`/`warn_non_voters` from list API.
+- **Election form**: `warn_non_voters` toggle added to `ElectionForm`, EMPTY_FORM, openEdit, handleSave, and rendered as a switch in `ElectionFormModal` (applies to any election, global or scoped).
+- **Elections API**: POST + PATCH persist `warn_non_voters` (list route already returns `e.*`).
+- **Penalty**: users PATCH accepts `timeout_days` (>0 sets `timeout_until` N days out; 0 clears) — admin only, logs `user_timeout`. GET/list/PATCH selects return `timeout_until`.
+- **Timeout UI (`admin/users`)**: "Timeout (Penalty)" section in edit modal — days input + Timeout User / Lift Timeout. `UserRow.timeout_until` added.
+- **API-level enforcement**: post creation (`api/posts` POST) and vote casting (`api/elections/[id]/vote` POST) both reject timed-out users with 403 (checks `timeout_until > now`).
 
 ---
 
