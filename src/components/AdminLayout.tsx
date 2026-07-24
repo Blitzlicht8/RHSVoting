@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/providers/AuthProvider'
@@ -170,7 +171,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <div className="flex items-center gap-3 mb-3">
             <div className="w-9 h-9 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
               {user.avatar_url ? (
-                <img src={user.avatar_url} alt={user.name} className="w-9 h-9 rounded-full object-cover" />
+                <Image src={user.avatar_url} alt={user.name} width={36} height={36} className="rounded-full object-cover" />
               ) : (
                 <span>{user.name.charAt(0).toUpperCase()}</span>
               )}

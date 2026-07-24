@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import Layout from '@/components/Layout'
 import Button from '@/components/ui/Button'
 import Spinner from '@/components/ui/Spinner'
@@ -428,9 +429,9 @@ export default function ProfilePage() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-base font-semibold text-gray-800 mb-4">Profile Photo</h2>
           <div className="flex items-center gap-5">
-            <div className="w-20 h-20 rounded-full bg-[#84050C] flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 overflow-hidden">
+            <div className="relative w-20 h-20 rounded-full bg-[#84050C] flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 overflow-hidden">
               {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt={profile.name} className="w-full h-full object-cover" />
+                <Image src={profile.avatar_url} alt={profile.name} fill sizes="80px" className="object-cover" />
               ) : (
                 initials
               )}

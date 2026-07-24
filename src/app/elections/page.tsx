@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import Layout from '@/components/Layout'
 import { useAuth } from '@/components/providers/AuthProvider'
@@ -87,12 +88,15 @@ function ElectionCard({
       className="flex flex-col bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden group"
     >
       {election.thumbnail_url && (
-        <img
-          src={election.thumbnail_url}
-          alt=""
-          className="w-full h-32 object-cover"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-        />
+        <div className="relative w-full h-32">
+          <Image
+            src={election.thumbnail_url}
+            alt=""
+            fill
+            sizes="(max-width:768px) 100vw, 400px"
+            className="object-cover"
+          />
+        </div>
       )}
       <div className="p-5 flex flex-col flex-1">
         <div className="flex items-start justify-between gap-2 mb-2">

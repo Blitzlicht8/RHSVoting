@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import Modal from '@/components/ui/Modal'
 import Button from '@/components/ui/Button'
 import Spinner from '@/components/ui/Spinner'
@@ -447,12 +448,13 @@ export default function ElectionFormModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">Cover Image</label>
               <p className="text-xs text-gray-400 mb-2">Recommended: 1200×630px</p>
               {formData.thumbnail_url ? (
-                <div className="relative rounded-xl overflow-hidden border border-gray-200">
-                  <img
+                <div className="relative rounded-xl overflow-hidden border border-gray-200 h-32">
+                  <Image
                     src={formData.thumbnail_url}
                     alt="Cover"
-                    className="w-full h-32 object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                    fill
+                    sizes="100vw"
+                    className="object-cover"
                   />
                   <button
                     type="button"

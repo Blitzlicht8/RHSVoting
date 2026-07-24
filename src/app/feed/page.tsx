@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import Image from 'next/image'
 import Layout from '@/components/Layout'
 import PostCard from '@/components/PostCard'
 import PostEditor, { Block, emptyBlock } from '@/components/PostEditor'
@@ -81,11 +82,12 @@ function ComposerCard({
           <div className="relative w-9 h-9 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
             <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{initials}</span>
             {user?.avatar_url && (
-              <img
+              <Image
                 src={user.avatar_url}
-                className="absolute inset-0 w-full h-full object-cover"
+                fill
+                sizes="36px"
                 alt=""
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                className="object-cover"
               />
             )}
           </div>

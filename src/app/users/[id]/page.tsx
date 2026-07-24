@@ -1,6 +1,7 @@
 ﻿'use client'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import Image from 'next/image'
 import Layout from '@/components/Layout'
 import { Calendar, Award } from 'lucide-react'
 
@@ -53,11 +54,12 @@ export default function UserProfilePage() {
             <div className="relative w-16 h-16 rounded-full bg-[#84050C] flex items-center justify-center text-white text-2xl font-bold ring-2 ring-[#FEE2E2] overflow-hidden flex-shrink-0">
               <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold">{profile.name?.charAt(0)?.toUpperCase()}</span>
               {profile.avatar_url && (
-                <img
+                <Image
                   src={profile.avatar_url}
                   alt={profile.name}
-                  className="absolute inset-0 w-full h-full object-cover"
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                  fill
+                  sizes="64px"
+                  className="object-cover"
                 />
               )}
             </div>

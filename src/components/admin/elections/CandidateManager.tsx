@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 
 export interface StudentResult {
   id: number
@@ -54,11 +55,11 @@ interface CandidateManagerProps {
 }
 
 function Avatar({ url, name, size = 8 }: { url?: string | null; name: string; size?: number }) {
-  const cls = `w-${size} h-${size} rounded-full overflow-hidden bg-[#FEE2E2] flex items-center justify-center flex-shrink-0`
+  const cls = `relative w-${size} h-${size} rounded-full overflow-hidden bg-[#FEE2E2] flex items-center justify-center flex-shrink-0`
   return (
     <div className={cls}>
       {url ? (
-        <img src={url} alt={name} className="w-full h-full object-cover" />
+        <Image src={url} alt={name} fill sizes={`${size * 4}px`} className="object-cover" />
       ) : (
         <span className={`font-bold text-[#6B0409] ${size <= 7 ? 'text-xs' : 'text-sm'}`}>
           {(name || '?').charAt(0).toUpperCase()}

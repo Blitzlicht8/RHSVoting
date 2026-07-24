@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import Button from '@/components/ui/Button'
 import { useToast } from '@/components/providers/ToastProvider'
@@ -377,9 +378,8 @@ export default function VerifyIdPage() {
             {user?.id_photo_url && user.id_photo_url !== 'none' && (
               <div className="w-full">
                 <p className="text-xs font-medium text-gray-500 mb-2 text-left">Submitted document</p>
-                <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={user.id_photo_url} alt="Submitted document" className="w-full h-40 object-cover" />
+                <div className="relative w-full h-40 rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                  <Image src={user.id_photo_url} alt="Submitted document" fill sizes="100vw" className="object-cover" />
                 </div>
               </div>
             )}
@@ -507,10 +507,9 @@ export default function VerifyIdPage() {
                 {locked('profile_photo') && <span className="ml-1 text-xs text-gray-400">(locked)</span>}
               </label>
               <div className="flex items-center gap-3">
-                <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
+                <div className="relative w-16 h-16 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
                   {profilePreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={profilePreview} alt="Profile preview" className="w-full h-full object-cover" />
+                    <Image src={profilePreview} alt="Profile preview" fill sizes="64px" className="object-cover" unoptimized />
                   ) : (
                     <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6z" /></svg>
                   )}

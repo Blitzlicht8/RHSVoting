@@ -1,5 +1,6 @@
 'use client'
 import { useRef, useState, useCallback } from 'react'
+import Image from 'next/image'
 import { uploadPostMedia } from '@/lib/uploadMedia'
 
 export interface Block {
@@ -169,7 +170,7 @@ export default function PostEditor({ value, onChange }: PostEditorProps) {
               {uploadingIds.has(block.id) ? (
                 <div className="w-full h-40 bg-gray-100 rounded-xl flex items-center justify-center text-sm text-gray-400 animate-pulse">Uploading image…</div>
               ) : (
-                <img src={block.content} alt="" className="max-w-full rounded-xl max-h-96 object-contain" />
+                <Image src={block.content} alt="" width={0} height={0} sizes="100vw" className="max-w-full rounded-xl max-h-96 object-contain w-auto h-auto" style={{ width: 'auto', height: 'auto' }} />
               )}
               <button onClick={() => deleteBlock(block.id)}
                 className="absolute top-2 right-2 w-6 h-6 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">

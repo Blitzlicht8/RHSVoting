@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Image from 'next/image'
 import AdminLayout from '@/components/AdminLayout'
 import Modal from '@/components/ui/Modal'
 import Badge from '@/components/ui/Badge'
@@ -387,11 +388,12 @@ export default function VerificationsPage() {
                   <div className={`relative w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden ${avatarColor(req.user_id)}`}>
                     <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{getInitials(req.user_name)}</span>
                     {req.user_avatar_url && (
-                      <img
+                      <Image
                         src={req.user_avatar_url}
                         alt={req.user_name}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                        fill
+                        sizes="40px"
+                        className="object-cover"
                       />
                     )}
                   </div>
@@ -437,12 +439,13 @@ export default function VerificationsPage() {
                   return (
                     <div className="px-4 pb-3 flex flex-wrap gap-2">
                       {photoUrls.map((url: string, i: number) => (
-                        <img
+                        <Image
                           key={i}
                           src={url}
                           alt="Document"
+                          width={64}
+                          height={64}
                           className="w-16 h-16 object-cover rounded-lg cursor-pointer border border-gray-200 hover:opacity-80 transition"
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
                           onClick={() => setLightbox({ urls: photoUrls, index: i })}
                         />
                       ))}
@@ -513,11 +516,12 @@ export default function VerificationsPage() {
               <div className={`relative w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden ${avatarColor(selectedImageRequest.user_id)}`}>
                 <span className="absolute inset-0 flex items-center justify-center text-xs font-bold">{getInitials(selectedImageRequest.user_name)}</span>
                 {selectedImageRequest.user_avatar_url && (
-                  <img
+                  <Image
                     src={selectedImageRequest.user_avatar_url}
                     alt={selectedImageRequest.user_name}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                    fill
+                    sizes="36px"
+                    className="object-cover"
                   />
                 )}
               </div>
@@ -555,20 +559,28 @@ export default function VerificationsPage() {
                       <span className="text-sm text-[#84050C] underline">Document {i + 1} (PDF)</span>
                     </a>
                   ) : (
-                    <img
+                    <Image
                       key={doc.id}
                       src={doc.file_path}
                       alt={`Document ${i + 1}`}
-                      className="w-full rounded-lg object-contain border border-gray-200 max-h-[40vh]"
+                      width={0}
+                      height={0}
+                      sizes="100vw"
+                      className="w-full rounded-lg object-contain border border-gray-200 max-h-[40vh] h-auto"
+                      style={{ width: '100%', height: 'auto' }}
                     />
                   )
                 ))}
               </div>
             ) : (
-              <img
+              <Image
                 src={selectedImageRequest.id_image}
                 alt="Full size ID document"
-                className="w-full rounded-lg object-contain border border-gray-200 max-h-[65vh]"
+                width={0}
+                height={0}
+                sizes="100vw"
+                className="w-full rounded-lg object-contain border border-gray-200 max-h-[65vh] h-auto"
+                style={{ width: '100%', height: 'auto' }}
               />
             )}
           </div>

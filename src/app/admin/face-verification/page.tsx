@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import AdminLayout from '@/components/AdminLayout'
 import Button from '@/components/ui/Button'
@@ -125,9 +126,8 @@ export default function FaceVerificationAdminPage() {
             {filtered.map(u => (
               <div key={u.id} className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    {u.avatar_url ? <img src={u.avatar_url} alt={u.name} className="w-full h-full object-cover" /> : null}
+                  <div className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
+                    {u.avatar_url ? <Image src={u.avatar_url} alt={u.name} fill sizes="40px" className="object-cover" /> : null}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">

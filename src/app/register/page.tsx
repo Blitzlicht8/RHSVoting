@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { Mail, User, Eye, EyeOff } from 'lucide-react'
 import Button from '@/components/ui/Button'
@@ -438,10 +439,9 @@ export default function RegisterPage() {
                 Profile Photo <span className="text-red-500">*</span>
               </label>
               <div className="flex items-center gap-3">
-                <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
+                <div className="relative w-16 h-16 rounded-full overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
                   {profilePreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={profilePreview} alt="Profile preview" className="w-full h-full object-cover" />
+                    <Image src={profilePreview} alt="Profile preview" fill sizes="64px" className="object-cover" unoptimized />
                   ) : (
                     <svg className="w-8 h-8 text-gray-300" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6z" /></svg>
                   )}

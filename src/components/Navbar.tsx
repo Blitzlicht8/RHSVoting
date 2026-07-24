@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/components/providers/AuthProvider'
@@ -93,11 +94,12 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
             title={user?.role === 'unverified' ? 'Verify your identity' : undefined}
           >
             {user?.avatar_url ? (
-              <img
+              <Image
                 src={user.avatar_url}
                 alt={user.name}
-                className="w-9 h-9 rounded-full object-cover"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                width={36}
+                height={36}
+                className="rounded-full object-cover"
               />
             ) : (
               <span className="text-sm font-semibold">{user?.name?.charAt(0)?.toUpperCase() || '?'}</span>

@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Image from 'next/image'
 import { Heart, MessageCircle, Share2, Trash2, Flag } from 'lucide-react'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 
@@ -47,7 +48,7 @@ function renderContent(raw: string) {
   let blocks: Array<{ type: string; content: string; subtype?: string }> = []
   try { blocks = JSON.parse(raw) } catch { blocks = [{ type: 'text', content: raw }] }
   return blocks.map((b, i) => {
-    if (b.type === 'image') return <img key={i} src={b.content} alt="" className="max-w-full rounded-xl my-2 max-h-96 object-contain" />
+    if (b.type === 'image') return <Image key={i} src={b.content} alt="" width={0} height={0} sizes="100vw" className="max-w-full rounded-xl my-2 max-h-96 object-contain w-auto h-auto" style={{ width: 'auto', height: 'auto' }} />
     if (b.type === 'video') return <video key={i} src={b.content} controls className="w-full rounded-xl my-2 max-h-80" />
     if (b.type === 'embed') {
       const yt = b.content.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/)
@@ -57,7 +58,7 @@ function renderContent(raw: string) {
       if (tk) return <iframe key={i} className="w-full aspect-video rounded-xl my-2" src={`https://www.tiktok.com/embed/${tk[1]}`} allowFullScreen />
       if (gd) return <iframe key={i} className="w-full aspect-video rounded-xl my-2" src={`https://drive.google.com/file/d/${gd[1]}/preview`} allowFullScreen />
       if (/\.(mp4|webm|mov)(\?|$)/i.test(b.content)) return <video key={i} src={b.content} controls className="w-full rounded-xl my-2 max-h-80" />
-      if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(b.content)) return <img key={i} src={b.content} alt="" className="max-w-full rounded-xl my-2 max-h-96 object-contain" />
+      if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(b.content)) return <Image key={i} src={b.content} alt="" width={0} height={0} sizes="100vw" className="max-w-full rounded-xl my-2 max-h-96 object-contain w-auto h-auto" style={{ width: 'auto', height: 'auto' }} />
       return <a key={i} href={b.content} target="_blank" rel="noopener noreferrer" className="text-[#84050C] underline text-sm break-all">{b.content}</a>
     }
     const Tag = b.subtype === 'heading' ? 'h2' as const : b.subtype === 'subheading' ? 'h3' as const : 'p' as const
@@ -177,11 +178,12 @@ export default function PostCard({ post, currentUserId, currentUserRole, current
           <div className="relative w-10 h-10 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
             <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{initials(post.author_name)}</span>
             {post.author_avatar && (
-              <img
+              <Image
                 src={post.author_avatar}
-                className="absolute inset-0 w-full h-full object-cover"
+                fill
+                sizes="40px"
                 alt=""
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                className="object-cover"
               />
             )}
           </div>
@@ -252,11 +254,12 @@ export default function PostCard({ post, currentUserId, currentUserRole, current
                 <div className="relative w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-xs font-semibold flex-shrink-0 overflow-hidden text-white">
                   <span className="absolute inset-0 flex items-center justify-center text-xs font-semibold">{initials(c.author_name)}</span>
                   {c.author_avatar && (
-                    <img
+                    <Image
                       src={c.author_avatar}
-                      className="absolute inset-0 w-full h-full object-cover"
+                      fill
+                      sizes="28px"
                       alt=""
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                      className="object-cover"
                     />
                   )}
                 </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import Layout from '@/components/Layout'
@@ -131,10 +132,12 @@ export default function CandidateProfilePage() {
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <div className="flex items-start gap-5">
             {candidate.photo_url ? (
-              <img
+              <Image
                 src={candidate.photo_url}
                 alt={candidate.name}
-                className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md flex-shrink-0"
+                width={96}
+                height={96}
+                className="rounded-full object-cover border-4 border-white shadow-md flex-shrink-0"
               />
             ) : (
               <div className="w-24 h-24 rounded-full bg-[#84050C] flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-md">

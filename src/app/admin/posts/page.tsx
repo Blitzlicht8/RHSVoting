@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Image from 'next/image'
 import AdminLayout from '@/components/AdminLayout'
 import Spinner from '@/components/ui/Spinner'
 import Badge from '@/components/ui/Badge'
@@ -101,7 +102,7 @@ export default function AdminPostsPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-8 h-8 rounded-full bg-[#84050C] text-white text-xs font-bold flex items-center justify-center overflow-hidden flex-shrink-0">
                     {p.author_avatar
-                      ? <img src={p.author_avatar} alt={p.author_name} className="w-8 h-8 rounded-full object-cover" />
+                      ? <Image src={p.author_avatar} alt={p.author_name} width={32} height={32} className="rounded-full object-cover" />
                       : <span>{p.author_name?.charAt(0)?.toUpperCase() || '?'}</span>}
                   </div>
                   <div className="min-w-0">

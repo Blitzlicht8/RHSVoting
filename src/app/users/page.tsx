@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import Layout from '@/components/Layout'
 import { useAuth } from '@/components/providers/AuthProvider'
 import Spinner from '@/components/ui/Spinner'
@@ -85,11 +86,12 @@ export default function MembersPage() {
                 <div className="relative w-11 h-11 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
                   <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">{getInitials(m.name)}</span>
                   {m.avatar_url && (
-                    <img
+                    <Image
                       src={m.avatar_url}
                       alt={m.name}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                      fill
+                      sizes="44px"
+                      className="object-cover"
                     />
                   )}
                 </div>

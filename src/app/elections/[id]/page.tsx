@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import Layout from '@/components/Layout'
@@ -256,9 +257,9 @@ function VotingView({
                         />
                       )}
                       <div className="flex items-start gap-3">
-                        <div className="w-14 h-14 rounded-full bg-[#FEE2E2] text-[#6B0409] flex items-center justify-center flex-shrink-0 text-xl font-bold overflow-hidden">
+                        <div className="relative w-14 h-14 rounded-full bg-[#FEE2E2] text-[#6B0409] flex items-center justify-center flex-shrink-0 text-xl font-bold overflow-hidden">
                           {candidate.photo_url ? (
-                            <img src={candidate.photo_url} alt={candidate.name} className="w-full h-full object-cover" />
+                            <Image src={candidate.photo_url} alt={candidate.name} fill sizes="56px" className="object-cover" />
                           ) : (
                             candidate.name.charAt(0).toUpperCase()
                           )}
@@ -586,9 +587,9 @@ function ResultsPositionList({
                         {isWinner && (
                           <span className="text-amber-500 text-base flex-shrink-0" title="Winner">👑</span>
                         )}
-                        <div className="w-9 h-9 rounded-full bg-[#FEE2E2] text-[#6B0409] flex items-center justify-center text-sm font-bold overflow-hidden flex-shrink-0">
+                        <div className="relative w-9 h-9 rounded-full bg-[#FEE2E2] text-[#6B0409] flex items-center justify-center text-sm font-bold overflow-hidden flex-shrink-0">
                           {candidate.photo_url ? (
-                            <img src={candidate.photo_url} alt={candidate.name} className="w-full h-full object-cover" />
+                            <Image src={candidate.photo_url} alt={candidate.name} fill sizes="36px" className="object-cover" />
                           ) : (
                             candidate.name.charAt(0).toUpperCase()
                           )}
@@ -677,9 +678,9 @@ function UpcomingView({ election, hideOpensBanner = false }: { election: Electio
                 <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {position.candidates.map((candidate) => (
                     <div key={candidate.id} className="flex items-center gap-3 p-3 rounded-lg border border-gray-100">
-                      <div className="w-10 h-10 rounded-full bg-[#FEE2E2] text-[#6B0409] flex items-center justify-center text-sm font-bold overflow-hidden flex-shrink-0">
+                      <div className="relative w-10 h-10 rounded-full bg-[#FEE2E2] text-[#6B0409] flex items-center justify-center text-sm font-bold overflow-hidden flex-shrink-0">
                         {candidate.photo_url ? (
-                          <img src={candidate.photo_url} alt={candidate.name} className="w-full h-full object-cover" />
+                          <Image src={candidate.photo_url} alt={candidate.name} fill sizes="40px" className="object-cover" />
                         ) : (
                           candidate.name.charAt(0).toUpperCase()
                         )}
@@ -863,12 +864,15 @@ export default function ElectionDetailPage() {
         {/* Header */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           {election.thumbnail_url && (
-            <img
-              src={election.thumbnail_url}
-              alt=""
-              className="w-full max-h-48 object-cover"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-            />
+            <div className="relative w-full h-48">
+              <Image
+                src={election.thumbnail_url}
+                alt=""
+                fill
+                sizes="100vw"
+                className="object-cover"
+              />
+            </div>
           )}
           <div className="p-6">
             <div className="flex items-start justify-between gap-3 flex-wrap">

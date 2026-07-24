@@ -23,14 +23,29 @@ export async function GET(request: NextRequest) {
   const admin = isAdmin(authUser.role)
   const voterIdArg = authUser.id as number
 
-  // Pre-flight: trigger lazy auto-transitions before building the list so clients see fresh status
-  const pendingTransitions = await db.execute({
-    sql: `SELECT id FROM elections WHERE (status = 'draft' AND auto_start = 1) OR (status = 'active' AND auto_end = 1)`,
-    args: [],
-  })
-  for (const row of pendingTransitions.rows) {
-    await checkAutoTransition(Number(row.id)).catch(() => {})
-  }
+  // Pre-flight: trigger lazy auto-transitions before building the list so clients
+  // see fresh status. Done in two bulk UPDATEs (was a per-election loop calling
+  // checkAutoTransition — an N+1 on this hot list path). Semantics identical:
+  //   - auto_start draft → active once start_date passed AND it has ≥1 position + ≥1 candidate
+  //   - auto_end active → ended once end_date passed
+  const nowIso = new Date().toISOString()
+  await db.batch(
+    [
+      {
+        sql: `UPDATE elections SET status='active', updated_at=datetime('now')
+              WHERE status='draft' AND auto_start=1 AND start_date <= ?
+                AND (SELECT COUNT(*) FROM positions p WHERE p.election_id = elections.id) > 0
+                AND (SELECT COUNT(*) FROM candidates c WHERE c.election_id = elections.id) > 0`,
+        args: [nowIso],
+      },
+      {
+        sql: `UPDATE elections SET status='ended', updated_at=datetime('now')
+              WHERE status='active' AND auto_end=1 AND end_date <= ?`,
+        args: [nowIso],
+      },
+    ],
+    'write'
+  ).catch(() => {})
 
   const whereClause = admin ? '' : `WHERE e.status IN ('active', 'ended')`
 

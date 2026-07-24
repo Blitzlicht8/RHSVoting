@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 
 interface Props {
   urls: string[]
@@ -49,11 +50,15 @@ export default function LightboxModal({ urls, startIndex = 0, onClose }: Props) 
           {url.endsWith('.pdf') || url.includes('/pdf') ? (
             <iframe src={url} className="w-full h-[80vh] rounded-lg" title="Document" />
           ) : (
-            <img
+            <Image
               src={url}
               alt="Document"
+              width={0}
+              height={0}
+              sizes="90vw"
               onClick={() => setZoomed(z => !z)}
-              className={`rounded-lg transition-all duration-200 ${zoomed ? 'max-w-none max-h-none' : 'max-h-[80vh] max-w-[90vw] object-contain'}`}
+              className={`rounded-lg transition-all duration-200 w-auto h-auto ${zoomed ? 'max-w-none max-h-none' : 'max-h-[80vh] max-w-[90vw] object-contain'}`}
+              style={{ width: 'auto', height: 'auto' }}
             />
           )}
         </div>

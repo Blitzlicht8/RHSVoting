@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
@@ -131,11 +132,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <div className="flex items-center gap-3 mb-3">
             <div className="w-9 h-9 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
               {user.avatar_url ? (
-                <img
+                <Image
                   src={user.avatar_url}
                   alt={user.name}
-                  className="w-9 h-9 rounded-full object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                  width={36}
+                  height={36}
+                  className="rounded-full object-cover"
                 />
               ) : (
                 <span className="text-sm font-bold">{user.name.charAt(0).toUpperCase()}</span>

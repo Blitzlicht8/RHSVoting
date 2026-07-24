@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
+import Image from 'next/image'
 import AdminLayout from '@/components/AdminLayout'
 import Modal from '@/components/ui/Modal'
 import Badge from '@/components/ui/Badge'
@@ -99,11 +100,15 @@ function UserAvatar({ user, size = 'sm' }: { user: UserRow; size?: 'sm' | 'md' }
   const dim = size === 'sm' ? 'w-9 h-9 text-xs' : 'w-10 h-10 text-sm'
   if (user.avatar_url) {
     return (
-      <img
-        src={user.avatar_url}
-        alt={user.name}
-        className={`${dim} rounded-full object-cover flex-shrink-0`}
-      />
+      <span className={`relative inline-block ${dim} flex-shrink-0`}>
+        <Image
+          src={user.avatar_url}
+          alt={user.name}
+          fill
+          sizes="40px"
+          className="rounded-full object-cover"
+        />
+      </span>
     )
   }
   return (
@@ -1124,7 +1129,8 @@ export default function UsersPage() {
                 <div className="flex flex-wrap gap-2">
                   {userDocs.map((doc, idx) => (
                     <div key={doc.id} className="relative group/doc">
-                      <img src={doc.file_path} alt={`Document ${idx + 1}`}
+                      <Image src={doc.file_path} alt={`Document ${idx + 1}`}
+                        width={64} height={64}
                         className="w-16 h-16 object-cover rounded-lg cursor-pointer border border-gray-200 hover:border-[#84050C] transition-colors"
                         onClick={() => { setLightboxUrls(userDocs.map(d => d.file_path)); setLightboxIndex(idx) }}
                       />
