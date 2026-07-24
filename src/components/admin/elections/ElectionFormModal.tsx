@@ -46,6 +46,7 @@ export interface ElectionForm {
   status: ElectionStatus
   positions: PositionForm[]
   is_global: boolean
+  visible_to_all: boolean
   allow_teacher_vote: boolean
   eligibility: EligibilityRule[]
   thumbnail_url?: string | null
@@ -608,11 +609,33 @@ export default function ElectionFormModal({
 
           {/* Group targeting — shown when global=false */}
           {!formData.is_global && (
-            <GroupEligibilityBuilder
-              key={`${election?.id ?? 'new'}-${open}`}
-              value={formData.eligibility}
-              onChange={(eligibility) => handleFormChange({ eligibility })}
-            />
+            <>
+              <GroupEligibilityBuilder
+                key={`${election?.id ?? 'new'}-${open}`}
+                value={formData.eligibility}
+                onChange={(eligibility) => handleFormChange({ eligibility })}
+              />
+
+              {/* Visible to non-eligible groups */}
+              <div className="mt-4 flex items-start gap-3">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={formData.visible_to_all}
+                  onClick={() => handleFormChange({ visible_to_all: !formData.visible_to_all })}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C] focus:ring-offset-1 mt-0.5 ${formData.visible_to_all ? 'bg-[#84050C]' : 'bg-gray-300'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${formData.visible_to_all ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Visible to non-eligible groups</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    When on, everyone can see this election, but only the eligible group(s) above can vote —
+                    others see it read-only. When off, only eligible groups can see it at all.
+                  </p>
+                </div>
+              </div>
+            </>
           )}
         </div>
 

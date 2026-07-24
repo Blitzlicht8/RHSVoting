@@ -41,6 +41,7 @@ interface Election {
   share_token?: string | null
   auto_start?: number | boolean
   auto_end?: number | boolean
+  eligible?: number | boolean
 }
 
 interface UserVote {
@@ -641,9 +642,10 @@ function ResultsPositionList({
 }
 
 /* ─── Upcoming View ──────────────────────────────────────────── */
-function UpcomingView({ election }: { election: Election }) {
+function UpcomingView({ election, hideOpensBanner = false }: { election: Election; hideOpensBanner?: boolean }) {
   return (
     <div className="space-y-6">
+      {!hideOpensBanner && (
       <div className="bg-[#FEE2E2] border border-[#FEE2E2] rounded-xl p-6 flex items-center gap-4">
         <div className="w-12 h-12 bg-[#FEE2E2] rounded-lg flex items-center justify-center flex-shrink-0">
           <svg className="w-6 h-6 text-[#84050C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -659,6 +661,7 @@ function UpcomingView({ election }: { election: Election }) {
           </p>
         </div>
       </div>
+      )}
 
       {election.positions.length > 0 && (
         <div>
@@ -829,8 +832,12 @@ export default function ElectionDetailPage() {
   const isUpcoming =
     election.status === 'draft' || new Date(election.start_date) > new Date()
 
+  // Non-admins seeing a scoped election only via visible_to_all are read-only.
+  const canVote = isAdmin || election.eligible === undefined || !!election.eligible
+
   const showVotingView =
     election.status === 'active' &&
+    canVote &&
     idVerified &&
     !election.hasVoted &&
     !isUpcoming
@@ -924,8 +931,19 @@ export default function ElectionDetailPage() {
           </div>
         </div>
 
+        {/* Not eligible — read-only view (election is visible to non-eligible groups) */}
+        {election.status === 'active' && !canVote && (
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-center gap-3 text-sm text-gray-600">
+            <svg className="w-5 h-5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            You can view this election, but you are not in an eligible group to vote.
+          </div>
+        )}
+
         {/* ID not verified warning */}
-        {election.status === 'active' && !idVerified && !election.hasVoted && (
+        {election.status === 'active' && canVote && !idVerified && !election.hasVoted && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3 text-sm text-amber-700">
             <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -953,8 +971,9 @@ export default function ElectionDetailPage() {
           />
         )}
 
-        {isUpcoming && !showVotingView && !showResultsView && (
-          <UpcomingView election={election} />
+        {/* Upcoming preview, or read-only candidate preview for non-eligible active viewers */}
+        {!showVotingView && !showResultsView && (isUpcoming || (election.status === 'active' && !canVote)) && (
+          <UpcomingView election={election} hideOpensBanner={election.status === 'active' && !canVote} />
         )}
       </div>
     </Layout>
