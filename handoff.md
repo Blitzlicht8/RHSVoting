@@ -8,7 +8,9 @@
 2026-07-24
 
 ## Version After This Session
-`1.4.0` — MINOR: Election group-structure filter on elections page + "Visible to non-eligible groups" toggle (read-only visibility with server-side vote gate). Adds `elections.visible_to_all` column.
+`1.4.1` — FIX: election group filter now drills into group *values* (optgroups per structure), not just structure names. List API returns `value_ids` per election; filter matches `v:<valueId>` or structure-wide `s:<structureId>`.
+
+Prev: `1.4.0` — MINOR: Election group-structure filter on elections page + "Visible to non-eligible groups" toggle (read-only visibility with server-side vote gate). Adds `elections.visible_to_all` column.
 
 Prev: `1.3.0` — MINOR: Settings Save bar (staged changes applied on Save) + unsaved-changes guard; confirmed App Version reads live from package.json
 

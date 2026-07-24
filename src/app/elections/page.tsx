@@ -23,15 +23,25 @@ interface Election {
   visible_to_all?: number | boolean
   eligible?: number | boolean
   structure_ids?: number[]
+  value_ids?: number[]
+}
+
+interface GroupValue {
+  id: number
+  name: string
+  active: boolean
 }
 
 interface GroupStructure {
   id: number
   name: string
   active: boolean
+  values: GroupValue[]
 }
 
 type FilterTab = 'all' | 'active' | 'upcoming' | 'ended'
+// Filter selection: 'all', or a structure-wide scope ('s:<id>'), or a value ('v:<id>').
+type GroupFilter = 'all' | `s:${number}` | `v:${number}`
 
 function StatusBadge({ status }: { status: Election['status'] }) {
   if (status === 'active')
@@ -201,7 +211,7 @@ export default function ElectionsPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<FilterTab>('all')
   const [structures, setStructures] = useState<GroupStructure[]>([])
-  const [groupFilter, setGroupFilter] = useState<number | 'all'>('all')
+  const [groupFilter, setGroupFilter] = useState<GroupFilter>('all')
 
   const adminRoles = ['master_admin', 'admin', 'moderator']
   const isAdmin = user ? adminRoles.includes(user.role) : false
@@ -236,16 +246,38 @@ export default function ElectionsPage() {
 
   const now = new Date()
 
-  // Only offer group filters actually referenced by at least one visible election.
-  const usedStructureIds = new Set<number>()
-  for (const e of elections) for (const id of e.structure_ids ?? []) usedStructureIds.add(id)
-  const groupOptions = structures.filter((s) => usedStructureIds.has(s.id))
+  // Build filter options from the scopes elections actually use. A value id is
+  // offered when some election targets that specific value; a structure-wide
+  // ("All of X") option is offered when some election targets a structure with
+  // no specific value picked.
+  const usedValueIds = new Set<number>()
+  const usedStructureWide = new Set<number>()
+  for (const e of elections) {
+    const vids = e.value_ids ?? []
+    for (const id of vids) usedValueIds.add(id)
+    // structure appears in structure_ids but contributes no specific value → structure-wide scope
+    const structureValueCount = new Map<number, number>()
+    for (const s of structures) for (const v of s.values ?? []) if (vids.includes(v.id)) structureValueCount.set(s.id, 1)
+    for (const sid of e.structure_ids ?? []) if (!structureValueCount.has(sid)) usedStructureWide.add(sid)
+  }
+  const groupOptionGroups = structures
+    .map((s) => ({
+      structure: s,
+      structureWide: usedStructureWide.has(s.id),
+      values: (s.values ?? []).filter((v) => v.active && usedValueIds.has(v.id)),
+    }))
+    .filter((g) => g.structureWide || g.values.length > 0)
 
   const filtered = elections.filter((e) => {
     if (activeTab === 'active' && e.status !== 'active') return false
     if (activeTab === 'upcoming' && !(e.status === 'draft' || new Date(e.start_date) > now)) return false
     if (activeTab === 'ended' && e.status !== 'ended') return false
-    if (groupFilter !== 'all' && !(e.structure_ids ?? []).includes(groupFilter)) return false
+    if (groupFilter !== 'all') {
+      const [kind, idStr] = groupFilter.split(':')
+      const id = Number(idStr)
+      if (kind === 'v' && !(e.value_ids ?? []).includes(id)) return false
+      if (kind === 's' && !(e.structure_ids ?? []).includes(id)) return false
+    }
     return true
   })
 
@@ -308,15 +340,22 @@ export default function ElectionsPage() {
             ))}
           </div>
 
-          {groupOptions.length > 0 && (
+          {groupOptionGroups.length > 0 && (
             <select
               value={groupFilter}
-              onChange={(e) => setGroupFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              onChange={(e) => setGroupFilter(e.target.value as GroupFilter)}
               className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#84050C]"
             >
               <option value="all">All groups</option>
-              {groupOptions.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+              {groupOptionGroups.map((g) => (
+                <optgroup key={g.structure.id} label={g.structure.name}>
+                  {g.structureWide && (
+                    <option value={`s:${g.structure.id}`}>All of {g.structure.name}</option>
+                  )}
+                  {g.values.map((v) => (
+                    <option key={v.id} value={`v:${v.id}`}>{v.name}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           )}
