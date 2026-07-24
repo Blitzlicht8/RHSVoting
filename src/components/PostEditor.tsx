@@ -1,5 +1,6 @@
 'use client'
 import { useRef, useState, useCallback } from 'react'
+import { uploadPostMedia } from '@/lib/uploadMedia'
 
 export interface Block {
   id: string
@@ -88,21 +89,25 @@ export default function PostEditor({ value, onChange }: PostEditorProps) {
   const imageRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const videoRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
+  // Latest blocks ref so async uploads write against fresh state (paste/drop can
+  // insert several blocks before the first upload resolves).
+  const valueRef = useRef(value)
+  valueRef.current = value
+
   const uploadFile = useCallback(async (file: File, blockId: string) => {
     setUploadingIds(s => new Set(s).add(blockId))
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('purpose', 'post')
     try {
-      const res = await fetch('/api/upload', { method: 'POST', credentials: 'include', body: fd })
-      const json = await res.json()
-      if (json.data?.url) {
-        onChange(value.map(b => b.id === blockId ? { ...b, content: json.data.url } : b))
+      const url = await uploadPostMedia(file)
+      if (url) {
+        onChange(valueRef.current.map(b => b.id === blockId ? { ...b, content: url } : b))
+      } else {
+        // Upload failed — drop the placeholder block rather than keep a blob: URL.
+        onChange(valueRef.current.filter(b => b.id !== blockId))
       }
     } finally {
       setUploadingIds(s => { const n = new Set(s); n.delete(blockId); return n })
     }
-  }, [value, onChange])
+  }, [onChange])
 
   const insertAfter = useCallback((afterId: string, newBlock: BlockWithFile) => {
     const idx = value.findIndex(b => b.id === afterId)
@@ -124,8 +129,36 @@ export default function PostEditor({ value, onChange }: PostEditorProps) {
     onChange(next.length === 0 ? [emptyBlock()] : next)
   }, [value, onChange])
 
+  // Paste / drag-drop path: append image & video files as blocks, then upload
+  // each through the SAME handler as the button path (no persisted blob: URLs).
+  const appendMediaFiles = useCallback((files: File[]) => {
+    const media = files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'))
+    if (media.length === 0) return
+    const newBlocks: Block[] = media.map(f => ({
+      id: uid(),
+      type: f.type.startsWith('video/') ? 'video' : 'image',
+      content: URL.createObjectURL(f),
+    }))
+    onChange([...valueRef.current, ...newBlocks])
+    media.forEach((f, i) => uploadFile(f, newBlocks[i].id))
+  }, [onChange, uploadFile])
+
   return (
-    <div className="space-y-1 min-h-[80px]">
+    <div
+      className="space-y-1 min-h-[80px]"
+      onPaste={e => {
+        const files = Array.from(e.clipboardData?.files ?? [])
+        if (files.some(f => f.type.startsWith('image/') || f.type.startsWith('video/'))) {
+          e.preventDefault()
+          appendMediaFiles(files)
+        }
+      }}
+      onDragOver={e => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault() }}
+      onDrop={e => {
+        const files = Array.from(e.dataTransfer?.files ?? [])
+        if (files.length) { e.preventDefault(); appendMediaFiles(files) }
+      }}
+    >
       {value.map((block) => {
         const isHovered = hoveredId === block.id
         const plusOpen = plusOpenId === block.id

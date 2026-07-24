@@ -7,6 +7,21 @@ import { Calendar, Award } from 'lucide-react'
 interface ProfileUser { id:number; name:string; role:string; avatar_url:string|null; bio:string|null; created_at:string }
 interface Achievement { id:number; title:string; description:string|null; year:number|null }
 
+// Post content is a JSON array of blocks. Extract a plain-text preview so the
+// raw JSON never leaks into the UI (media-only posts show a marker instead).
+function postExcerpt(raw: string): string {
+  try {
+    const blocks = JSON.parse(raw) as Array<{ type: string; content: string }>
+    if (!Array.isArray(blocks)) return raw
+    const text = blocks.filter(b => b.type === 'text').map(b => b.content).join(' ').trim()
+    if (text) return text
+    const media = blocks.find(b => b.type === 'image' || b.type === 'video' || b.type === 'embed')
+    return media ? `[${media.type}]` : ''
+  } catch {
+    return raw
+  }
+}
+
 export default function UserProfilePage() {
   const { id } = useParams()
   const [profile, setProfile] = useState<ProfileUser|null>(null)
@@ -85,7 +100,7 @@ export default function UserProfilePage() {
             <div className="space-y-3">
               {posts.slice(0,5).map(p => (
                 <div key={p.id} className="text-sm text-gray-600 pb-2 border-b border-gray-50 last:border-0 last:pb-0">
-                  {p.content.slice(0,120)}{p.content.length>120?'...':''}
+                  {(() => { const t = postExcerpt(p.content); return t.slice(0,120) + (t.length>120?'...':'') })()}
                   <span className="text-xs text-gray-400 ml-2">{new Date(p.created_at).toLocaleDateString()}</span>
                 </div>
               ))}
