@@ -57,7 +57,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingPostCount, setPendingPostCount] = useState(0)
-  const [faceOn, setFaceOn] = useState(false)
+  // Seed from a cached value so the nav item doesn't flicker off on every
+  // admin-page remount while the settings fetch is in flight.
+  const [faceOn, setFaceOn] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return window.sessionStorage.getItem('faceOn') === '1'
+  })
 
   useEffect(() => {
     if (!loading && !user) router.push('/')
@@ -79,7 +84,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       .catch(() => {})
     fetch('/api/settings', { credentials: 'include' })
       .then(r => r.json())
-      .then(res => setFaceOn(res.data?.enable_face_verification === 'true'))
+      .then(res => {
+        const on = res.data?.enable_face_verification === 'true'
+        setFaceOn(on)
+        try { window.sessionStorage.setItem('faceOn', on ? '1' : '0') } catch {}
+      })
       .catch(() => {})
   }, [user])
 
