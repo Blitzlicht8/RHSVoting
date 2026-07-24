@@ -9,7 +9,7 @@ import Input from '@/components/ui/Input'
 import OTPInput from '@/components/ui/OTPInput'
 import Logo from '@/components/ui/Logo'
 import { useToast } from '@/components/providers/ToastProvider'
-import LivenessCapture from '@/components/LivenessCapture'
+import FaceCapture from '@/components/FaceCapture'
 import { faceDistance, isFaceMatch } from '@/lib/faceApi'
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -401,14 +401,13 @@ export default function LoginPage() {
         {step === 'face' && (
           <div className="space-y-4">
             <p className="text-center text-sm text-gray-500">
-              Extra security check — follow the prompts to verify it&apos;s you.
+              Extra security check — look at your camera and verify it&apos;s you.
             </p>
-            <LivenessCapture
+            <FaceCapture
               key={faceAttempt}
-              mode="verify"
-              onComplete={handleFaceCaptured}
+              onCaptured={handleFaceCaptured}
               onSkip={handleFaceSkip}
-              busy={faceMatching}
+              matching={faceMatching}
               error={faceError}
             />
           </div>

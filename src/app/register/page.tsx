@@ -10,7 +10,7 @@ import Logo from '@/components/ui/Logo'
 import { useToast } from '@/components/providers/ToastProvider'
 import GroupSelects, { useGroupSelections } from '@/components/GroupSelects'
 import { scanFaceFromFile, FACE_SCAN_MESSAGES } from '@/lib/faceApi'
-import LivenessCapture from '@/components/LivenessCapture'
+import FaceCapture from '@/components/FaceCapture'
 
 // ─── Password strength ─────────────────────────────────────────────────────────
 
@@ -476,28 +476,27 @@ export default function RegisterPage() {
             {faceEnabled && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Live Face Scan <span className="text-red-500">*</span>
+                  Face Scan (Camera) <span className="text-red-500">*</span>
                 </label>
                 {liveDone ? (
                   <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                    Live face verified ✓
+                    Face captured ✓ — this will be matched at login.
                   </p>
                 ) : liveSkipped ? (
                   <div className="space-y-2">
                     <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                      Live scan skipped — your uploaded photo will be used instead.
+                      Camera scan skipped — your uploaded photo will be used instead.
                     </p>
                     <button type="button" onClick={() => { setLiveSkipped(false) }}
                       className="text-sm text-[#84050C] hover:text-[#6B0409] font-medium">
-                      Try live scan again
+                      Use camera instead
                     </button>
                   </div>
                 ) : (
-                  <LivenessCapture
-                    mode="enroll"
-                    onComplete={(desc) => {
+                  <FaceCapture
+                    onCaptured={(desc) => {
                       setFaceDescriptor(desc); setLiveDone(true)
-                      setFaceStatus('ok'); setFaceMsg('Live face verified ✓')
+                      setFaceStatus('ok'); setFaceMsg('Face captured ✓')
                     }}
                     onSkip={() => setLiveSkipped(true)}
                   />

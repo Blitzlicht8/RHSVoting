@@ -111,6 +111,38 @@ export async function analyzeFace(
   }
 }
 
+export type LiveMetrics =
+  | { ok: true; ear: number; yawRatio: number }
+  | { ok: false; reason: 'no-face' | 'multiple-faces' | 'error' }
+
+/**
+ * Fast liveness metrics — landmarks ONLY, no descriptor. The recognition net is
+ * the expensive step; skipping it here lets the loop run fast enough to catch a
+ * ~200ms blink. Descriptor is captured once (via scanFace) when challenges pass.
+ */
+export async function faceLivenessMetrics(
+  input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement
+): Promise<LiveMetrics> {
+  try {
+    const api = await loadFaceModels()
+    const opts = new api.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 })
+    const results = await api.detectAllFaces(input, opts).withFaceLandmarks()
+    if (results.length === 0) return { ok: false, reason: 'no-face' }
+    if (results.length > 1) return { ok: false, reason: 'multiple-faces' }
+    const lm = results[0].landmarks
+    const ear = (eyeAspectRatio(lm.getLeftEye()) + eyeAspectRatio(lm.getRightEye())) / 2
+    const leftEye = lm.getLeftEye(); const rightEye = lm.getRightEye(); const nose = lm.getNose()
+    const cx = (pts: { x: number }[]) => pts.reduce((s, p) => s + p.x, 0) / pts.length
+    const leftX = cx(leftEye); const rightX = cx(rightEye)
+    const noseX = nose[nose.length - 1].x
+    const span = rightX - leftX
+    const yawRatio = span === 0 ? 0.5 : (noseX - leftX) / span
+    return { ok: true, ear, yawRatio }
+  } catch {
+    return { ok: false, reason: 'error' }
+  }
+}
+
 /** Load a File into an <img> element and scan it. */
 export async function scanFaceFromFile(file: File): Promise<FaceScan> {
   const url = URL.createObjectURL(file)
