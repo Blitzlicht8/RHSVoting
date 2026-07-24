@@ -35,7 +35,17 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json({ data: { enabled: false, skip: true, hasDescriptor: false, mustEnroll: false, reportPending: false, descriptor: null } })
   }
 
+  // When the feature is off (or skipped for this account) EVERYTHING is inert:
+  // no enroll prompt, no report block, no descriptor handed out.
   const active = enabled && !skip
   const mustEnroll = active && (!hasDescriptor || reverify || enroll)
-  return NextResponse.json({ data: { enabled, skip, hasDescriptor, mustEnroll, reportPending, descriptor: mustEnroll ? null : descriptor } })
+  const reportBlock = active && reportPending
+  return NextResponse.json({
+    data: {
+      enabled, skip, hasDescriptor,
+      mustEnroll,
+      reportPending: reportBlock,
+      descriptor: active && !mustEnroll ? descriptor : null,
+    },
+  })
 }

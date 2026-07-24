@@ -57,6 +57,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingPostCount, setPendingPostCount] = useState(0)
+  const [faceOn, setFaceOn] = useState(false)
 
   useEffect(() => {
     if (!loading && !user) router.push('/')
@@ -76,6 +77,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       .then(r => r.json())
       .then(res => setPendingPostCount(res.data?.total ?? (Array.isArray(res.data?.posts) ? res.data.posts.length : 0)))
       .catch(() => {})
+    fetch('/api/settings', { credentials: 'include' })
+      .then(r => r.json())
+      .then(res => setFaceOn(res.data?.enable_face_verification === 'true'))
+      .catch(() => {})
   }, [user])
 
   if (loading) {
@@ -89,7 +94,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   if (!user || !isAdminRole(user.role)) return null
 
   const visibleNav = ADMIN_NAV.filter(item =>
-    !item.roles || item.roles.includes(user.role)
+    (!item.roles || item.roles.includes(user.role)) &&
+    (item.href !== '/admin/face-verification' || faceOn)
   )
 
   const isActive = (href: string) =>

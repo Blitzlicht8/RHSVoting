@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import AdminLayout from '@/components/AdminLayout'
 import Button from '@/components/ui/Button'
 import Spinner from '@/components/ui/Spinner'
@@ -34,8 +35,17 @@ type Action = 'prompt' | 'reverify' | 'skip_on' | 'skip_off' | 'clear_report' | 
 
 export default function FaceVerificationAdminPage() {
   const { addToast } = useToast()
+  const router = useRouter()
   const [users, setUsers] = useState<FaceUser[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Feature off → the page does not exist: bounce away.
+  useEffect(() => {
+    fetch('/api/settings', { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => { if (j.data?.enable_face_verification !== 'true') router.replace('/admin/verifications') })
+      .catch(() => {})
+  }, [router])
   const [tab, setTab] = useState<Tab>('all')
   const [busyId, setBusyId] = useState<number | null>(null)
 
