@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { hasPermission } from '@/lib/permissions'
 import { logActivity } from '@/lib/logger'
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
@@ -12,6 +13,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!isAdmin(authUser.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!(await hasPermission(authUser.role, 'reviewVerificationFields'))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

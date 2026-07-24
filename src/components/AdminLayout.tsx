@@ -72,7 +72,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       .catch(() => {})
     fetch('/api/posts?status=pending', { credentials: 'include' })
       .then(r => r.json())
-      .then(res => setPendingPostCount(Array.isArray(res.data?.posts) ? res.data.posts.length : 0))
+      .then(res => setPendingPostCount(res.data?.total ?? (Array.isArray(res.data?.posts) ? res.data.posts.length : 0)))
       .catch(() => {})
   }, [user])
 

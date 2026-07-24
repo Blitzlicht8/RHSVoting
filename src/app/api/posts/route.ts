@@ -11,12 +11,14 @@ import { evaluateEligibility, getUserValueSet, EligibilityRule } from '@/lib/gro
 async function getVisibleElectionIds(userId: number, role: string): Promise<number[] | null> {
   if (isAdmin(role)) return null
 
-  const elections = await db.execute({ sql: `SELECT id, is_global FROM elections`, args: [] })
+  const elections = await db.execute({ sql: `SELECT id, is_global, visible_to_all FROM elections`, args: [] })
   const ids = new Set<number>()
 
   const scopedIds: number[] = []
   for (const e of elections.rows) {
-    if (Number(e.is_global)) ids.add(Number(e.id))
+    // Global or visible-to-all elections are visible to everyone; their posts
+    // follow the same rule (the election page itself is visible to them).
+    if (Number(e.is_global) || Number(e.visible_to_all)) ids.add(Number(e.id))
     else scopedIds.push(Number(e.id))
   }
 
@@ -130,7 +132,16 @@ export async function GET(request: NextRequest) {
   args.push(limit, offset)
 
   const result = await db.execute({ sql, args })
-  return NextResponse.json({ data: { posts: result.rows, page } })
+
+  // Admin moderation views (?status=…) need an unpaginated total so badges/counts
+  // don't cap at the page limit.
+  let total: number | undefined
+  if (visibleElectionIds === null && statusFilter && ['pending', 'approved', 'rejected'].includes(statusFilter)) {
+    const c = await db.execute({ sql: `SELECT COUNT(*) AS cnt FROM posts WHERE status = ?`, args: [statusFilter] })
+    total = Number(c.rows[0]?.cnt ?? 0)
+  }
+
+  return NextResponse.json({ data: { posts: result.rows, page, total } })
 }
 
 export async function POST(request: NextRequest) {
@@ -165,14 +176,20 @@ export async function POST(request: NextRequest) {
     isPublic = 0
   }
 
-  // Approval workflow: when require_post_approval is on, non-admin posts start
-  // pending (hidden from feed until an admin approves). Admins auto-approve.
+  // Approval workflow: non-admin posts start pending (hidden from feed until an
+  // admin approves) only when approval is required AND not auto-approving. The
+  // two settings are mutually exclusive but read both defensively. Admins always
+  // auto-approve.
   const sRow = await db.execute({
-    sql: `SELECT value FROM settings WHERE key = 'require_post_approval'`,
+    sql: `SELECT key, value FROM settings WHERE key IN ('require_post_approval', 'auto_approve_posts')`,
     args: [],
   })
-  const requireApproval = String(sRow.rows[0]?.value) === 'true'
-  const status = requireApproval && !isAdmin(authUser.role) ? 'pending' : 'approved'
+  const sMap: Record<string, string> = {}
+  for (const r of sRow.rows) sMap[r.key as string] = String(r.value)
+  const requireApproval = sMap.require_post_approval === 'true'
+  const autoApprove = sMap.auto_approve_posts === 'true'
+  const needsApproval = requireApproval && !autoApprove && !isAdmin(authUser.role)
+  const status = needsApproval ? 'pending' : 'approved'
 
   const result = await db.execute({
     sql: `INSERT INTO posts (author_id, election_id, content, is_public, status) VALUES (?,?,?,?,?) RETURNING id`,

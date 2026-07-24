@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { hasPermission } from '@/lib/permissions'
 import { logActivity } from '@/lib/logger'
 import { Role } from '@/types'
 
@@ -11,6 +12,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const authUser = await getAuthUser()
   if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!isAdmin(authUser.role as Role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!(await hasPermission(authUser.role as Role, 'managePostApproval'))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const postId = parseInt(params.id)
   const body = await request.json()
   const status = String(body.status)

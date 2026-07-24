@@ -61,10 +61,28 @@ export async function PATCH(request: NextRequest) {
   const prevRow = await db.execute({ sql: 'SELECT value FROM settings WHERE key = ?', args: [key] })
   const prevValue = prevRow.rows[0]?.value as string | undefined
 
-  await db.execute({
-    sql: 'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
-    args: [key, String(value)],
-  })
+  // require_post_approval and auto_approve_posts are mutually exclusive. Enforce
+  // it server-side so the client's non-atomic sequential PATCHes can never leave
+  // both 'true' in the DB: setting one to 'true' forces the other to 'false'.
+  const POST_APPROVAL_PAIR: Partial<Record<SettingKey, SettingKey>> = {
+    require_post_approval: 'auto_approve_posts',
+    auto_approve_posts: 'require_post_approval',
+  }
+  const counterpart = POST_APPROVAL_PAIR[key as SettingKey]
+  if (counterpart && String(value) === 'true') {
+    await db.batch(
+      [
+        { sql: 'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', args: [key, 'true'] },
+        { sql: 'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', args: [counterpart, 'false'] },
+      ],
+      'write'
+    )
+  } else {
+    await db.execute({
+      sql: 'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+      args: [key, String(value)],
+    })
+  }
 
   if (prevValue !== String(value)) {
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
