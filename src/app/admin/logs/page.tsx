@@ -75,6 +75,59 @@ const ACTION_BADGE: Record<string, { label: string; className: string }> = {
     label: 'Academic Removed',
     className: 'bg-yellow-100 text-yellow-700 border border-yellow-200',
   },
+  // Session 8 — new event types
+  group_structure_created: {
+    label: 'Group Structure Created',
+    className: 'bg-indigo-100 text-indigo-700 border border-indigo-200',
+  },
+  group_structure_deleted: {
+    label: 'Group Structure Removed',
+    className: 'bg-rose-100 text-rose-700 border border-rose-200',
+  },
+  group_value_created: {
+    label: 'Group Value Created',
+    className: 'bg-indigo-100 text-indigo-700 border border-indigo-200',
+  },
+  group_value_deleted: {
+    label: 'Group Value Removed',
+    className: 'bg-rose-100 text-rose-700 border border-rose-200',
+  },
+  verification_submitted: {
+    label: 'Verification Submitted',
+    className: 'bg-blue-100 text-blue-700 border border-blue-200',
+  },
+  verification_reverified: {
+    label: 'Reverification Submitted',
+    className: 'bg-sky-100 text-sky-700 border border-sky-200',
+  },
+  verification_approved: {
+    label: 'Verification Approved',
+    className: 'bg-green-100 text-green-700 border border-green-200',
+  },
+  verification_rejected: {
+    label: 'Verification Denied',
+    className: 'bg-red-100 text-red-700 border border-red-200',
+  },
+  election_visibility_changed: {
+    label: 'Election Visibility Changed',
+    className: 'bg-violet-100 text-violet-700 border border-violet-200',
+  },
+  user_timeout: {
+    label: 'User Timed Out',
+    className: 'bg-orange-100 text-orange-700 border border-orange-200',
+  },
+  post_approved: {
+    label: 'Post Approved',
+    className: 'bg-green-100 text-green-700 border border-green-200',
+  },
+  post_rejected: {
+    label: 'Post Rejected',
+    className: 'bg-red-100 text-red-700 border border-red-200',
+  },
+  settings_changed: {
+    label: 'Settings Changed',
+    className: 'bg-purple-100 text-purple-700 border border-purple-200',
+  },
 }
 
 function ActionBadge({ action }: { action: string }) {

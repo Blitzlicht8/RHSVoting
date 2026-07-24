@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 
 const ALLOWED_KEYS = [
   'auto_verify_id',
@@ -57,10 +58,18 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Only master_admin can change structural settings' }, { status: 403 })
   }
 
+  const prevRow = await db.execute({ sql: 'SELECT value FROM settings WHERE key = ?', args: [key] })
+  const prevValue = prevRow.rows[0]?.value as string | undefined
+
   await db.execute({
     sql: 'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
     args: [key, String(value)],
   })
+
+  if (prevValue !== String(value)) {
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+    await logActivity(authUser.id as number, 'settings_changed', `Changed "${key}" from "${prevValue ?? '(unset)'}" to "${String(value)}"`, ip)
+  }
 
   return NextResponse.json({ message: 'Setting updated', data: { key, value: String(value) } })
 }
