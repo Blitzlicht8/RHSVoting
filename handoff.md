@@ -45,6 +45,10 @@ Baseline vs after measured via `npm run build` route sizes. Live network timing 
 
 **Part 2 (Turso → Supabase Postgres) NOT DONE — deferred to `feat/supabase-migration`.** `.env.local` already has Supabase + Postgres vars pulled from Vercel production. Turso still live.
 
+**Supabase MCP connected.** Project-scoped `.mcp.json` (committed) adds an HTTP MCP server `supabase` (project `ulnxmakclnwbjdhutjci`; features: docs/account/database/debugging/development/functions/branching/storage). Auth is per-user OAuth — each dev runs `/mcp` in an interactive terminal, selects `supabase`, Authenticate (see `context.md` → MCP Servers). Useful for Part 2. Optional: `npx skills add supabase/agent-skills`.
+
+**Merge note:** perf pass was rebased onto the latest `origin/master` (which gained PR #10 face fixes after this session started) and pushed as `7b7a46c`. QA re-run green on the combined tree.
+
 ---
 
 ### (historical) Prev version header

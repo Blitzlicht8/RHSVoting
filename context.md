@@ -72,6 +72,29 @@ NEXT_PUBLIC_APP_URL=
 
 Lives in `.env.local`. Never commit this file.
 
+Supabase/Postgres vars are also present in Vercel (production env) for the planned
+Turso → Supabase migration (Session 11 Part 2): `POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`,
+`POSTGRES_PRISMA_URL`, `POSTGRES_HOST/USER/PASSWORD/DATABASE`, `SUPABASE_URL`,
+`SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+Pull locally with `npx vercel env pull .env.local --environment=production`. Turso is
+still the live DB — do NOT remove Turso vars until Supabase is confirmed in production.
+
+---
+
+## MCP Servers
+
+Project-scoped MCP config lives in `.mcp.json` (committed, shared across sessions).
+
+| Server | Transport | Purpose |
+|---|---|---|
+| `supabase` | HTTP | Supabase project `ulnxmakclnwbjdhutjci` — docs, database, debugging, dev, functions, branching, storage. For the planned Postgres migration. |
+
+**Auth is per-user (OAuth), not stored in the repo.** Each developer must authenticate once:
+run `/mcp` in an interactive `claude` terminal (NOT an IDE extension), select `supabase`,
+then Authenticate. Until then the server shows as unauthenticated and its tools are unavailable.
+
+Optional Supabase agent skills: `npx skills add supabase/agent-skills`.
+
 ---
 
 ## Roles
