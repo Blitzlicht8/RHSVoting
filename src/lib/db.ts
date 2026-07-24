@@ -135,11 +135,16 @@ export function parsePgUrl(url: string): {
 let _pool: Pool | null = null
 function getPool(): Pool {
   if (!_pool) {
+    // APP_DATABASE_URL first: a dedicated var we control. The Supabase↔Vercel
+    // integration manages/overwrites POSTGRES_URL (direct connection, user
+    // "postgres") and can carry a stale password — set APP_DATABASE_URL to the
+    // Session-pooler URL (user "postgres.<ref>", port 5432) to bypass that.
     const url =
+      process.env.APP_DATABASE_URL ||
       process.env.POSTGRES_URL ||
       process.env.POSTGRES_URL_NON_POOLING ||
       process.env.DATABASE_URL
-    if (!url) throw new Error('POSTGRES_URL is not set')
+    if (!url) throw new Error('APP_DATABASE_URL / POSTGRES_URL is not set')
     const cfg = parsePgUrl(url)
     _pool = new Pool({ ...cfg, ssl: { rejectUnauthorized: false }, max: 5 })
   }
