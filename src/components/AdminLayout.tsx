@@ -19,6 +19,7 @@ import {
   Shield,
   LogOut,
   MessageSquare,
+  ScanFace,
 } from 'lucide-react'
 
 interface AdminNavItem {
@@ -31,6 +32,7 @@ interface AdminNavItem {
 const ADMIN_NAV: AdminNavItem[] = [
   { href: '/admin/verifications', label: 'Verifications', icon: <ShieldCheck className="w-5 h-5" /> },
   { href: '/admin/users', label: 'Members', icon: <Users className="w-5 h-5" /> },
+  { href: '/admin/face-verification', label: 'Face Verification', icon: <ScanFace className="w-5 h-5" />, roles: ['master_admin', 'admin'] },
   { href: '/admin/academic', label: 'Group Structure', icon: <BookOpen className="w-5 h-5" /> },
   { href: '/admin/elections', label: 'Manage Elections', icon: <ListChecks className="w-5 h-5" /> },
   { href: '/admin/posts', label: "Post Approvals", icon: <MessageSquare className="w-5 h-5" /> },
@@ -55,6 +57,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [pendingCount, setPendingCount] = useState(0)
   const [pendingPostCount, setPendingPostCount] = useState(0)
+  const [faceOn, setFaceOn] = useState(false)
 
   useEffect(() => {
     if (!loading && !user) router.push('/')
@@ -74,6 +77,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       .then(r => r.json())
       .then(res => setPendingPostCount(res.data?.total ?? (Array.isArray(res.data?.posts) ? res.data.posts.length : 0)))
       .catch(() => {})
+    fetch('/api/settings', { credentials: 'include' })
+      .then(r => r.json())
+      .then(res => setFaceOn(res.data?.enable_face_verification === 'true'))
+      .catch(() => {})
   }, [user])
 
   if (loading) {
@@ -87,7 +94,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   if (!user || !isAdminRole(user.role)) return null
 
   const visibleNav = ADMIN_NAV.filter(item =>
-    !item.roles || item.roles.includes(user.role)
+    (!item.roles || item.roles.includes(user.role)) &&
+    (item.href !== '/admin/face-verification' || faceOn)
   )
 
   const isActive = (href: string) =>

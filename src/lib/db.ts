@@ -405,6 +405,8 @@ async function _init(): Promise<void> {
   // Session 7: post approval toggles (mutually exclusive). require_post_approval on => new posts pending.
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('require_post_approval', 'false')`, args: [] })
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_approve_posts', 'true')`, args: [] })
+  // Session 10 (experimental): client-side face verification, OFF by default until tested
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_face_verification', 'false')`, args: [] })
   // Normalize legacy '1'/'0' values to 'true'/'false'
   await db.execute({ sql: `UPDATE settings SET value = ? WHERE key = ? AND value = ?`, args: ['true', 'otp_required_login', '1'] })
   await db.execute({ sql: `UPDATE settings SET value = ? WHERE key = ? AND value = ?`, args: ['false', 'auto_verify_id', '0'] })
@@ -496,6 +498,15 @@ async function _init(): Promise<void> {
     `ALTER TABLE users ADD COLUMN timeout_until TEXT`,
     // Session 7: post approval workflow — status = approved|pending|rejected
     `ALTER TABLE posts ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`,
+    // Session 10 (experimental): client-side face verification — stored 128-float descriptor (JSON array)
+    `ALTER TABLE users ADD COLUMN face_descriptor TEXT`,
+    `ALTER TABLE verification_requests ADD COLUMN face_descriptor TEXT`,
+    // Session 10b: admin face-verification controls + report flow
+    `ALTER TABLE users ADD COLUMN face_skip INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN face_reverify_required INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN face_enroll_required INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN face_report_pending INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN face_reported_at TEXT`,
   ]
   for (const sql of newColumns) {
     await db.execute({ sql, args: [] }).catch(() => {})

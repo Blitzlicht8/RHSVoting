@@ -15,6 +15,7 @@ const ALLOWED_KEYS = [
   'org_type',
   'require_post_approval',
   'auto_approve_posts',
+  'enable_face_verification',
 ] as const
 type SettingKey = (typeof ALLOWED_KEYS)[number]
 

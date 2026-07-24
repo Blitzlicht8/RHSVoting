@@ -233,6 +233,24 @@ export async function POST(request: NextRequest) {
     profilePhotoUrl = pblob.url
   }
 
+  // ── Session 10 (experimental): client-computed face descriptor ──
+  // 128-float embedding produced in the browser by face-api.js. The server does
+  // NOT run face detection — it only stores what the client sent. Optional: only
+  // present when the enable_face_verification setting is on. Carried forward when
+  // the photo is locked (descriptor derives from the photo).
+  let faceDescriptor: string | null = null
+  if (!photoLocked) {
+    const rawDesc = formData.get('face_descriptor')
+    if (rawDesc != null) {
+      try {
+        const parsed = JSON.parse(String(rawDesc))
+        if (Array.isArray(parsed) && parsed.length === 128 && parsed.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+          faceDescriptor = JSON.stringify(parsed)
+        }
+      } catch {}
+    }
+  }
+
   const rawFiles = formData.getAll('file') as File[]
 
   if (rawFiles.length > MAX_FILES) {
@@ -279,9 +297,9 @@ export async function POST(request: NextRequest) {
 
   const insertResult = await db.execute({
     sql: `INSERT INTO verification_requests
-            (user_id, image_path, status, doc_type, lrn, profile_photo_url, denied_fields, created_at, updated_at)
-          VALUES (?, ?, 'pending', ?, ?, ?, NULL, datetime('now'), datetime('now'))`,
-    args: [authUser.id, primaryUrl, doc_type, lrn, profilePhotoUrl],
+            (user_id, image_path, status, doc_type, lrn, profile_photo_url, face_descriptor, denied_fields, created_at, updated_at)
+          VALUES (?, ?, 'pending', ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))`,
+    args: [authUser.id, primaryUrl, doc_type, lrn, profilePhotoUrl, faceDescriptor],
   })
 
   const verificationRequestId = Number(insertResult.lastInsertRowid)
@@ -305,10 +323,11 @@ export async function POST(request: NextRequest) {
     sql: `UPDATE users SET
             lrn = ?,
             avatar_url = COALESCE(?, avatar_url),
+            face_descriptor = COALESCE(?, face_descriptor),
             verification_status = 'pending',
             updated_at = datetime('now')
           WHERE id = ?`,
-    args: [lrn, profilePhotoUrl, authUser.id],
+    args: [lrn, profilePhotoUrl, faceDescriptor, authUser.id],
   })
 
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'

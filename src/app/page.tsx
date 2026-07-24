@@ -9,10 +9,13 @@ import Input from '@/components/ui/Input'
 import OTPInput from '@/components/ui/OTPInput'
 import Logo from '@/components/ui/Logo'
 import { useToast } from '@/components/providers/ToastProvider'
+import FaceCapture from '@/components/FaceCapture'
+import LivenessCapture from '@/components/LivenessCapture'
+import { faceDistance, isFaceMatch } from '@/lib/faceApi'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-type Step = 'creds' | 'otp'
+type Step = 'creds' | 'otp' | 'face'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -33,6 +36,16 @@ export default function LoginPage() {
 
   // Shared
   const [loading, setLoading] = useState(false)
+
+  // Face verification (experimental, additive factor after credential auth)
+  const [storedDescriptor, setStoredDescriptor] = useState<number[] | null>(null)
+  const [pendingRedirect, setPendingRedirect] = useState('/dashboard')
+  const [faceError, setFaceError] = useState<string | null>(null)
+  const [faceMatching, setFaceMatching] = useState(false)
+  const [faceAttempt, setFaceAttempt] = useState(0)
+  const [faceMode, setFaceMode] = useState<'enroll' | 'verify' | 'blocked'>('verify')
+  const [faceFails, setFaceFails] = useState(0)
+  const MAX_FACE_FAILS = 3
 
   // Countdown for resend
   const [countdown, setCountdown] = useState(0)
@@ -64,6 +77,81 @@ export default function LoginPage() {
       if (countdownRef.current) clearInterval(countdownRef.current)
     }
   }, [countdown])
+
+  // ── Post-auth: face verification gate ────────────────────────────────────────
+  // Credentials (and OTP) already succeeded. Query the server for this account's
+  // face state and branch: enroll (register face), verify (match), or blocked.
+  const finishLogin = async (redirect: string) => {
+    setPendingRedirect(redirect)
+    try {
+      const res = await fetch('/api/face/status', { credentials: 'include' })
+      const d = (await res.json())?.data
+      if (d && d.enabled && !d.skip) {
+        if (d.reportPending) { setFaceMode('blocked'); setStep('face'); return }
+        if (d.mustEnroll) { setFaceMode('enroll'); setStep('face'); return }
+        if (Array.isArray(d.descriptor) && d.descriptor.length === 128) {
+          setStoredDescriptor(d.descriptor); setFaceMode('verify'); setStep('face'); return
+        }
+      }
+    } catch {}
+    window.location.href = redirect
+  }
+
+  const recordFace = async (payload: { matched?: boolean; distance?: number }) => {
+    try {
+      await fetch('/api/auth/face-verify', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+    } catch {}
+  }
+
+  // Enrollment (register-face-at-login) — store descriptor, then continue.
+  const handleEnrollComplete = async (descriptor: number[]) => {
+    setFaceMatching(true)
+    try {
+      const res = await fetch('/api/face/enroll', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descriptor }),
+      })
+      if (!res.ok) { addToast('Could not save your face. Try again.', 'error'); setFaceMatching(false); setFaceAttempt((n) => n + 1); return }
+      addToast('Face registered.', 'success')
+      window.location.href = pendingRedirect
+    } catch {
+      addToast('Network error.', 'error'); setFaceMatching(false); setFaceAttempt((n) => n + 1)
+    }
+  }
+
+  // Verify — compare live capture to the stored descriptor.
+  const handleFaceCaptured = async (descriptor: number[]) => {
+    if (!storedDescriptor) return
+    setFaceMatching(true); setFaceError(null)
+    const dist = faceDistance(descriptor, storedDescriptor)
+    const matched = isFaceMatch(descriptor, storedDescriptor)
+    await recordFace({ matched, distance: dist })
+    setFaceMatching(false)
+    if (matched) {
+      addToast('Face verified.', 'success')
+      window.location.href = pendingRedirect
+    } else {
+      const fails = faceFails + 1
+      setFaceFails(fails)
+      setFaceError(`That doesn't match your registered face (${fails}/${MAX_FACE_FAILS}). Try again.`)
+      setFaceAttempt((n) => n + 1)
+    }
+  }
+
+  const handleReport = async () => {
+    try { await fetch('/api/face/report', { method: 'POST', credentials: 'include' }) } catch {}
+    setFaceMode('blocked')
+  }
+
+  const signOut = async () => {
+    try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }) } catch {}
+    window.location.href = '/'
+  }
 
   // ── Step 1: login ──────────────────────────────────────────────────────────
 
@@ -99,12 +187,12 @@ export default function LoginPage() {
       }
 
       if (json.data?.redirectTo) {
-        window.location.href = json.data.redirectTo
+        await finishLogin(json.data.redirectTo)
         return
       }
 
       // Fully authenticated (fallback)
-      window.location.href = '/dashboard'
+      await finishLogin('/dashboard')
     } catch {
       addToast('Network error. Please check your connection.', 'error')
     } finally {
@@ -142,7 +230,7 @@ export default function LoginPage() {
         return
       }
 
-      window.location.href = '/dashboard'
+      await finishLogin('/dashboard')
     } catch {
       addToast('Network error. Please check your connection.', 'error')
     } finally {
@@ -183,7 +271,7 @@ export default function LoginPage() {
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900">Rizal High School Elections</h1>
             <p className="text-sm text-gray-500 mt-1">
-              {step === 'creds' ? 'Sign in to your account' : 'Two-factor authentication'}
+              {step === 'creds' ? 'Sign in to your account' : step === 'face' ? 'Face verification' : 'Two-factor authentication'}
             </p>
           </div>
         </div>
@@ -324,6 +412,50 @@ export default function LoginPage() {
               Verify code
             </Button>
           </form>
+        )}
+
+        {/* ── Step 3: Face verification (experimental, additive) ── */}
+        {step === 'face' && (
+          <div className="space-y-4">
+            {faceMode === 'blocked' ? (
+              <div className="text-center space-y-4">
+                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                  Your face verification problem has been reported. An admin must review your account before you can sign in.
+                </p>
+                <Button variant="secondary" size="lg" onClick={signOut} className="w-full">Back to sign in</Button>
+              </div>
+            ) : faceMode === 'enroll' ? (
+              <>
+                <p className="text-center text-sm text-gray-500">
+                  Register your face — follow the prompts. This is required for your account.
+                </p>
+                <LivenessCapture key={faceAttempt} onComplete={handleEnrollComplete} />
+              </>
+            ) : (
+              <>
+                <p className="text-center text-sm text-gray-500">
+                  Extra security check — look at your camera and verify it&apos;s you.
+                </p>
+                <FaceCapture
+                  key={faceAttempt}
+                  onCaptured={handleFaceCaptured}
+                  matching={faceMatching}
+                  error={faceError}
+                />
+                {faceFails >= MAX_FACE_FAILS && (
+                  <div className="space-y-2 text-center">
+                    <p className="text-sm text-gray-600">Still not working?</p>
+                    <Button variant="secondary" size="lg" onClick={handleReport} className="w-full">
+                      Report a problem to admins
+                    </Button>
+                  </div>
+                )}
+                <button type="button" onClick={signOut} className="w-full text-sm text-gray-500 hover:text-gray-700">
+                  Cancel and sign out
+                </button>
+              </>
+            )}
+          </div>
         )}
       </div>
     </main>

@@ -2,13 +2,13 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { Mail, User, Eye, EyeOff } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 import Logo from '@/components/ui/Logo'
 import { useToast } from '@/components/providers/ToastProvider'
 import GroupSelects, { useGroupSelections } from '@/components/GroupSelects'
+import { scanFaceFromFile, FACE_SCAN_MESSAGES } from '@/lib/faceApi'
 
 // ─── Password strength ─────────────────────────────────────────────────────────
 
@@ -88,7 +88,6 @@ const MAX_FILES = 3
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function RegisterPage() {
-  const router = useRouter()
   const { addToast } = useToast()
 
   const [step, setStep] = useState<Step>('credentials')
@@ -113,6 +112,9 @@ export default function RegisterPage() {
   const [docTypeOptions, setDocTypeOptions] = useState<string[]>([])
   const [docType, setDocType] = useState('')
   const docsRequired = docTypeOptions.length > 0
+  const [faceEnabled, setFaceEnabled] = useState(false)
+  const [faceStatus, setFaceStatus] = useState<'idle' | 'scanning' | 'ok' | 'fail'>('idle')
+  const [faceMsg, setFaceMsg] = useState<string | null>(null)
 
   const [lrn, setLrn] = useState('')
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null)
@@ -137,10 +139,11 @@ export default function RegisterPage() {
   // Load settings (doc types) when reaching profile step.
   useEffect(() => {
     if (step !== 'profile') return
-    fetch('/api/settings')
+    fetch('/api/settings', { credentials: 'include' })
       .then(r => r.json())
       .then(j => {
         const s = j.data ?? {}
+        setFaceEnabled(s.enable_face_verification === 'true')
         if (s.doc_type_labels) {
           try {
             const arr = JSON.parse(s.doc_type_labels)
@@ -236,6 +239,17 @@ export default function RegisterPage() {
     if (f.size > MAX_FILE_SIZE_BYTES) { setFormError('Profile photo exceeds the 5 MB limit.'); return }
     setProfilePhoto(f)
     setProfilePreview(URL.createObjectURL(f))
+    // Photo face-check runs only when camera face-login is OFF. When it's ON the
+    // face is registered via the camera gate after submit; the photo isn't scanned.
+    if (!faceEnabled) {
+      setFaceStatus('scanning'); setFaceMsg('Checking for a face…')
+      scanFaceFromFile(f).then(scan => {
+        if (scan.ok) { setFaceStatus('ok'); setFaceMsg('Face detected ✓') }
+        else { setFaceStatus('fail'); setFaceMsg(FACE_SCAN_MESSAGES[scan.reason]) }
+      })
+    } else {
+      setFaceStatus('idle'); setFaceMsg(null)
+    }
   }
 
   const addFiles = (incoming: File[]) => {
@@ -264,6 +278,21 @@ export default function RegisterPage() {
     if (!profilePhoto) { setFormError('Please upload a profile photo of your face.'); return }
     if (docsRequired && files.length === 0) { setFormError('Please attach at least one document.'); return }
 
+    // Session 10 (experimental): client-side face check on the profile photo.
+    // Descriptor was computed on photo-select (faceStatus). Re-scan here only if
+    // it's still pending (e.g. slow model load).
+    // Camera face-login OFF: the profile photo must pass a face check here.
+    // ON: face is registered once via the app-wide gate right after landing
+    // (single prompt), so nothing to do at submit.
+    if (!faceEnabled) {
+      if (faceStatus !== 'ok') {
+        setFaceStatus('scanning'); setFaceMsg('Checking for a face…')
+        const scan = await scanFaceFromFile(profilePhoto)
+        if (!scan.ok) { setFaceStatus('fail'); setFaceMsg(FACE_SCAN_MESSAGES[scan.reason]); setFormError(FACE_SCAN_MESSAGES[scan.reason]); return }
+        setFaceStatus('ok'); setFaceMsg('Face detected ✓')
+      }
+    }
+
     const formData = new FormData()
     formData.append('assignments', JSON.stringify(assignments))
     formData.append('lrn', lrn.trim())
@@ -277,7 +306,9 @@ export default function RegisterPage() {
       const json = await res.json()
       if (!res.ok) { addToast(json.error ?? 'Submission failed.', 'error'); return }
       addToast('Account created and submitted for verification.', 'success')
-      router.push('/dashboard')
+      // Hard navigation so AuthProvider remounts and re-fetches the now-authed
+      // session (client-side router.push keeps the stale null user → stuck spinner).
+      window.location.href = '/dashboard'
     } catch {
       addToast('Network error during submission.', 'error')
     } finally {
@@ -422,7 +453,22 @@ export default function RegisterPage() {
                   <p className="text-xs text-gray-400 mt-1">Clear photo of your face. JPEG/PNG/WebP, max 5 MB.</p>
                 </div>
               </div>
+              {!faceEnabled && faceMsg && (
+                <p className={`mt-2 text-xs font-medium ${
+                  faceStatus === 'ok' ? 'text-green-700'
+                  : faceStatus === 'fail' ? 'text-amber-700'
+                  : 'text-gray-500'
+                }`}>
+                  {faceStatus === 'scanning' && '⏳ '}{faceMsg}
+                </p>
+              )}
             </div>
+
+            {faceEnabled && (
+              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                After you finish, you&apos;ll be asked to register your face with your camera — this is used to verify you at login.
+              </p>
+            )}
 
             {/* LRN */}
             <div>

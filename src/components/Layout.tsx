@@ -9,6 +9,7 @@ import Navbar from '@/components/Navbar'
 import Spinner from '@/components/ui/Spinner'
 import BottomNav from '@/components/BottomNav'
 import { useToast } from '@/components/providers/ToastProvider'
+import FaceGate from '@/components/FaceGate'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -51,6 +52,7 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   return (
+    <FaceGate>
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
@@ -133,5 +135,6 @@ export default function Layout({ children }: LayoutProps) {
       </div>
       <BottomNav onOpenSidebar={() => setSidebarOpen(true)} />
     </div>
+    </FaceGate>
   )
 }

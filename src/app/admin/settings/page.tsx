@@ -21,10 +21,11 @@ interface SettingsDraft {
   otp_required_login: string
   require_post_approval: string // 'true' | 'false' — mutually exclusive with auto_approve_posts
   auto_approve_posts: string    // 'true' | 'false'
+  enable_face_verification: string // 'true' | 'false' — experimental client-side face check
 }
 const DRAFT_KEYS: (keyof SettingsDraft)[] = [
   'app_name', 'org_type', 'doc_type_labels', 'auto_verify_id', 'otp_required_login',
-  'require_post_approval', 'auto_approve_posts',
+  'require_post_approval', 'auto_approve_posts', 'enable_face_verification',
 ]
 function draftFromSettings(s: Record<string, string>): SettingsDraft {
   return {
@@ -35,6 +36,7 @@ function draftFromSettings(s: Record<string, string>): SettingsDraft {
     otp_required_login: s.otp_required_login ?? 'false',
     require_post_approval: s.require_post_approval ?? 'false',
     auto_approve_posts: s.auto_approve_posts ?? 'true',
+    enable_face_verification: s.enable_face_verification ?? 'false',
   }
 }
 
@@ -743,6 +745,12 @@ export default function SettingsPage() {
                   description="Users receive an OTP email each time they sign in. Adds an extra layer of security."
                   isOn={otpRequiredOn}
                   onToggle={() => toggleDraft('otp_required_login')}
+                />
+                <ToggleRow
+                  label="Face Verification (Experimental)"
+                  description="Runs a client-side face check on the registration photo and a webcam match at login. All face processing stays in the browser — no face data is sent to the server. Additive to password + OTP; falls back gracefully if no camera. Off by default."
+                  isOn={draft.enable_face_verification === 'true'}
+                  onToggle={() => toggleDraft('enable_face_verification')}
                 />
               </SectionCard>
 
