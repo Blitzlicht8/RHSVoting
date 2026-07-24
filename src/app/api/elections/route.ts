@@ -79,14 +79,19 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Distinct structure ids each election's include rules reference (for the filter).
-  const structureIdsFor = (eid: number): number[] => {
+  // Distinct structure + value ids each election's include rules reference (for
+  // the filter). structure_ids covers structure-wide scopes ("all of X");
+  // value_ids covers specific values (e.g. a single Strand or Section).
+  const scopeIdsFor = (eid: number): { structure_ids: number[]; value_ids: number[] } => {
     const rules = rulesByElection.get(eid) ?? []
-    const ids = new Set<number>()
+    const structIds = new Set<number>()
+    const valIds = new Set<number>()
     for (const r of rules) {
-      if (!Number(r.is_exclude) && r.structure_id != null) ids.add(Number(r.structure_id))
+      if (Number(r.is_exclude)) continue
+      if (r.structure_id != null) structIds.add(Number(r.structure_id))
+      if (r.value_id != null) valIds.add(Number(r.value_id))
     }
-    return Array.from(ids)
+    return { structure_ids: Array.from(structIds), value_ids: Array.from(valIds) }
   }
 
   const valueSet = admin ? null : await getUserValueSet(voterIdArg)
@@ -95,7 +100,7 @@ export async function GET(request: NextRequest) {
     .map((e): Record<string, unknown> => {
       const eid = Number(e.id)
       const eligible = admin || !!e.is_global || evaluateEligibility(rulesByElection.get(eid) ?? [], valueSet!)
-      return { ...e, eligible: eligible ? 1 : 0, structure_ids: structureIdsFor(eid) }
+      return { ...e, eligible: eligible ? 1 : 0, ...scopeIdsFor(eid) }
     })
     // Non-admins only see an election if they are eligible OR it is marked
     // visible to non-eligible groups (read-only). Admins see everything.
