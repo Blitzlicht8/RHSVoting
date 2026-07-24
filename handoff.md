@@ -8,7 +8,9 @@
 2026-07-24
 
 ## Version After This Session
-`1.4.2` — FIX: election filter is now a "Filter" popover button (funnel icon) with expandable per-structure categories (accordion) instead of a native select. Leveled values grouped under parent context header + parent-prefixed selected label (e.g. "STEM · A") so repeated child names (Section A/B/C) read clearly. Active filter shown as chip with clear (×).
+`1.4.3` — FIX: election filter is now multi-select (checkboxes, OR semantics across chosen scopes). Button shows count badge + Clear. `groupFilters: Set<'v:id'|'s:id'>`; popover stays open on toggle.
+
+Prev: `1.4.2` — FIX: election filter is now a "Filter" popover button (funnel icon) with expandable per-structure categories (accordion) instead of a native select. Leveled values grouped under parent context header + parent-prefixed selected label (e.g. "STEM · A") so repeated child names (Section A/B/C) read clearly. Active filter shown as chip with clear (×).
 
 Prev: `1.4.1` — FIX: election group filter now drills into group *values* (optgroups per structure), not just structure names. List API returns `value_ids` per election; filter matches `v:<valueId>` or structure-wide `s:<structureId>`.
 
