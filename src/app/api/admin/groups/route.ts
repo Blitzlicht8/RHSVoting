@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
-import { getStructures, getStructureTree } from '@/lib/groups'
+import { getStructures, getStructureTree, invalidateGroupsCache } from '@/lib/groups'
 
 function requireWrite(role: string) {
   return ['master_admin', 'admin'].includes(role)
@@ -62,5 +62,6 @@ export async function POST(request: NextRequest) {
 
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
   await logActivity(authUser.id, 'group_structure_created', `Created group structure: ${name.trim()}`, ip)
+  invalidateGroupsCache()
   return NextResponse.json({ data: result.rows[0] }, { status: 201 })
 }

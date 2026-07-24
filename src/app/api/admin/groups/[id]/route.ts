@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
+import { invalidateGroupsCache } from '@/lib/groups'
 import type { InValue } from '@libsql/client'
 
 function requireWrite(role: string) {
@@ -51,6 +52,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     args,
   })
   if (!result.rows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  invalidateGroupsCache()
   return NextResponse.json({ data: result.rows[0] })
 }
 
@@ -96,5 +98,6 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
   await logActivity(authUser.id, 'group_structure_deleted', `Deleted group structure ${id}`, ip)
+  invalidateGroupsCache()
   return NextResponse.json({ message: 'Deleted' })
 }

@@ -145,20 +145,22 @@ export default function DashboardPage() {
     if (!user) return
     const fetchData = async () => {
       try {
-        const electionsRes = await fetch('/api/elections')
-        const electionsJson = await electionsRes.json()
-        const rawElections: Election[] = electionsJson.data?.elections ?? []
+        // Fire elections + (admin stats) concurrently — they're independent.
+        const electionsP = fetch('/api/elections').then((r) => r.json())
+        const adminP = isAdmin
+          ? Promise.all([
+              fetch('/api/users?limit=1').then((r) => r.json()),
+              fetch('/api/verifications?status=pending&limit=1').then((r) => r.json()),
+            ])
+          : null
 
+        const electionsJson = await electionsP
+        const rawElections: Election[] = electionsJson.data?.elections ?? []
         // hasVoted is returned directly from the elections API (no N+1 per-election fetch)
         setElections(rawElections.map((e) => ({ ...e, hasVoted: !!e.hasVoted })))
 
-        if (isAdmin) {
-          const [usersRes, verificationsRes] = await Promise.all([
-            fetch('/api/users?limit=1'),
-            fetch('/api/verifications?status=pending&limit=1'),
-          ])
-          const usersJson = await usersRes.json()
-          const verificationsJson = await verificationsRes.json()
+        if (adminP) {
+          const [usersJson, verificationsJson] = await adminP
           setTotalUsers(usersJson.data?.total ?? 0)
           setPendingVerifications(verificationsJson.data?.total ?? 0)
         }

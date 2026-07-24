@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
+import { cached, invalidate, CACHE_KEYS, CONFIG_TTL } from '@/lib/cache'
 
 const ALLOWED_KEYS = [
   'auto_verify_id',
@@ -27,11 +28,13 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const result = await db.execute({ sql: 'SELECT key, value FROM settings', args: [] })
-  const settings: Record<string, string> = {}
-  for (const row of result.rows) {
-    settings[row.key as string] = row.value as string
-  }
+  // Global (same for every user), rarely changes → cache with short TTL.
+  const settings = await cached(CACHE_KEYS.settings, CONFIG_TTL, async () => {
+    const result = await db.execute({ sql: 'SELECT key, value FROM settings', args: [] })
+    const out: Record<string, string> = {}
+    for (const row of result.rows) out[row.key as string] = row.value as string
+    return out
+  })
 
   return NextResponse.json({ data: settings })
 }
@@ -84,6 +87,8 @@ export async function PATCH(request: NextRequest) {
       args: [key, String(value)],
     })
   }
+
+  invalidate(CACHE_KEYS.settings)
 
   if (prevValue !== String(value)) {
     const ip = request.headers.get('x-forwarded-for') ?? 'unknown'

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
+import { invalidateGroupsCache } from '@/lib/groups'
 import type { InValue } from '@libsql/client'
 
 function requireWrite(role: string) {
@@ -66,5 +67,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
   await logActivity(authUser.id, 'group_value_created', `Created group value: ${name.trim()}`, ip)
+  invalidateGroupsCache()
   return NextResponse.json({ data: result.rows[0] }, { status: 201 })
 }

@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { invalidate, CACHE_KEYS } from '@/lib/cache'
 
 async function checkAdmin() {
   const auth = await getAuthUser()
@@ -30,6 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (updates.length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
   args.push(id)
   await db.execute({ sql: `UPDATE roles SET ${updates.join(',')} WHERE id=?`, args })
+  invalidate(CACHE_KEYS.rolesList)
   return NextResponse.json({ message: 'Updated' })
 }
 
@@ -46,5 +48,6 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
   const users = await db.execute({ sql: `SELECT COUNT(*) as c FROM users WHERE role_id=?`, args: [id] })
   if (Number((users.rows[0] as any)?.c) > 0) return NextResponse.json({ error: 'Role has assigned members' }, { status: 400 })
   await db.execute({ sql: `DELETE FROM roles WHERE id=?`, args: [id] })
+  invalidate(CACHE_KEYS.rolesList)
   return NextResponse.json({ message: 'Deleted' })
 }

@@ -2,6 +2,12 @@
 // Structures are levels (parent_structure_id set) or standalone (null).
 // Values are the selectable options; their tree is defined by parent_value_id.
 import { db } from './db'
+import { invalidate, CACHE_KEYS } from './cache'
+
+/** Call after any write to group_structures / group_values so /api/groups refreshes. */
+export function invalidateGroupsCache(): void {
+  invalidate(CACHE_KEYS.groupsTree)
+}
 
 export interface GroupStructure {
   id: number
