@@ -298,7 +298,7 @@ export async function POST(request: NextRequest) {
   const insertResult = await db.execute({
     sql: `INSERT INTO verification_requests
             (user_id, image_path, status, doc_type, lrn, profile_photo_url, face_descriptor, denied_fields, created_at, updated_at)
-          VALUES (?, ?, 'pending', ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))`,
+          VALUES (?, ?, 'pending', ?, ?, ?, ?, NULL, datetime('now'), datetime('now')) RETURNING id`,
     args: [authUser.id, primaryUrl, doc_type, lrn, profilePhotoUrl, faceDescriptor],
   })
 

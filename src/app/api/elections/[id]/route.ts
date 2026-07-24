@@ -66,7 +66,7 @@ async function syncPositions(electionId: number, positions: PositionInput[]) {
     const posName = (pos.name ?? '').trim()
     if (!posName) continue
     const posResult = await db.execute({
-      sql: `INSERT INTO positions (election_id, name, max_votes, max_votes_mode, order_index) VALUES (?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO positions (election_id, name, max_votes, max_votes_mode, order_index) VALUES (?, ?, ?, ?, ?) RETURNING id`,
       args: [electionId, posName, pos.max_votes ?? 1, pos.max_votes_mode ?? 'custom', i],
     })
     const posId = Number(posResult.lastInsertRowid)
@@ -74,7 +74,7 @@ async function syncPositions(electionId: number, positions: PositionInput[]) {
       const candName = (cand.name ?? '').trim()
       if (!candName) continue
       const candResult = await db.execute({
-        sql: `INSERT INTO candidates (election_id, position_id, name, bio, platform, qualifications, grade_level, subtype, section, grade_level_id, subtype_id, section_id, student_user_id, user_id, photo_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO candidates (election_id, position_id, name, bio, platform, qualifications, grade_level, subtype, section, grade_level_id, subtype_id, section_id, student_user_id, user_id, photo_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
         args: [electionId, posId, candName, cand.bio ?? null, cand.platform ?? null, cand.qualifications ?? null, cand.grade_level ?? null, cand.subtype ?? null, cand.section ?? null, cand.grade_level_id ?? null, cand.subtype_id ?? null, cand.section_id ?? null, cand.student_user_id ?? null, cand.student_user_id ?? null, cand.photo_url ?? null],
       })
       const candId = Number(candResult.lastInsertRowid)
