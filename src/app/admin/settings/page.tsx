@@ -19,9 +19,12 @@ interface SettingsDraft {
   doc_type_labels: string // JSON array string
   auto_verify_id: string  // 'true' | 'false'
   otp_required_login: string
+  require_post_approval: string // 'true' | 'false' — mutually exclusive with auto_approve_posts
+  auto_approve_posts: string    // 'true' | 'false'
 }
 const DRAFT_KEYS: (keyof SettingsDraft)[] = [
   'app_name', 'org_type', 'doc_type_labels', 'auto_verify_id', 'otp_required_login',
+  'require_post_approval', 'auto_approve_posts',
 ]
 function draftFromSettings(s: Record<string, string>): SettingsDraft {
   return {
@@ -30,6 +33,8 @@ function draftFromSettings(s: Record<string, string>): SettingsDraft {
     doc_type_labels: s.doc_type_labels ?? '[]',
     auto_verify_id: s.auto_verify_id ?? 'false',
     otp_required_login: s.otp_required_login ?? 'false',
+    require_post_approval: s.require_post_approval ?? 'false',
+    auto_approve_posts: s.auto_approve_posts ?? 'true',
   }
 }
 
@@ -410,6 +415,18 @@ export default function SettingsPage() {
   const canToggle = ['master_admin', 'admin'].includes(user.role)
   const autoVerifyOn = draft.auto_verify_id === 'true'
   const otpRequiredOn = draft.otp_required_login === 'true'
+  const requireApprovalOn = draft.require_post_approval === 'true'
+  const autoApproveOn = draft.auto_approve_posts === 'true'
+
+  // Post approval toggles are mutually exclusive: turning one on forces the other off.
+  const toggleRequireApproval = () => {
+    const on = !requireApprovalOn
+    setDraft(d => ({ ...d, require_post_approval: on ? 'true' : 'false', auto_approve_posts: on ? 'false' : 'true' }))
+  }
+  const toggleAutoApprove = () => {
+    const on = !autoApproveOn
+    setDraft(d => ({ ...d, auto_approve_posts: on ? 'true' : 'false', require_post_approval: on ? 'false' : 'true' }))
+  }
 
   return (
     <AdminLayout>
@@ -702,6 +719,21 @@ export default function SettingsPage() {
                   description="Automatically verify accounts when they upload documents. If disabled, admins must manually approve each submission."
                   isOn={autoVerifyOn}
                   onToggle={() => toggleDraft('auto_verify_id')}
+                />
+              </SectionCard>
+
+              <SectionCard title="Feed & Posting">
+                <ToggleRow
+                  label="Require Post Approval"
+                  description="All member posts stay hidden from the feed until an admin approves them on the Members' Posts moderation page."
+                  isOn={requireApprovalOn}
+                  onToggle={toggleRequireApproval}
+                />
+                <ToggleRow
+                  label="Auto-Approve Posts"
+                  description="Member posts appear in the feed immediately with no admin review. Cannot be on at the same time as Require Post Approval."
+                  isOn={autoApproveOn}
+                  onToggle={toggleAutoApprove}
                 />
               </SectionCard>
 

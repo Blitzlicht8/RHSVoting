@@ -402,6 +402,9 @@ async function _init(): Promise<void> {
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('group_label_l3', 'Unit')`, args: [] })
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('doc_type_labels', '["Government ID","School ID","Employee ID"]')`, args: [] })
   await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('org_type', 'school')`, args: [] })
+  // Session 7: post approval toggles (mutually exclusive). require_post_approval on => new posts pending.
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('require_post_approval', 'false')`, args: [] })
+  await db.execute({ sql: `INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_approve_posts', 'true')`, args: [] })
   // Normalize legacy '1'/'0' values to 'true'/'false'
   await db.execute({ sql: `UPDATE settings SET value = ? WHERE key = ? AND value = ?`, args: ['true', 'otp_required_login', '1'] })
   await db.execute({ sql: `UPDATE settings SET value = ? WHERE key = ? AND value = ?`, args: ['false', 'auto_verify_id', '0'] })
@@ -473,6 +476,8 @@ async function _init(): Promise<void> {
     // Session 5: deadline warning toggle + user timeout/penalty
     `ALTER TABLE elections ADD COLUMN warn_non_voters INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE users ADD COLUMN timeout_until TEXT`,
+    // Session 7: post approval workflow — status = approved|pending|rejected
+    `ALTER TABLE posts ADD COLUMN status TEXT NOT NULL DEFAULT 'approved'`,
   ]
   for (const sql of newColumns) {
     await db.execute({ sql, args: [] }).catch(() => {})

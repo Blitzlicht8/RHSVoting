@@ -12,6 +12,8 @@ const ALLOWED_KEYS = [
   'group_label_l3',
   'doc_type_labels',
   'org_type',
+  'require_post_approval',
+  'auto_approve_posts',
 ] as const
 type SettingKey = (typeof ALLOWED_KEYS)[number]
 

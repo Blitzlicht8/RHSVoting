@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
   if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const url = request.nextUrl
+  const statusFilter = url.searchParams.get('status') // admin moderation: 'pending' | 'approved' | 'rejected'
   const electionId = url.searchParams.get('electionId')
   // Accept both `userId` and legacy `author_id` (profile page) for the author filter.
   const userId = url.searchParams.get('userId') ?? url.searchParams.get('author_id')
@@ -114,6 +115,17 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Approval gate: non-admins never see others' pending/rejected posts; authors
+  // still see their own (so they know it's awaiting approval). Admins see all,
+  // and can filter by status for the moderation page.
+  if (visibleElectionIds !== null) {
+    sql += ` AND (p.status = 'approved' OR p.author_id = ?)`
+    args.push(authUser.id)
+  } else if (statusFilter && ['pending', 'approved', 'rejected'].includes(statusFilter)) {
+    sql += ` AND p.status = ?`
+    args.push(statusFilter)
+  }
+
   sql += ` ORDER BY p.created_at DESC LIMIT ? OFFSET ?`
   args.push(limit, offset)
 
@@ -153,12 +165,21 @@ export async function POST(request: NextRequest) {
     isPublic = 0
   }
 
+  // Approval workflow: when require_post_approval is on, non-admin posts start
+  // pending (hidden from feed until an admin approves). Admins auto-approve.
+  const sRow = await db.execute({
+    sql: `SELECT value FROM settings WHERE key = 'require_post_approval'`,
+    args: [],
+  })
+  const requireApproval = String(sRow.rows[0]?.value) === 'true'
+  const status = requireApproval && !isAdmin(authUser.role) ? 'pending' : 'approved'
+
   const result = await db.execute({
-    sql: `INSERT INTO posts (author_id, election_id, content, is_public) VALUES (?,?,?,?) RETURNING id`,
-    args: [authUser.id, electionId, body.content, isPublic],
+    sql: `INSERT INTO posts (author_id, election_id, content, is_public, status) VALUES (?,?,?,?,?) RETURNING id`,
+    args: [authUser.id, electionId, body.content, isPublic, status],
   })
   const postId = Number(result.rows[0].id)
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
-  await logActivity(authUser.id, 'post_created', `Created ${isPublic ? 'public' : 'election'} post`, ip)
-  return NextResponse.json({ data: { id: postId } }, { status: 201 })
+  await logActivity(authUser.id, 'post_created', `Created ${isPublic ? 'public' : 'election'} post${status === 'pending' ? ' (pending approval)' : ''}`, ip)
+  return NextResponse.json({ data: { id: postId, status } }, { status: 201 })
 }
