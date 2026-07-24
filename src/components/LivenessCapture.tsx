@@ -11,14 +11,19 @@ import { Camera } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { faceLivenessMetrics, scanFace } from '@/lib/faceApi'
 
-type Challenge = 'blink' | 'turn'
-const SEQUENCE: Challenge[] = ['blink', 'turn']
-const BLINK_CLOSED_RATIO = 0.82  // EAR below 82% of open baseline → eyes closing
-const BLINK_OPEN_RATIO = 0.92    // EAR back above 92% → open again
-const YAW_TURN = 0.13
+// Head-pose challenges — the 68-landmark model tracks nose/eye geometry far more
+// reliably than eyelids, so pose beats blink for low-res webcams. We first
+// CALIBRATE the user's resting yaw (their "forward"), then require movement
+// RELATIVE to that baseline — so a naturally off-centre face can't auto-pass.
+type Challenge = 'calibrate' | 'turn' | 'center'
+const SEQUENCE: Challenge[] = ['calibrate', 'turn', 'center']
+const CALIBRATE_SAMPLES = 8   // frames of "hold still" to average into a baseline
+const YAW_TURN_DELTA = 0.10   // move this far from baseline → "turned"
+const YAW_CENTER_DELTA = 0.05 // back within this of baseline → "forward"
 const PROMPTS: Record<Challenge, string> = {
-  blink: 'Close your eyes for a second, then open',
-  turn: 'Slowly turn your head to the side',
+  calibrate: 'Hold still and look at the camera',
+  turn: 'Slowly turn your head to one side',
+  center: 'Now face forward again',
 }
 
 type Props = {
@@ -33,9 +38,9 @@ export default function LivenessCapture({ onComplete, onSkip }: Props) {
   const runningRef = useRef(false)
   const doneRef = useRef(false)
   const stepRef = useRef(0)
-  const blinkArmedRef = useRef(false)
-  const earBaselineRef = useRef(0)
   const capturingRef = useRef(false)
+  const yawSamplesRef = useRef<number[]>([])
+  const yawBaseRef = useRef(0.5)
 
   const [status, setStatus] = useState<'starting' | 'active' | 'unavailable'>('starting')
   const [prompt, setPrompt] = useState('Position your face in the frame')
@@ -64,8 +69,6 @@ export default function LivenessCapture({ onComplete, onSkip }: Props) {
     }
     stepRef.current = next
     setStep(next)
-    earBaselineRef.current = 0
-    blinkArmedRef.current = false
     setPrompt(PROMPTS[SEQUENCE[next]])
   }, [onComplete, stop])
 
@@ -80,15 +83,17 @@ export default function LivenessCapture({ onComplete, onSkip }: Props) {
         } else {
           setHint(null)
           const cur = SEQUENCE[stepRef.current]
-          if (cur === 'blink') {
-            const base = earBaselineRef.current
-            if (!blinkArmedRef.current && res.ear > base) earBaselineRef.current = res.ear
-            if (base > 0.1) {
-              if (res.ear < base * BLINK_CLOSED_RATIO) blinkArmedRef.current = true
-              else if (blinkArmedRef.current && res.ear > base * BLINK_OPEN_RATIO) { blinkArmedRef.current = false; await advance() }
+          if (cur === 'calibrate') {
+            const arr = yawSamplesRef.current
+            arr.push(res.yawRatio)
+            if (arr.length >= CALIBRATE_SAMPLES) {
+              yawBaseRef.current = arr.reduce((s, v) => s + v, 0) / arr.length
+              await advance()
             }
           } else if (cur === 'turn') {
-            if (Math.abs(res.yawRatio - 0.5) > YAW_TURN) await advance()
+            if (Math.abs(res.yawRatio - yawBaseRef.current) > YAW_TURN_DELTA) await advance()
+          } else if (cur === 'center') {
+            if (Math.abs(res.yawRatio - yawBaseRef.current) < YAW_CENTER_DELTA) await advance()
           }
         }
       }
