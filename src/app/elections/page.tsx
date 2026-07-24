@@ -41,8 +41,8 @@ interface GroupStructure {
 }
 
 type FilterTab = 'all' | 'active' | 'upcoming' | 'ended'
-// Filter selection: 'all', or a structure-wide scope ('s:<id>'), or a value ('v:<id>').
-type GroupFilter = 'all' | `s:${number}` | `v:${number}`
+// A filter scope token: a structure-wide scope ('s:<id>') or a value ('v:<id>').
+type GroupFilter = `s:${number}` | `v:${number}`
 
 function StatusBadge({ status }: { status: Election['status'] }) {
   if (status === 'active')
@@ -212,7 +212,8 @@ export default function ElectionsPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<FilterTab>('all')
   const [structures, setStructures] = useState<GroupStructure[]>([])
-  const [groupFilter, setGroupFilter] = useState<GroupFilter>('all')
+  // Multi-select: set of scope tokens ('v:<id>' | 's:<id>'). Empty = all.
+  const [groupFilters, setGroupFilters] = useState<Set<GroupFilter>>(new Set())
   const [filterOpen, setFilterOpen] = useState(false)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const filterRef = useRef<HTMLDivElement>(null)
@@ -299,22 +300,26 @@ export default function ElectionsPage() {
   }
 
   const structureName = (id: number) => structures.find((s) => s.id === id)?.name ?? 'Group'
-  let selectedLabel = ''
-  if (groupFilter !== 'all') {
-    const [kind, idStr] = groupFilter.split(':')
-    const id = Number(idStr)
-    selectedLabel = kind === 'v' ? valuePath(id) : `All ${structureName(id)}`
-  }
+  const toggleFilter = (tok: GroupFilter) => setGroupFilters((prev) => {
+    const next = new Set(prev)
+    if (next.has(tok)) next.delete(tok); else next.add(tok)
+    return next
+  })
 
   const filtered = elections.filter((e) => {
     if (activeTab === 'active' && e.status !== 'active') return false
     if (activeTab === 'upcoming' && !(e.status === 'draft' || new Date(e.start_date) > now)) return false
     if (activeTab === 'ended' && e.status !== 'ended') return false
-    if (groupFilter !== 'all') {
-      const [kind, idStr] = groupFilter.split(':')
-      const id = Number(idStr)
-      if (kind === 'v' && !(e.value_ids ?? []).includes(id)) return false
-      if (kind === 's' && !(e.structure_ids ?? []).includes(id)) return false
+    if (groupFilters.size > 0) {
+      // OR semantics: election passes if it matches any selected scope.
+      const match = Array.from(groupFilters).some((tok) => {
+        const [kind, idStr] = tok.split(':')
+        const id = Number(idStr)
+        if (kind === 'v') return (e.value_ids ?? []).includes(id)
+        if (kind === 's') return (e.structure_ids ?? []).includes(id)
+        return false
+      })
+      if (!match) return false
     }
     return true
   })
@@ -384,7 +389,7 @@ export default function ElectionsPage() {
                 type="button"
                 onClick={() => setFilterOpen((o) => !o)}
                 className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
-                  groupFilter !== 'all'
+                  groupFilters.size > 0
                     ? 'border-[#84050C] text-[#84050C] bg-[#FEE2E2]'
                     : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
                 }`}
@@ -392,31 +397,28 @@ export default function ElectionsPage() {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L14 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 018 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
                 </svg>
-                {groupFilter === 'all' ? 'Filter' : selectedLabel}
-                {groupFilter !== 'all' && (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => { e.stopPropagation(); setGroupFilter('all') }}
-                    className="ml-0.5 -mr-1 rounded hover:bg-[#84050C]/10 p-0.5"
-                    aria-label="Clear filter"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                Filter
+                {groupFilters.size > 0 && (
+                  <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-[#84050C] text-white text-xs font-semibold">
+                    {groupFilters.size}
                   </span>
                 )}
               </button>
 
               {filterOpen && (
                 <div className="absolute right-0 z-30 mt-2 w-64 max-h-96 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg py-1">
-                  <button
-                    type="button"
-                    onClick={() => { setGroupFilter('all'); setFilterOpen(false) }}
-                    className={`w-full text-left px-4 py-2 text-sm ${groupFilter === 'all' ? 'text-[#84050C] font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
-                  >
-                    All groups
-                  </button>
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Filter by group</span>
+                    {groupFilters.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setGroupFilters(new Set())}
+                        className="text-xs font-medium text-[#84050C] hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                   {groupOptionGroups.map((g) => {
                     const isOpen = expanded.has(g.structure.id)
                     // Group leveled values under their parent context so repeated
@@ -447,13 +449,15 @@ export default function ElectionsPage() {
                         {isOpen && (
                           <div className="pb-1">
                             {g.structureWide && (
-                              <button
-                                type="button"
-                                onClick={() => { setGroupFilter(`s:${g.structure.id}`); setFilterOpen(false) }}
-                                className={`w-full text-left pl-9 pr-4 py-1.5 text-sm ${groupFilter === `s:${g.structure.id}` ? 'text-[#84050C] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-                              >
+                              <label className={`flex items-center gap-2.5 pl-9 pr-4 py-1.5 text-sm cursor-pointer hover:bg-gray-50 ${groupFilters.has(`s:${g.structure.id}`) ? 'text-[#84050C] font-medium' : 'text-gray-600'}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={groupFilters.has(`s:${g.structure.id}`)}
+                                  onChange={() => toggleFilter(`s:${g.structure.id}`)}
+                                  className="w-4 h-4 accent-[#84050C]"
+                                />
                                 All {g.structure.name}
-                              </button>
+                              </label>
                             )}
                             {Array.from(byParent.entries()).map(([parentKey, vals]) => (
                               <div key={parentKey || '_'}>
@@ -461,14 +465,18 @@ export default function ElectionsPage() {
                                   <p className="pl-9 pr-4 pt-1.5 pb-0.5 text-[11px] font-medium uppercase tracking-wide text-gray-400">{parentKey}</p>
                                 )}
                                 {vals.map((v) => (
-                                  <button
+                                  <label
                                     key={v.id}
-                                    type="button"
-                                    onClick={() => { setGroupFilter(`v:${v.id}`); setFilterOpen(false) }}
-                                    className={`w-full text-left ${parentKey ? 'pl-12' : 'pl-9'} pr-4 py-1.5 text-sm ${groupFilter === `v:${v.id}` ? 'text-[#84050C] font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                                    className={`flex items-center gap-2.5 ${parentKey ? 'pl-12' : 'pl-9'} pr-4 py-1.5 text-sm cursor-pointer hover:bg-gray-50 ${groupFilters.has(`v:${v.id}`) ? 'text-[#84050C] font-medium' : 'text-gray-600'}`}
                                   >
+                                    <input
+                                      type="checkbox"
+                                      checked={groupFilters.has(`v:${v.id}`)}
+                                      onChange={() => toggleFilter(`v:${v.id}`)}
+                                      className="w-4 h-4 accent-[#84050C]"
+                                    />
                                     {v.name}
-                                  </button>
+                                  </label>
                                 ))}
                               </div>
                             ))}
