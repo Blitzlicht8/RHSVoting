@@ -8,7 +8,9 @@
 2026-07-24
 
 ## Version After This Session
-`1.5.0` — MINOR: Election deadline reminders on dashboard + user timeout/penalty system. New columns `elections.warn_non_voters`, `users.timeout_until`.
+`1.6.0` — MINOR: Feed/posting overhaul — election-scoped post visibility, unified media upload (button + plus-menu + paste + drop), blob-URL persistence bug fixed, profile Recent Posts filtered + JSON-leak fixed.
+
+Prev: `1.5.0` — MINOR: Election deadline reminders on dashboard + user timeout/penalty system. New columns `elections.warn_non_voters`, `users.timeout_until`.
 
 Prev: `1.4.3` — FIX: election filter is now multi-select (checkboxes, OR semantics across chosen scopes). Button shows count badge + Clear. `groupFilters: Set<'v:id'|'s:id'>`; popover stays open on toggle.
 
@@ -23,6 +25,20 @@ Prev: `1.3.0` — MINOR: Settings Save bar (staged changes applied on Save) + un
 Prev: `1.2.2` — FIX: eligibility builder groups leveled values under their parent value (repeated child names like Section A/B/C now shown under each Strand caption)
 
 Prev: `1.2.1` — FIX: election eligibility builder now cascades (leveled group values show only when a parent value is selected; stale rules from deselected parents dropped)
+
+---
+
+## What Was Done (Session 6 — Feed/Posting Overhaul)
+
+- **Posting scope (`api/posts`)**: new `getVisibleElectionIds(userId, role)` — set of elections a non-admin may see posts for = global + eligible-by-rules (`evaluateEligibility`) + candidate-in (`candidates.user_id`/`student_user_id`). Admins bypass (null).
+  - **GET**: main feed = `is_public = 1 OR election_id IN (visible)`. `electionId` filter gated (non-eligible get empty). `userId`/legacy `author_id` filter applies same visibility. Admin sees all.
+  - **POST**: election-scoped post validates author is eligible/candidate (403 otherwise) + forces `is_public = 0` so only eligible voters/candidates receive it. Badge already rendered via `election_title` in `PostCard`.
+- **Media upload unified (`src/lib/uploadMedia.ts` new)**: `uploadPostMedia(file)` → `/api/upload` (purpose `post`) → server Blob URL. Used by ALL composer paths.
+  - **Blob-URL bug fixed**: composer bottom Photo/Video buttons (`feed/page.tsx`) previously persisted `URL.createObjectURL()` (`blob:` local URL) — now insert a preview block then swap in the uploaded URL; drop the block on failure.
+  - **`PostEditor`**: `uploadFile` uses shared helper + `valueRef` for fresh-state writes; new `appendMediaFiles` + container `onPaste`/`onDragOver`/`onDrop` for inline paste/drop, same upload handler.
+  - **Submit guard**: Post disabled/blocked while any block content still `blob:` (upload pending) and while election audience has no election selected.
+  - Composer election dropdown lists only `eligible` elections.
+- **Profile Recent Posts (`users/[id]/page.tsx`)**: `author_id` filter now honored server-side (was falling through to public feed = all users' posts). Raw post-content JSON no longer leaks — `postExcerpt()` parses blocks to plain-text preview (media-only → `[image]`/`[video]`/`[embed]`).
 
 ---
 

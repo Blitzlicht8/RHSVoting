@@ -1,8 +1,59 @@
-﻿export const dynamic = 'force-dynamic'
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
-import { getAuthUser } from '@/lib/auth'
+import { getAuthUser, isAdmin } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
+import { evaluateEligibility, getUserValueSet, EligibilityRule } from '@/lib/groups'
+
+// Election posts are visible only to users eligible to vote in that election
+// or who are candidates in it. This returns the set of election ids a
+// non-admin user may see posts for. Admins see all (returns null → no gate).
+async function getVisibleElectionIds(userId: number, role: string): Promise<number[] | null> {
+  if (isAdmin(role)) return null
+
+  const elections = await db.execute({ sql: `SELECT id, is_global FROM elections`, args: [] })
+  const ids = new Set<number>()
+
+  const scopedIds: number[] = []
+  for (const e of elections.rows) {
+    if (Number(e.is_global)) ids.add(Number(e.id))
+    else scopedIds.push(Number(e.id))
+  }
+
+  if (scopedIds.length > 0) {
+    const rulesResult = await db.execute({
+      sql: `SELECT election_id, structure_id, value_id, is_all_groups, is_exclude
+            FROM election_eligibility_rules
+            WHERE election_id IN (${scopedIds.map(() => '?').join(',')})`,
+      args: scopedIds,
+    })
+    const rulesByElection = new Map<number, EligibilityRule[]>()
+    for (const r of rulesResult.rows) {
+      const eid = Number(r.election_id)
+      const list = rulesByElection.get(eid) ?? []
+      list.push({
+        structure_id: r.structure_id === null ? null : Number(r.structure_id),
+        value_id: r.value_id === null ? null : Number(r.value_id),
+        is_all_groups: Number(r.is_all_groups),
+        is_exclude: Number(r.is_exclude),
+      })
+      rulesByElection.set(eid, list)
+    }
+    const valueSet = await getUserValueSet(userId)
+    for (const eid of scopedIds) {
+      if (evaluateEligibility(rulesByElection.get(eid) ?? [], valueSet)) ids.add(eid)
+    }
+  }
+
+  // Candidates can always see posts for elections they run in.
+  const cand = await db.execute({
+    sql: `SELECT DISTINCT election_id FROM candidates WHERE user_id = ? OR student_user_id = ?`,
+    args: [userId, userId],
+  })
+  for (const c of cand.rows) ids.add(Number(c.election_id))
+
+  return Array.from(ids)
+}
 
 export async function GET(request: NextRequest) {
   await ensureInit()
@@ -11,10 +62,21 @@ export async function GET(request: NextRequest) {
 
   const url = request.nextUrl
   const electionId = url.searchParams.get('electionId')
-  const userId = url.searchParams.get('userId')
+  // Accept both `userId` and legacy `author_id` (profile page) for the author filter.
+  const userId = url.searchParams.get('userId') ?? url.searchParams.get('author_id')
   const page = parseInt(url.searchParams.get('page') ?? '1')
   const limit = 20
   const offset = (page - 1) * limit
+
+  const visibleElectionIds = await getVisibleElectionIds(authUser.id, authUser.role)
+
+  // electionId filter: gate non-eligible users out of an election's posts.
+  if (electionId) {
+    const eid = parseInt(electionId)
+    if (visibleElectionIds !== null && !visibleElectionIds.includes(eid)) {
+      return NextResponse.json({ data: { posts: [], page } })
+    }
+  }
 
   let sql = `SELECT p.*, u.name as author_name, u.avatar_url as author_avatar,
              e.title as election_title,
@@ -26,9 +88,31 @@ export async function GET(request: NextRequest) {
              WHERE 1=1`
   const args: (string | number | null)[] = [authUser.id]
 
-  if (electionId) { sql += ` AND p.election_id = ?`; args.push(parseInt(electionId)) }
-  if (userId) { sql += ` AND p.author_id = ?`; args.push(parseInt(userId)) }
-  if (!electionId && !userId) sql += ` AND p.is_public = 1`
+  // Visibility clause for non-admins: a post is visible if it is public, or it
+  // is tied to an election the user may see. Admins (null) bypass this.
+  const electionVisibility = () => {
+    if (visibleElectionIds === null) return '' // admin
+    if (visibleElectionIds.length === 0) return ` AND p.is_public = 1`
+    return ` AND (p.is_public = 1 OR p.election_id IN (${visibleElectionIds.map(() => '?').join(',')}))`
+  }
+
+  if (electionId) {
+    sql += ` AND p.election_id = ?`; args.push(parseInt(electionId))
+  } else if (userId) {
+    sql += ` AND p.author_id = ?`; args.push(parseInt(userId))
+    const clause = electionVisibility()
+    sql += clause
+    if (clause.includes('IN (')) args.push(...visibleElectionIds!)
+  } else {
+    if (visibleElectionIds === null) {
+      // admin main feed: public + all election posts
+    } else if (visibleElectionIds.length === 0) {
+      sql += ` AND p.is_public = 1`
+    } else {
+      sql += ` AND (p.is_public = 1 OR p.election_id IN (${visibleElectionIds.map(() => '?').join(',')}))`
+      args.push(...visibleElectionIds)
+    }
+  }
 
   sql += ` ORDER BY p.created_at DESC LIMIT ? OFFSET ?`
   args.push(limit, offset)
@@ -57,13 +141,24 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   if (!body.content?.trim()) return NextResponse.json({ error: 'Content required' }, { status: 400 })
 
+  // Election-scoped post: verify the author may post to that election, and force
+  // it non-public so it is only served to eligible voters/candidates.
+  const electionId = body.election_id ? parseInt(String(body.election_id)) : null
+  let isPublic = body.is_public ? 1 : 0
+  if (electionId) {
+    const visible = await getVisibleElectionIds(authUser.id, authUser.role)
+    if (visible !== null && !visible.includes(electionId)) {
+      return NextResponse.json({ error: 'You are not eligible to post to this election.' }, { status: 403 })
+    }
+    isPublic = 0
+  }
+
   const result = await db.execute({
     sql: `INSERT INTO posts (author_id, election_id, content, is_public) VALUES (?,?,?,?) RETURNING id`,
-    args: [authUser.id, body.election_id ?? null, body.content, body.is_public ? 1 : 0],
+    args: [authUser.id, electionId, body.content, isPublic],
   })
   const postId = Number(result.rows[0].id)
   const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
-  const is_public = body.is_public
-  await logActivity(authUser.id, 'post_created', `Created ${is_public ? 'public' : 'election'} post`, ip)
+  await logActivity(authUser.id, 'post_created', `Created ${isPublic ? 'public' : 'election'} post`, ip)
   return NextResponse.json({ data: { id: postId } }, { status: 201 })
 }

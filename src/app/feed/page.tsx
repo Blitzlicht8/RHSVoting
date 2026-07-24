@@ -3,12 +3,13 @@ import { useEffect, useState, useCallback } from 'react'
 import Layout from '@/components/Layout'
 import PostCard from '@/components/PostCard'
 import PostEditor, { Block, emptyBlock } from '@/components/PostEditor'
+import { uploadPostMedia } from '@/lib/uploadMedia'
 import { useAuth } from '@/components/providers/AuthProvider'
 import { useToast } from '@/components/providers/ToastProvider'
 import { Skeleton } from '@/components/ui/Skeleton'
 import Link from 'next/link'
 
-interface Election { id: number; title: string }
+interface Election { id: number; title: string; eligible?: number }
 
 function hasContent(blocks: Block[]) {
   return blocks.some(b => b.content.trim().length > 0)
@@ -33,7 +34,8 @@ function ComposerCard({
       fetch('/api/elections', { credentials: 'include' })
         .then(r => r.json())
         .then(j => {
-          const list: Election[] = j.data?.elections ?? []
+          // Only elections the user is eligible for / a candidate in can receive posts.
+          const list: Election[] = (j.data?.elections ?? []).filter((e: Election) => e.eligible)
           setElections(list)
           if (list.length > 0) setElectionId(list[0].id)
         })
@@ -45,8 +47,22 @@ function ComposerCard({
     ? user.name.trim().split(/\s+/).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
     : '?'
 
+  // Shared media handler for the bottom Photo/Video buttons: insert a preview
+  // block, upload to Blob, then swap in the real URL (never persist blob:).
+  const addMedia = async (file: File, type: 'image' | 'video') => {
+    const id = Math.random().toString(36).slice(2)
+    setBlocks(bs => [...bs, { id, type, content: URL.createObjectURL(file) }])
+    const url = await uploadPostMedia(file)
+    setBlocks(bs => url
+      ? bs.map(b => b.id === id ? { ...b, content: url } : b)
+      : bs.filter(b => b.id !== id))
+  }
+
   const handleSubmit = async () => {
     if (!hasContent(blocks)) return
+    // Guard: never persist a local object URL — wait for uploads to resolve.
+    if (blocks.some(b => b.content.startsWith('blob:'))) return
+    if (audience === 'election' && !electionId) return
     setSubmitting(true)
     await onPost(blocks, audience === 'public', audience === 'election' ? electionId : null)
     setBlocks([emptyBlock()])
@@ -136,7 +152,8 @@ function ComposerCard({
             Photo
             <input type="file" accept="image/*" className="hidden" onChange={e => {
               const f = e.target.files?.[0]
-              if (f) setBlocks(bs => [...bs, { id: Math.random().toString(36).slice(2), type: 'image', content: URL.createObjectURL(f) }])
+              if (f) addMedia(f, 'image')
+              e.target.value = ''
             }} />
           </label>
           <label className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 cursor-pointer transition-colors">
@@ -146,7 +163,8 @@ function ComposerCard({
             Video
             <input type="file" accept="video/*" className="hidden" onChange={e => {
               const f = e.target.files?.[0]
-              if (f) setBlocks(bs => [...bs, { id: Math.random().toString(36).slice(2), type: 'video', content: URL.createObjectURL(f) }])
+              if (f) addMedia(f, 'video')
+              e.target.value = ''
             }} />
           </label>
           <button
@@ -167,7 +185,7 @@ function ComposerCard({
       <div className="px-5 pb-4 flex justify-end">
         <button
           onClick={handleSubmit}
-          disabled={submitting || !hasContent(blocks)}
+          disabled={submitting || !hasContent(blocks) || blocks.some(b => b.content.startsWith('blob:')) || (audience === 'election' && !electionId)}
           className="px-5 py-2 bg-[#84050C] text-white text-sm font-semibold rounded-lg hover:bg-[#6B0409] disabled:opacity-50 transition-colors"
         >
           {submitting ? 'Posting…' : 'Post'}
