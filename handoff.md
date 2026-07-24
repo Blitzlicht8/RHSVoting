@@ -8,6 +8,46 @@
 2026-07-24
 
 ## Version After This Session
+`1.9.1` — FIX: performance pass (`fix/perf-pass`), Part 1 only. **On branch, NOT merged — image pages need manual visual QA before merge (below). Part 2 (Supabase migration) deferred to a separate branch.**
+
+Prev: `1.9.0` — MINOR (EXPERIMENTAL): client-side face verification (`feat/face-verification-client`), MERGED via PR #9.
+
+---
+
+## What Was Done (Session 11 — Performance Pass Part 1, v1.9.1, `fix/perf-pass`, UNMERGED)
+
+Baseline vs after measured via `npm run build` route sizes. Live network timing NOT measurable in this headless env — needs Network-tab confirmation on deploy.
+
+**1. Query-layer caching (`src/lib/cache.ts` NEW).** Per-instance in-memory TTL cache (`cached`/`invalidate`/`invalidatePrefix`; `CONFIG_TTL=60s`). Applied to the three GLOBAL, low-churn reads, each invalidated on write:
+- `/api/settings` GET (invalidate in PATCH).
+- `/api/groups` GET (structure tree; `invalidateGroupsCache()` added to `groups.ts`, called from all 4 admin/groups write routes).
+- `/api/admin/roles` GET (invalidate in roles POST + `[id]` PATCH/DELETE).
+- **NOT cached: `/api/elections` list GET** — per-user (`hasVoted`/`eligible`) + volatile vote counts; stale data is a correctness bug for a voting app. Its rules already load in one `IN (...)` query + one value-set load (no N+1).
+- Per-lambda cache; 60s TTL bounds cross-instance staleness, explicit invalidate keeps the writing instance immediate.
+
+**2. `next/image` migration (ALL 33 raw `<img>`).** Patterns: `fill` (parents given `relative` where missing), fixed `width`/`height` (avatars/thumbnails), `width=0 height=0 sizes="100vw"`+auto style (unknown-aspect post media/lightbox); `unoptimized` on blob-preview srcs. Page-specific JS dropped (dashboard 5.42→3.52 kB, elections 5.96→4.13); First Load +~5 kB shared (next/image runtime) — net win is image bytes/format (WebP/AVIF) + lazy-load at request time.
+- **⚠ NEEDS MANUAL VISUAL QA (unverifiable headless):**
+  - `elections/[id]/page.tsx` banner (~:866): real class `max-h-48` → wrapped `relative w-full h-48`; confirm height.
+  - `PostEditor.tsx:172` + `PostCard.tsx:50,60` post media: NO `unoptimized` (assumed remote Blob URL). If a live local-object-URL preview shows right after upload it may not render — check.
+  - All `fill` conversions need `position: relative` parents; added where missing but eyeball every avatar/photo page once.
+
+**3. N+1 fix.** Elections list GET pre-flight: per-election `checkAutoTransition()` loop → two bulk `UPDATE`s (auto-start w/ position+candidate guards via correlated subqueries; auto-end), identical semantics, kills a hot-path N+1. `checkAutoTransition` still used for single-election create POST. **Deferred (write-path, FK-sequential, low-value):** election create/update nested INSERT loops, eligibility-rule inserts, `setUserAssignments`, verify-upload, admin/verifiers lookup.
+
+**4. Turso client reuse — already correct.** `db.ts` singleton `_db` reused; `ensureInit` memoized. No change (context.md do-not-touch).
+
+**5. Waterfalls.** Only fix: dashboard fires elections + admin-stats concurrently (were sequential). Elections/profile already parallel; login/profile-modal cascades genuinely dependent.
+
+**6. Bundle — already lean.** First Load 92–120 kB; face-api correctly lazy-loaded; no admin dep leak. No action.
+
+**7. Loading states — already present.** Skeletons/spinners on dashboard/feed/elections/profile; login form renders immediately. No action.
+
+**Branch commits:** (a) cache + dashboard parallel fetch; (b) next/image + bulk auto-transition + version bump.
+
+**Part 2 (Turso → Supabase Postgres) NOT DONE — deferred to `feat/supabase-migration`.** `.env.local` already has Supabase + Postgres vars pulled from Vercel production. Turso still live.
+
+---
+
+### (historical) Prev version header
 `1.8.1` — FIX: post-launch QA fix pass (`fix/qa-pass-v1.8`). See "Session 9" below.
 
 Prev: `1.8.0` — MINOR: Roles & Permissions gains 4 new granular scopes; Activity Logs records + badges new event types (election visibility changes, settings changes, reverification). New log actions `election_visibility_changed`, `settings_changed`, `verification_reverified`.
