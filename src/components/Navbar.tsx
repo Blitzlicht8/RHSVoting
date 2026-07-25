@@ -75,13 +75,14 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
       </h1>
 
       <div className="ml-auto flex items-center gap-3">
-        {/* Admin pill — desktop only */}
+        {/* Context pill — desktop only. On admin pages, link back to the user
+            app; on the user app, link into admin. */}
         {user && ['master_admin', 'admin', 'moderator'].includes(user.role) && (
           <Link
-            href="/admin/users"
+            href={pathname.startsWith('/admin') ? '/dashboard' : '/admin/users'}
             className="hidden md:flex items-center px-3 py-1.5 bg-[#84050C] text-white text-xs font-semibold rounded-full hover:bg-[#6B0409] transition-colors"
           >
-            Admin Dashboard
+            {pathname.startsWith('/admin') ? 'Home Dashboard' : 'Admin Dashboard'}
           </Link>
         )}
 
@@ -89,7 +90,7 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setShowDropdown((v) => !v)}
-            className="w-9 h-9 rounded-full bg-[#84050C] text-white text-sm font-semibold flex items-center justify-center hover:bg-[#6B0409] transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C] focus:ring-offset-2 overflow-hidden"
+            className="relative w-9 h-9 rounded-full bg-[#84050C] text-white text-sm font-semibold flex items-center justify-center hover:bg-[#6B0409] transition-colors focus:outline-none focus:ring-2 focus:ring-[#84050C] focus:ring-offset-2 overflow-hidden"
             aria-label="User menu"
             title={user?.role === 'unverified' ? 'Verify your identity' : undefined}
           >
@@ -97,9 +98,9 @@ export default function Navbar({ onMenuToggle }: NavbarProps) {
               <Image
                 src={user.avatar_url}
                 alt={user.name}
-                width={36}
-                height={36}
-                className="rounded-full object-cover"
+                fill
+                sizes="36px"
+                className="object-cover"
               />
             ) : (
               <span className="text-sm font-semibold">{user?.name?.charAt(0)?.toUpperCase() || '?'}</span>
