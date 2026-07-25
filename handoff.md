@@ -8,7 +8,9 @@
 2026-07-24
 
 ## Version After This Session
-`1.9.1` — FIX: performance pass (`fix/perf-pass`), Part 1 only. **On branch, NOT merged — image pages need manual visual QA before merge (below). Part 2 (Supabase migration) deferred to a separate branch.**
+`2.0.0` — MAJOR: **Turso → Supabase Postgres migration (Session 11 Part 2), MERGED + LIVE in prod.** DB layer swapped to `pg` behind a libsql-shaped adapter; data migrated + verified; app reads `APP_DATABASE_URL` (Session pooler). See Session 11 Part 2 below for the cutover incident notes.
+
+Prev: `1.9.1` — FIX: performance pass (Session 11 Part 1). next/image migration image pages still want a manual visual QA (banner heights, post-media, avatars).
 
 Prev: `1.9.0` — MINOR (EXPERIMENTAL): client-side face verification (`feat/face-verification-client`), MERGED via PR #9.
 
@@ -58,10 +60,17 @@ Done (build + typecheck green):
 - `scripts/smoke-write-pg.ts` (pass) — writes: `RETURNING id`→lastInsertRowid, `datetime('now')` text format, batch transaction, `OR IGNORE`→DO NOTHING (no overwrite), `OR REPLACE settings`→DO UPDATE (upsert).
 - **Runtime fixes found via smoke:** pg returns int8/BIGINT (incl. ids + COUNT) as strings → registered `types.setTypeParser(20, parseInt)` so ids/counts are numbers like libsql (else `lastInsertRowid` was NaN + `===` type bugs). Robust `parsePgUrl()` splits on last `@` (Supabase passwords have special chars that break connection-string parsing) — exported + used by db.ts and the script.
 
-**Still required before merge (per prompt's non-auto-merge rule):**
-- Interactive regression on `npm run dev` against Postgres: register → OTP → verify → vote → post → admin actions (smoke covered the SQL paths, not full UI flows).
-- Env swap on Vercel: app now reads `POSTGRES_URL` (present at runtime). Keep Turso vars one full deploy cycle before removing. Update `context.md` Tech Stack (Database) + Required Env Vars when stable.
-- Merge `feat/supabase-migration` only after you confirm prod behaves on Postgres.
+**MERGED + LIVE on Postgres (v2.0.0, master).** `feat/supabase-migration` merged to master, deployed to prod (`rhs-voting.vercel.app`), Supabase is now the live DB. Turso removed.
+
+**Prod cutover incident notes (important for future DB/env work):**
+- **App reads `APP_DATABASE_URL` FIRST** (`db.ts` getPool), then falls back to `POSTGRES_URL`. Reason: the **Supabase↔Vercel integration manages/overwrites `POSTGRES_URL`** with the *direct* connection (user `postgres`, host `db.<ref>.supabase.co`) and can carry a **stale password** → `28P01 password authentication failed`. Pin the working **Session pooler** URL in `APP_DATABASE_URL` (Vercel, Production) so the integration can't clobber it.
+- **Use the Session pooler URL** (user `postgres.<ref>`, host `aws-0-<REGION>.pooler.supabase.com`, port **5432**) — the direct `db.<ref>` host is **IPv6-only** (`ENOTFOUND` from IPv4 networks / some runtimes). Put the REAL region in the host (a literal `<region>` placeholder → `ENOTFOUND aws-0-<region>...`).
+- Pushing `master` **auto-deploys AND auto-promotes** to the prod alias — a bad env there takes prod down instantly. Rollback = `npx vercel promote <last-good-deployment-url>` (or dashboard → Deployments → Promote). Raw `*.vercel.app` deployment URLs sit behind Vercel deployment-protection SSO (return 302), so verify via the prod **alias** + `npx vercel logs <alias>`.
+- `.env.local` is now untracked + gitignored (was tracked/UTF-16-broken). Branch-switching had wiped it once — keep real creds only in the local file. Migration/smoke scripts read `.env.local` (`POSTGRES_URL`).
+
+**Migration was executed + verified before cutover:** all 27 tables copied (row counts matched), read smoke 9/9, write smoke pass. Scripts kept in `scripts/` (migrate + smoke) for re-runs.
+
+**Follow-ups:** interactive UI regression on the live Postgres prod (register → OTP → verify → vote → post → admin) still worth a manual pass. `@libsql/client` dep + `InValue` type imports remain (harmless; used by scripts) — drop in a later cleanup if desired.
 
 **RUNBOOK to finish Part 2 (Rhen):**
 1. Put the REAL creds in local `.env.local` (gitignored): `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` (Turso dashboard), and `POSTGRES_URL` (Supabase dashboard → Connect → prefer the direct/non-pooling 5432 URL for the bulk load). Do NOT commit `.env.local`.

@@ -59,7 +59,8 @@ If the token stops working, generate a new one at GitHub → Settings → Develo
 ## Required Env Vars
 
 ```
-POSTGRES_URL=
+APP_DATABASE_URL=   # primary DB conn — Supabase Session pooler URL (see below)
+POSTGRES_URL=       # fallback; integration-managed, may be stale — do not rely on
 JWT_SECRET=
 BLOB_READ_WRITE_TOKEN=
 SMTP_HOST=
@@ -71,7 +72,15 @@ NEXT_PUBLIC_APP_URL=
 
 Lives in `.env.local`. Never commit this file.
 
-The app connects via `POSTGRES_URL` (Supabase). Other Supabase vars present in Vercel:
+The app connects via **`APP_DATABASE_URL`** (falls back to `POSTGRES_URL`). Use a dedicated
+var because the Supabase↔Vercel integration overwrites `POSTGRES_URL` with the *direct*
+connection (user `postgres`) + a possibly-stale password (`28P01`). Set `APP_DATABASE_URL`
+to the Supabase **Session pooler** URL: user `postgres.<ref>`, host
+`aws-0-<REGION>.pooler.supabase.com`, port **5432** (direct `db.<ref>` host is IPv6-only →
+`ENOTFOUND` from IPv4). Pushing `master` auto-deploys AND auto-promotes prod — a bad DB env
+takes prod down; roll back with `npx vercel promote <last-good-deployment-url>`.
+
+Other Supabase vars present in Vercel:
 `POSTGRES_URL_NON_POOLING`, `POSTGRES_HOST/USER/PASSWORD/DATABASE`, `SUPABASE_URL`,
 `SUPABASE_SECRET_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 These are Vercel "sensitive" vars → masked as `[SENSITIVE]` on `vercel env pull`; to run
