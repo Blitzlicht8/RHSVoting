@@ -169,9 +169,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         {/* User section */}
         <div className="border-t border-gray-800 p-4">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
+            <div className="relative w-9 h-9 rounded-full bg-[#84050C] flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden">
               {user.avatar_url ? (
-                <Image src={user.avatar_url} alt={user.name} width={36} height={36} className="rounded-full object-cover" />
+                <Image src={user.avatar_url} fill sizes="36px" alt={user.name} className="object-cover" />
               ) : (
                 <span>{user.name.charAt(0).toUpperCase()}</span>
               )}
