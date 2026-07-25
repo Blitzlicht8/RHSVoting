@@ -42,6 +42,14 @@ interface VerifierUser {
   assignments: { structure_id: number; structure_name: string; value_id: number; value_name: string }[]
 }
 
+// A step in the drill-down: which parent value was clicked to descend to its children.
+interface DrillStep {
+  structureId: number
+  structureName: string
+  valueId: number
+  valueName: string
+}
+
 function getRoleLabel(role: string): string {
   const labels: Record<string, string> = {
     master_admin: 'Master Admin', admin: 'Admin',
@@ -60,13 +68,14 @@ export default function GroupStructurePage() {
 
   const [structures, setStructures] = useState<StructureWithValues[]>([])
   const [loadingStructures, setLoadingStructures] = useState(true)
-  const [selectedStructureId, setSelectedStructureId] = useState<number | null>(null)
 
-  // Values for the selected structure (scoped by parent value if leveled)
+  // Hierarchical drill-down: a root structure + a stack of chosen parent values.
+  const [rootStructureId, setRootStructureId] = useState<number | null>(null)
+  const [drillPath, setDrillPath] = useState<DrillStep[]>([])
+
+  // Values for the current (deepest) structure, scoped by the current parent value.
   const [values, setValues] = useState<GroupValue[]>([])
   const [loadingValues, setLoadingValues] = useState(false)
-  const [selectedParentValueId, setSelectedParentValueId] = useState<number | null>(null)
-  const [parentValues, setParentValues] = useState<GroupValue[]>([])
 
   const [newValueName, setNewValueName] = useState('')
   const [editingValue, setEditingValue] = useState<{ id: number; name: string } | null>(null)
@@ -100,9 +109,18 @@ export default function GroupStructurePage() {
   const hasPendingEdit = editingValue !== null || newValueName.trim() !== ''
   useUnsavedGuard(hasPendingEdit)
 
-  const selectedStructure = structures.find(s => s.id === selectedStructureId) ?? null
-  const parentStructure = selectedStructure?.parent_structure_id != null
-    ? structures.find(s => s.id === selectedStructure.parent_structure_id) ?? null
+  // Root structures = top of every chain (and standalones).
+  const rootStructures = structures.filter(s => s.parent_structure_id == null)
+
+  // Current position derived from the drill path.
+  const currentStructureId = drillPath.length
+    ? structures.find(s => s.parent_structure_id === drillPath[drillPath.length - 1].structureId)?.id ?? null
+    : rootStructureId
+  const currentParentValueId = drillPath.length ? drillPath[drillPath.length - 1].valueId : null
+  const currentStructure = structures.find(s => s.id === currentStructureId) ?? null
+  // Child structure nested below the current one (if the chain continues) — enables drill-in.
+  const childStructure = currentStructureId != null
+    ? structures.find(s => s.parent_structure_id === currentStructureId) ?? null
     : null
 
   const fetchStructures = useCallback(async () => {
@@ -112,7 +130,8 @@ export default function GroupStructurePage() {
       const json = await res.json()
       const data: StructureWithValues[] = json.data ?? []
       setStructures(data)
-      setSelectedStructureId(prev => prev != null && data.some(s => s.id === prev) ? prev : (data[0]?.id ?? null))
+      const roots = data.filter(s => s.parent_structure_id == null)
+      setRootStructureId(prev => prev != null && roots.some(s => s.id === prev) ? prev : (roots[0]?.id ?? null))
     } finally {
       setLoadingStructures(false)
     }
@@ -120,7 +139,7 @@ export default function GroupStructurePage() {
 
   useEffect(() => { fetchStructures() }, [fetchStructures])
 
-  // Load values for the selected structure, scoped by parent value if leveled
+  // Load values for the current structure, scoped by the current parent value.
   const fetchValues = useCallback(async (structureId: number, parentValueId: number | null) => {
     setLoadingValues(true)
     try {
@@ -133,50 +152,60 @@ export default function GroupStructurePage() {
     }
   }, [])
 
-  // When selection changes: reset parent value, load parent options if leveled
-  useEffect(() => {
-    if (selectedStructureId == null) { setValues([]); setParentValues([]); setSelectedParentValueId(null); return }
-    const struct = structures.find(s => s.id === selectedStructureId)
-    if (!struct) return
+  // Reset drill path when switching root structure.
+  const selectRoot = (id: number) => {
+    setRootStructureId(id)
+    setDrillPath([])
     setEditingValue(null)
     setNewValueName('')
-    if (struct.parent_structure_id != null) {
-      const parent = structures.find(s => s.id === struct.parent_structure_id)
-      setParentValues(parent?.values ?? [])
-      setSelectedParentValueId(null)
-      setValues([]) // wait for parent value selection
-    } else {
-      setParentValues([])
-      setSelectedParentValueId(null)
-      fetchValues(selectedStructureId, null)
-    }
-  }, [selectedStructureId, structures, fetchValues])
+  }
 
-  // Leveled: reload values when parent value chosen
+  // Descend into a value's child structure.
+  const drillInto = (v: GroupValue) => {
+    if (!currentStructure || !childStructure) return
+    setDrillPath(prev => [...prev, {
+      structureId: currentStructure.id, structureName: currentStructure.name,
+      valueId: v.id, valueName: v.name,
+    }])
+    setEditingValue(null)
+    setNewValueName('')
+  }
+
+  // Jump to a breadcrumb level (index -1 = root, else drill step index).
+  const goToLevel = (index: number) => {
+    setDrillPath(prev => prev.slice(0, index + 1))
+    setEditingValue(null)
+    setNewValueName('')
+  }
+
+  // Fetch current values whenever position changes.
   useEffect(() => {
-    if (selectedStructureId == null || parentStructure == null) return
-    if (selectedParentValueId != null) fetchValues(selectedStructureId, selectedParentValueId)
-    else setValues([])
-  }, [selectedParentValueId, selectedStructureId, parentStructure, fetchValues])
+    if (currentStructureId == null) { setValues([]); return }
+    fetchValues(currentStructureId, currentParentValueId)
+  }, [currentStructureId, currentParentValueId, fetchValues])
+
+  // If the tree reloads and the drill path no longer resolves, reset it.
+  useEffect(() => {
+    if (!loadingStructures && drillPath.length && currentStructureId == null) setDrillPath([])
+  }, [loadingStructures, drillPath.length, currentStructureId])
 
   // --- Value CRUD ---
   const addValue = async () => {
-    if (!newValueName.trim() || selectedStructureId == null || saving) return
-    if (parentStructure != null && selectedParentValueId == null) return
+    if (!newValueName.trim() || currentStructureId == null || saving) return
     setSaving(true)
     try {
-      await fetch(`/api/admin/groups/${selectedStructureId}/values`, {
+      await fetch(`/api/admin/groups/${currentStructureId}/values`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-        body: JSON.stringify({ name: newValueName.trim(), parent_value_id: selectedParentValueId }),
+        body: JSON.stringify({ name: newValueName.trim(), parent_value_id: currentParentValueId }),
       })
       setNewValueName('')
-      await fetchValues(selectedStructureId, selectedParentValueId)
+      await fetchValues(currentStructureId, currentParentValueId)
       await fetchStructures()
     } finally { setSaving(false) }
   }
 
   const saveValue = async () => {
-    if (!editingValue || selectedStructureId == null || saving) return
+    if (!editingValue || currentStructureId == null || saving) return
     setSaving(true)
     try {
       await fetch(`/api/admin/groups/values/${editingValue.id}`, {
@@ -184,22 +213,22 @@ export default function GroupStructurePage() {
         body: JSON.stringify({ name: editingValue.name }),
       })
       setEditingValue(null)
-      await fetchValues(selectedStructureId, selectedParentValueId)
+      await fetchValues(currentStructureId, currentParentValueId)
       await fetchStructures()
     } finally { setSaving(false) }
   }
 
   const toggleValueActive = async (v: GroupValue) => {
-    if (selectedStructureId == null) return
+    if (currentStructureId == null) return
     await fetch(`/api/admin/groups/values/${v.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ active: !v.active }),
     })
-    await fetchValues(selectedStructureId, selectedParentValueId)
+    await fetchValues(currentStructureId, currentParentValueId)
   }
 
   const deleteValue = async (v: GroupValue, force = false) => {
-    if (selectedStructureId == null) return
+    if (currentStructureId == null) return
     const res = await fetch(`/api/admin/groups/values/${v.id}${force ? '?force=true' : ''}`, {
       method: 'DELETE', credentials: 'include',
     })
@@ -209,17 +238,17 @@ export default function GroupStructurePage() {
       return
     }
     setValueForceDelete(null)
-    await fetchValues(selectedStructureId, selectedParentValueId)
+    await fetchValues(currentStructureId, currentParentValueId)
     await fetchStructures()
   }
 
   const confirmForceDeleteValue = async () => {
-    if (!valueForceDelete || selectedStructureId == null) return
+    if (!valueForceDelete || currentStructureId == null) return
     setDeleting(true)
     try {
       await fetch(`/api/admin/groups/values/${valueForceDelete.id}?force=true`, { method: 'DELETE', credentials: 'include' })
       setValueForceDelete(null)
-      await fetchValues(selectedStructureId, selectedParentValueId)
+      await fetchValues(currentStructureId, currentParentValueId)
       await fetchStructures()
     } finally { setDeleting(false) }
   }
@@ -321,108 +350,149 @@ export default function GroupStructurePage() {
 
   if (!user || !requireAdmin(user.role)) return null
 
-  const canAddValue = selectedStructureId != null && newValueName.trim() !== '' &&
-    (parentStructure == null || selectedParentValueId != null)
+  const canAddValue = currentStructureId != null && newValueName.trim() !== ''
 
   return (
     <AdminLayout>
       <div className="max-w-5xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Group Structure</h1>
-        <p className="text-gray-500 text-sm mb-6">Manage the values within each group structure and assign verifiers.</p>
+        <p className="text-gray-500 text-sm mb-6">Browse each group structure as a hierarchy — click a value to drill into its nested groups. Assign verifiers below.</p>
 
-        {/* Structure tabs */}
         {loadingStructures ? (
-          <div className="text-gray-500 text-sm">Loading structures…</div>
-        ) : structures.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center text-gray-500 text-sm">
+          /* Skeleton — reads as loading, not broken */
+          <div className="mb-4 space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {[0, 1, 2].map(i => <div key={i} className="h-8 w-24 rounded-lg bg-gray-100 animate-pulse" />)}
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+              <div className="h-4 w-40 bg-gray-100 rounded animate-pulse" />
+              {[0, 1, 2].map(i => <div key={i} className="h-11 bg-gray-100 rounded-lg animate-pulse" />)}
+            </div>
+          </div>
+        ) : rootStructures.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center text-gray-500 text-sm mb-4">
             No group structures defined. Create one in Settings → Group Structures.
           </div>
         ) : (
           <>
+            {/* Root structure selector */}
             <div className="flex flex-wrap gap-2 mb-4">
-              {structures.map(s => (
-                <button key={s.id}
-                  onClick={() => setSelectedStructureId(s.id)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
-                    selectedStructureId === s.id
-                      ? 'bg-[#84050C] text-white border-[#84050C]'
-                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}>
-                  {s.name}
-                  {!s.active && <span className="ml-1.5 text-xs opacity-70">(inactive)</span>}
-                </button>
-              ))}
+              {rootStructures.map(s => {
+                const leveled = structures.some(c => c.parent_structure_id === s.id)
+                return (
+                  <button key={s.id}
+                    onClick={() => selectRoot(s.id)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+                      rootStructureId === s.id
+                        ? 'bg-[#84050C] text-white border-[#84050C]'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}>
+                    {s.name}
+                    {leveled && <span className={`ml-1.5 text-xs ${rootStructureId === s.id ? 'opacity-80' : 'text-gray-400'}`}>▾ leveled</span>}
+                    {!s.active && <span className="ml-1.5 text-xs opacity-70">(inactive)</span>}
+                  </button>
+                )
+              })}
             </div>
 
-            {/* Values editor */}
+            {/* Values panel with breadcrumb drill-down */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100">
-                <h2 className="text-sm font-semibold text-gray-900">
-                  {selectedStructure?.name} — Values
-                  {parentStructure && (
-                    <span className="ml-1 text-gray-500 font-normal">(under {parentStructure.name})</span>
-                  )}
-                </h2>
+              {/* Breadcrumb */}
+              <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-1.5 flex-wrap text-sm">
+                <button
+                  onClick={() => goToLevel(-1)}
+                  disabled={drillPath.length === 0}
+                  className={`font-semibold ${drillPath.length === 0 ? 'text-gray-900 cursor-default' : 'text-[#84050C] hover:underline'}`}>
+                  {structures.find(s => s.id === rootStructureId)?.name ?? 'Structure'}
+                </button>
+                {drillPath.map((step, i) => (
+                  <span key={`${step.structureId}:${step.valueId}`} className="flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    <button
+                      onClick={() => goToLevel(i)}
+                      disabled={i === drillPath.length - 1}
+                      className={i === drillPath.length - 1 ? 'text-gray-900 font-semibold cursor-default' : 'text-[#84050C] hover:underline'}>
+                      {step.valueName}
+                    </button>
+                  </span>
+                ))}
+                {currentStructure && (
+                  <>
+                    <svg className="w-3.5 h-3.5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    <span className="text-gray-500">{currentStructure.name}</span>
+                  </>
+                )}
               </div>
 
-              {/* Parent value selector for leveled structures */}
-              {parentStructure && (
-                <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-                  <label className="text-sm text-gray-600">{parentStructure.name}:</label>
-                  <select
-                    value={selectedParentValueId ?? ''}
-                    onChange={e => setSelectedParentValueId(e.target.value ? Number(e.target.value) : null)}
-                    className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C]">
-                    <option value="">Select {parentStructure.name.toLowerCase()}…</option>
-                    {parentValues.map(pv => <option key={pv.id} value={pv.id}>{pv.name}</option>)}
-                  </select>
-                </div>
-              )}
-
+              {/* Rows */}
               <div className="p-4">
-                {parentStructure && selectedParentValueId == null ? (
-                  <div className="text-center text-gray-500 text-sm py-6">
-                    Select a {parentStructure.name.toLowerCase()} above to view and manage its {selectedStructure?.name.toLowerCase()} values.
+                {loadingValues ? (
+                  <div className="space-y-2">
+                    {[0, 1, 2].map(i => <div key={i} className="h-11 bg-gray-100 rounded-lg animate-pulse" />)}
                   </div>
-                ) : loadingValues ? (
-                  <div className="text-center text-gray-500 text-sm py-4">Loading…</div>
                 ) : values.length === 0 ? (
-                  <div className="text-center text-gray-500 text-sm py-4">No values yet.</div>
+                  <div className="text-center text-gray-500 text-sm py-6">
+                    No {currentStructure?.name.toLowerCase()} values here yet. Add one below.
+                  </div>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="space-y-1.5">
                     {values.map(v => (
-                      <div key={v.id} className="group relative">
+                      <div key={v.id}
+                        className={`group flex items-center gap-2 border rounded-lg px-3 py-2 transition-colors ${
+                          v.active ? 'bg-white border-gray-200 hover:border-gray-300' : 'bg-gray-50 border-gray-200'
+                        }`}>
                         {editingValue?.id === v.id ? (
-                          <div className="flex items-center gap-1 bg-white border border-gray-300 rounded-full px-2 py-1">
-                            <input className="bg-transparent text-sm text-gray-900 focus:outline-none w-28"
+                          <>
+                            <input className="flex-1 bg-white border border-gray-300 rounded-md px-2 py-1 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C]"
                               value={editingValue.name} autoFocus
                               onChange={e => setEditingValue({ ...editingValue, name: e.target.value })}
                               onKeyDown={e => { if (e.key === 'Enter') saveValue(); if (e.key === 'Escape') setEditingValue(null) }} />
-                            <button onClick={saveValue} disabled={saving} className="text-xs text-green-600 hover:text-green-700">✓</button>
-                            <button onClick={() => setEditingValue(null)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
-                          </div>
+                            <button onClick={saveValue} disabled={saving} className="text-sm text-green-600 hover:text-green-700 px-1">Save</button>
+                            <button onClick={() => setEditingValue(null)} className="text-sm text-gray-400 hover:text-gray-600 px-1">Cancel</button>
+                          </>
                         ) : (
-                          <div className={`flex items-center gap-1 border rounded-full px-3 py-1 text-sm transition-colors ${
-                            v.active ? 'bg-gray-50 border-gray-200 text-gray-700 hover:border-gray-300' : 'bg-gray-100 border-gray-200 text-gray-400'
-                          }`}>
-                            <span>{v.name}</span>
-                            {typeof v.user_count === 'number' && v.user_count > 0 && (
-                              <span className="text-xs bg-gray-200 text-gray-600 rounded-full px-1.5">{v.user_count}</span>
+                          <>
+                            {/* Name + drill-in (whole left area is the drill affordance when leveled) */}
+                            {childStructure ? (
+                              <button onClick={() => drillInto(v)}
+                                className="flex-1 flex items-center gap-2 text-left min-w-0"
+                                title={`Manage ${childStructure.name} under ${v.name}`}>
+                                <span className={`text-sm truncate ${v.active ? 'text-gray-900' : 'text-gray-400'}`}>{v.name}</span>
+                                {typeof v.user_count === 'number' && v.user_count > 0 && (
+                                  <span className="text-xs bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5 shrink-0">{v.user_count}</span>
+                                )}
+                                {!v.active && <span className="text-xs text-gray-400 shrink-0">(inactive)</span>}
+                                <span className="ml-auto flex items-center gap-1 text-xs text-[#84050C] shrink-0">
+                                  {childStructure.name}
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                </span>
+                              </button>
+                            ) : (
+                              <div className="flex-1 flex items-center gap-2 min-w-0">
+                                <span className={`text-sm truncate ${v.active ? 'text-gray-900' : 'text-gray-400'}`}>{v.name}</span>
+                                {typeof v.user_count === 'number' && v.user_count > 0 && (
+                                  <span className="text-xs bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5 shrink-0">{v.user_count}</span>
+                                )}
+                                {!v.active && <span className="text-xs text-gray-400 shrink-0">(inactive)</span>}
+                              </div>
                             )}
-                            {!v.active && <span className="text-xs text-gray-400">(inactive)</span>}
-                            <button onClick={() => setEditingValue({ id: v.id, name: v.name })}
-                              className="opacity-0 group-hover:opacity-100 ml-1 text-gray-400 hover:text-gray-700 transition-opacity" title="Rename">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l-4 1 1-4 9.293-9.293a1 1 0 011.414 0l2.586 2.586a1 1 0 010 1.414L9 13z" /></svg>
-                            </button>
-                            <button onClick={() => toggleValueActive(v)}
-                              className="opacity-0 group-hover:opacity-100 ml-0.5 text-gray-400 hover:text-amber-600 transition-opacity" title={v.active ? 'Deactivate' : 'Activate'}>
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
-                            </button>
-                            <button onClick={() => setPendingSimpleDelete({ name: v.name, onConfirm: () => deleteValue(v) })}
-                              className="opacity-0 group-hover:opacity-100 ml-0.5 text-gray-400 hover:text-red-600 transition-opacity" title="Delete">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                          </div>
+
+                            {/* Row actions */}
+                            <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => setEditingValue({ id: v.id, name: v.name })}
+                                className="p-1 text-gray-400 hover:text-gray-700" title="Rename">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l-4 1 1-4 9.293-9.293a1 1 0 011.414 0l2.586 2.586a1 1 0 010 1.414L9 13z" /></svg>
+                              </button>
+                              <button onClick={() => toggleValueActive(v)}
+                                className="p-1 text-gray-400 hover:text-amber-600" title={v.active ? 'Deactivate' : 'Activate'}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                              </button>
+                              <button onClick={() => setPendingSimpleDelete({ name: v.name, onConfirm: () => deleteValue(v) })}
+                                className="p-1 text-gray-400 hover:text-red-600" title="Delete">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                              </button>
+                            </div>
+                          </>
                         )}
                       </div>
                     ))}
@@ -430,15 +500,14 @@ export default function GroupStructurePage() {
                 )}
 
                 {/* Add value */}
-                {(!parentStructure || selectedParentValueId != null) && (
-                  <div className="mt-4 flex gap-2">
-                    <input className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C]"
-                      placeholder={`New ${selectedStructure?.name.toLowerCase()} value…`} value={newValueName}
-                      onChange={e => setNewValueName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addValue() }} />
-                    <button onClick={addValue} disabled={!canAddValue || saving}
-                      className="px-3 py-1.5 bg-[#84050C] text-white text-sm rounded-lg hover:bg-[#6B0409] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Add</button>
-                  </div>
-                )}
+                <div className="mt-4 flex gap-2">
+                  <input className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C]"
+                    placeholder={`New ${currentStructure?.name.toLowerCase() ?? ''} value${currentParentValueId != null ? ` under ${drillPath[drillPath.length - 1]?.valueName}` : ''}…`}
+                    value={newValueName}
+                    onChange={e => setNewValueName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addValue() }} />
+                  <button onClick={addValue} disabled={!canAddValue || saving}
+                    className="px-3 py-1.5 bg-[#84050C] text-white text-sm rounded-lg hover:bg-[#6B0409] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Add</button>
+                </div>
               </div>
             </div>
           </>
@@ -463,7 +532,9 @@ export default function GroupStructurePage() {
           {!selectedVerifier && (
             <div className="divide-y divide-gray-100">
               {loadingAllVerifiers ? (
-                <div className="px-4 py-6 text-center text-gray-500 text-sm">Loading…</div>
+                <div className="p-4 space-y-3">
+                  {[0, 1].map(i => <div key={i} className="h-12 bg-gray-100 rounded-lg animate-pulse" />)}
+                </div>
               ) : allVerifiers.length === 0 ? (
                 <div className="px-4 py-6 text-center text-gray-500 text-sm">No verifiers assigned yet.</div>
               ) : allVerifiers.map(u => (
