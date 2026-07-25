@@ -8,13 +8,33 @@
 2026-07-25
 
 ## Version After This Session
-`2.1.0` — MINOR: **Activity-log & role/permission coverage audit (Session 13, `fix/gating-audit`)**. Filled activity-log gaps (logout, password change, election create/delete, candidate add/remove, comment create/delete, comment report, report resolve/dismiss, verifier assign/remove, role create/update/delete) + added `ACTION_BADGE` for every new + previously-raw action type. Tightened role/permission gating: election CRUD now requires `manageElections` (was `isAdmin` only / `manageElectionVisibility`); user CRUD requires `manageUsers`; report resolution requires `viewReports`. See Session 13 tables below.
+`2.2.0` — MINOR: **Feed & Profile post display fixes (Session 14, `fix/post-display`)**. Profile Recent Posts now render the real `PostCard` (YouTube/TikTok/Drive/image/video/link embeds become actual iframes/media) instead of `postExcerpt()` `[embed]`/`[image]` text markers. Added a canonical post permalink: new `GET /api/posts/[id]` (single post, same visibility+approval gate as the feed) + `/posts/[id]` page rendering the real `PostCard`. Every post now links to it (feed/profile header timestamp → `/posts/[id]`); Share copies `/posts/[id]` (was `/feed#post-${id}`). Extracted `getVisibleElectionIds` to `src/lib/postVisibility.ts` (shared by list + single GET). Avatar audit: all renders already use the object-cover-in-fixed-round-container pattern (Session 11 next/image migration) — no clipping left. See Session 14 below.
+
+Prev: `2.1.0` — MINOR: **Activity-log & role/permission coverage audit (Session 13, `fix/gating-audit`)**. Filled activity-log gaps (logout, password change, election create/delete, candidate add/remove, comment create/delete, comment report, report resolve/dismiss, verifier assign/remove, role create/update/delete) + added `ACTION_BADGE` for every new + previously-raw action type. Tightened role/permission gating: election CRUD now requires `manageElections` (was `isAdmin` only / `manageElectionVisibility`); user CRUD requires `manageUsers`; report resolution requires `viewReports`. See Session 13 tables below.
 
 Prev: `2.0.2` — FIX: **Pool exhaustion (`EMAXCONNSESSION`)** — Admin Users page 500'd with "max clients reached in session mode - pool_size:15". Per-lambda `max` lowered 5→3 (`PG_POOL_MAX` override), `idleTimeoutMillis` 30s→10s so connections free fast. **ACTION for Rhen: switch `APP_DATABASE_URL` in Vercel to the Supabase Transaction pooler (port 6543) URL** — session pooler (5432) caps total clients ~15 and serverless blows past it; transaction pooler multiplexes and is the correct serverless mode. (pg default uses unnamed prepared stmts → transaction-pooler compatible.)
 
 Prev: `2.0.1` — FIX: **Post-cutover stability (Session 12, `fix/postgres-stability`)** — cold-start killer, redirect-loop fix, PG pool tuning. See Session 12 below.
 
 Prev: `2.0.0` — MAJOR: **Turso → Supabase Postgres migration (Session 11 Part 2), MERGED + LIVE in prod.** DB layer swapped to `pg` behind a libsql-shaped adapter; data migrated + verified; app reads `APP_DATABASE_URL` (Session pooler). See Session 11 Part 2 below for the cutover incident notes.
+
+---
+
+## What Was Done (Session 14 — Feed & Profile Post Display Fixes, v2.2.0, `fix/post-display`)
+
+`tsc --noEmit` clean, `npm run build` green (`/posts/[id]` 1.13 kB; `/api/posts/[id]` gains GET).
+
+**1. Profile posts render the real post (not `[embed]`).** `src/app/users/[id]/page.tsx` dropped `postExcerpt()` (the source of `[image]`/`[video]`/`[embed]` text markers) and now maps its posts through the real `<PostCard>`. The profile already fetches `/api/posts?author_id=${id}` which returns full feed-shaped rows (`author_name`, `author_avatar`, counts, `user_reacted`, `election_title`, `status`), so no API change needed — just pass rows to PostCard. Uses `useAuth()` for `currentUserId`/role/verified. Embeds (YouTube/TikTok/Drive/image/video/link) now render as real iframes/media via PostCard's `renderContent`.
+
+**2. Canonical permalink.**
+- **`GET /api/posts/[id]`** (new, in `src/app/api/posts/[id]/route.ts`) — single post, same SELECT shape as the feed list + the same election-visibility and approval gate (non-admins: public-or-visible-election AND approved-or-own; admins bypass). 404 on missing/not-visible.
+- **`/posts/[id]` page** (new, `src/app/posts/[id]/page.tsx`) — fetches that endpoint, renders the real `PostCard`, Back button, unavailable/no-access empty state. This is the canonical link.
+- **Every post links to it:** feed + profile card header timestamp is now an `<a href="/posts/[id]">` ("View post"). `PostCard.handleShare` copies `/posts/${id}` (was `/feed#post-${id}`). Feed cards keep their `id="post-${id}"` anchor.
+- **Refactor:** `getVisibleElectionIds` moved from `posts/route.ts` into `src/lib/postVisibility.ts`; both list GET and single GET import it (no logic change / no duplication).
+
+**3. Avatar clipping audit.** Swept every avatar render named in the prompt (profile header `profile/page.tsx` + `users/[id]/page.tsx`, Navbar dropdown, admin user list `admin/users` UserAvatar, verifications panel, members directory `users/page.tsx`, PostCard comments). **All already use the correct pattern** — `<Image fill className="object-cover" />` inside a fixed-size `overflow-hidden rounded-full` box (or, in Navbar, square `width=36 height=36` + `object-cover`, which cover-crops to square). This was fixed by the Session 11 `next/image` migration; nothing left clipped/stretched. No code changes for #3.
+
+**QA note (unverified headless):** feed + a profile with image/video/embed posts + `/posts/[id]` permalink still want a live visual pass (auth-gated, remote Supabase — not runnable headless), consistent with prior sessions.
 
 ---
 

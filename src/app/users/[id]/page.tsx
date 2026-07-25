@@ -3,31 +3,19 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Image from 'next/image'
 import Layout from '@/components/Layout'
+import PostCard from '@/components/PostCard'
+import { useAuth } from '@/components/providers/AuthProvider'
 import { Calendar, Award } from 'lucide-react'
 
 interface ProfileUser { id:number; name:string; role:string; avatar_url:string|null; bio:string|null; created_at:string }
 interface Achievement { id:number; title:string; description:string|null; year:number|null }
 
-// Post content is a JSON array of blocks. Extract a plain-text preview so the
-// raw JSON never leaks into the UI (media-only posts show a marker instead).
-function postExcerpt(raw: string): string {
-  try {
-    const blocks = JSON.parse(raw) as Array<{ type: string; content: string }>
-    if (!Array.isArray(blocks)) return raw
-    const text = blocks.filter(b => b.type === 'text').map(b => b.content).join(' ').trim()
-    if (text) return text
-    const media = blocks.find(b => b.type === 'image' || b.type === 'video' || b.type === 'embed')
-    return media ? `[${media.type}]` : ''
-  } catch {
-    return raw
-  }
-}
-
 export default function UserProfilePage() {
   const { id } = useParams()
+  const { user: authUser } = useAuth()
   const [profile, setProfile] = useState<ProfileUser|null>(null)
   const [achievements, setAchievements] = useState<Achievement[]>([])
-  const [posts, setPosts] = useState<{id:number;content:string;created_at:string}[]>([])
+  const [posts, setPosts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -97,14 +85,18 @@ export default function UserProfilePage() {
         )}
 
         {posts.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">Recent Posts</h2>
-            <div className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700 mb-3 px-1">Recent Posts</h2>
+            <div className="space-y-4">
               {posts.slice(0,5).map(p => (
-                <div key={p.id} className="text-sm text-gray-600 pb-2 border-b border-gray-50 last:border-0 last:pb-0">
-                  {(() => { const t = postExcerpt(p.content); return t.slice(0,120) + (t.length>120?'...':'') })()}
-                  <span className="text-xs text-gray-400 ml-2">{new Date(p.created_at).toLocaleDateString()}</span>
-                </div>
+                <PostCard
+                  key={p.id}
+                  post={p}
+                  currentUserId={authUser?.id ?? 0}
+                  currentUserRole={authUser?.role}
+                  currentUserIdVerified={!!authUser?.id_verified}
+                  onDelete={pid => setPosts(ps => ps.filter(x => x.id !== pid))}
+                />
               ))}
             </div>
           </div>
