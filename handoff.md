@@ -5,10 +5,32 @@
 ---
 
 ## Session Date
-2026-07-24
+2026-07-25
 
 ## Version After This Session
-`2.0.0` — MAJOR: **Turso → Supabase Postgres migration (Session 11 Part 2), MERGED + LIVE in prod.** DB layer swapped to `pg` behind a libsql-shaped adapter; data migrated + verified; app reads `APP_DATABASE_URL` (Session pooler). See Session 11 Part 2 below for the cutover incident notes.
+`2.0.1` — FIX: **Post-cutover stability (Session 12, `fix/postgres-stability`)** — cold-start killer, redirect-loop fix, PG pool tuning. See Session 12 below.
+
+Prev: `2.0.0` — MAJOR: **Turso → Supabase Postgres migration (Session 11 Part 2), MERGED + LIVE in prod.** DB layer swapped to `pg` behind a libsql-shaped adapter; data migrated + verified; app reads `APP_DATABASE_URL` (Session pooler). See Session 11 Part 2 below for the cutover incident notes.
+
+---
+
+## What Was Done (Session 12 — Post-Cutover Stability, v2.0.1, `fix/postgres-stability`)
+
+Three confirmed prod problems: (A) logged-in redirect/infinite-load loop (only cookie-delete escapes); (B) ~10s page/data loads; (C) post-cutover correctness doubt.
+
+**1. Cold-start killer — `ensureInit()` DDL on every request (`src/lib/db.ts`).** Root of the 10s loads: every serverless cold instance ran 27 CREATE + ~55 ALTER + seeds + **2 bcrypt.hash** before any route work. `_init()` now short-circuits on a single cheap read: `SELECT value FROM settings WHERE key='schema_version'` — if it equals `SCHEMA_VERSION` (`'2.0.0'`), return immediately, no DDL/seed/bcrypt. Wrapped in try/catch so a fresh DB (no `settings` table) still runs full init. Version stamped LAST (partial/crashed init re-runs next time). Still lazy (no eager import), `force-dynamic` untouched. **First cold start post-deploy pays the full init once (all IF-NOT-EXISTS/ON-CONFLICT no-ops on the existing prod DB), then stamps — every subsequent cold start skips it.** To force a re-run after future schema changes, bump `SCHEMA_VERSION`.
+
+**2. Redirect loop (`src/middleware.ts`, `AuthProvider.tsx`, `/api/auth/me`).** Cause: middleware only base64-decoded the JWT (no signature check) while `/api/auth/me` did full `jose` verify → a signature-invalid token looked logged-in to middleware (redirect `/`→`/dashboard`) but 401'd at `me` → client bounced to `/` → loop.
+   - `middleware.ts`: now does full `jwtVerify` (jose runs in Edge) with the same `JWT_SECRET`. Middleware + server verification now agree. A present-but-invalid token is expired via `res.cookies.delete()` on every response so the stale cookie can't keep driving the loop.
+   - `/api/auth/me`: on 401 also `res.cookies.delete('auth-token')` server-side.
+   - `AuthProvider.fetchMe`: added 8s `AbortController` timeout (loading can't hang forever); on 401 hard-`router.replace('/')` ONCE, guarded by `window.location.pathname !== '/'` (no re-loop).
+
+**3. PG pool tuning (`db.ts` getPool).** Kept `_pool` singleton + `max:5`. Added `keepAlive:true`, `connectionTimeoutMillis:10_000`, `idleTimeoutMillis:30_000`, `statement_timeout:15_000` (server-side — a hung query aborts instead of pinning the request ~10s). `APP_DATABASE_URL` (Session pooler, 5432) precedence unchanged.
+
+**4. Correctness sweep (static).** `translate()` blanket `\bLIKE\b`→`ILIKE`: audited all 5 LIKE call sites (`users`, `admin/members/search`, `admin/verifiers`, `admin/logs`) — all are param'd (`?`) search conditions, none embed LIKE inside a string literal → replace is safe. `tsc --noEmit` clean, `npm run build` green (Middleware 32.5 kB w/ jose).
+   - **⚠ STILL NEEDS live manual pass on prod Postgres** (unverifiable headless): register → OTP → verify-id → login → dashboard → vote → post → comment/react → admin (users, verifications, elections, roles, logs, groups). Cutover smokes (read 9/9, write pass) passed at 2.0.0; these Session-12 changes touch auth/init/pool, not query translation.
+
+**Before/after timing:** not measurable in headless env — confirm on deploy via Network tab / `npx vercel logs <alias>`. Expected: cold-start dashboard load drops from ~10s (full DDL+bcrypt) to init-skip + single query; redirect loop eliminated (bad token cleared, no bounce).
 
 Prev: `1.9.1` — FIX: performance pass (Session 11 Part 1). next/image migration image pages still want a manual visual QA (banner heights, post-media, avatars).
 

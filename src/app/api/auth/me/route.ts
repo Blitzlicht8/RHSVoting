@@ -8,7 +8,11 @@ export async function GET(_request: NextRequest) {
 
   const authUser = await getAuthUser()
   if (!authUser) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Expire the stale token server-side so a bad cookie can't re-trigger the
+    // middleware redirect loop (/ → /dashboard → 401 → / …).
+    const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    res.cookies.delete('auth-token')
+    return res
   }
 
   const result = await db.execute({

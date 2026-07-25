@@ -34,18 +34,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   const fetchMe = useCallback(async () => {
+    // Abort a hung request so loading can't stay true forever (blank/infinite load).
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 8000)
     try {
-      const res = await fetch('/api/auth/me', { credentials: 'include' })
+      const res = await fetch('/api/auth/me', {
+        credentials: 'include',
+        signal: controller.signal,
+      })
       if (res.ok) {
         const json = await res.json()
         setUser(json.data ?? null)
       } else {
         setUser(null)
+        // 401 = stale/invalid token. Cookie already cleared server-side; bounce to
+        // landing ONCE (guarded by pathname) so we never loop back into a protected route.
+        if (
+          res.status === 401 &&
+          typeof window !== 'undefined' &&
+          window.location.pathname !== '/'
+        ) {
+          router.replace('/')
+        }
       }
     } catch {
       setUser(null)
+    } finally {
+      clearTimeout(timer)
     }
-  }, [])
+  }, [router])
 
   useEffect(() => {
     fetchMe().finally(() => setLoading(false))
