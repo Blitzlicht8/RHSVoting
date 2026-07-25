@@ -8,7 +8,9 @@
 2026-07-25
 
 ## Version After This Session
-`2.2.0` — MINOR: **Feed & Profile post display fixes (Session 14, `fix/post-display`)**. Profile Recent Posts now render the real `PostCard` (YouTube/TikTok/Drive/image/video/link embeds become actual iframes/media) instead of `postExcerpt()` `[embed]`/`[image]` text markers. Added a canonical post permalink: new `GET /api/posts/[id]` (single post, same visibility+approval gate as the feed) + `/posts/[id]` page rendering the real `PostCard`. Every post now links to it (feed/profile header timestamp → `/posts/[id]`); Share copies `/posts/[id]` (was `/feed#post-${id}`). Extracted `getVisibleElectionIds` to `src/lib/postVisibility.ts` (shared by list + single GET). Avatar audit: all renders already use the object-cover-in-fixed-round-container pattern (Session 11 next/image migration) — no clipping left. See Session 14 below.
+`2.3.0` — MINOR: **UI/UX & Contrast Overhaul (Session 15, `fix/ui-contrast`)**. Fixed the confirmed invisible-text bug: `src/app/admin/academic/page.tsx` (Group Structure) was the **only** admin page built for a dark theme (`text-white`, `bg-gray-900`, `text-gray-300`) while the admin shell content area is light (`bg-gray-50` + white `Navbar`). Its `text-white` "Group Structure" heading + every card/input/pill/modal landed dark-on-light or white-on-white and vanished. Converted the entire page to the shared light admin theme every other admin page uses (`bg-white` cards + `border-gray-200 shadow-sm`, `text-gray-900` headings, `text-gray-500/600/700` body, `bg-white`/`border-gray-200`/`text-gray-900` inputs with `focus:ring-[#84050C]/20`, `bg-gray-100 text-gray-700` chips, light modals). All CRUD + the Verifier assignment panel keep their function — restyle only. Also dropped the page's double `p-6` wrapper (AdminLayout already pads `p-4 md:p-6 lg:p-8`). **Structural fix, not a spot-patch** — the mismatch can't recur because the page no longer assumes a dark theme. App-wide sweep confirmed no other dark-themed page/card leftovers (`bg-gray-900/800` only appears in the intended dark sidebar/nav + modal `bg-black/60` overlays) and no orphan white-on-light text; remaining `text-gray-200/300` are decorative icons, empty-state graphics, `—` dashes, disabled/unchecked labels, and the 404 numeral — none are readable body text. `tsc --noEmit` clean, `npm run build` green. See Session 15 below.
+
+Prev: `2.2.0` — MINOR: **Feed & Profile post display fixes (Session 14, `fix/post-display`)**. Profile Recent Posts now render the real `PostCard` (YouTube/TikTok/Drive/image/video/link embeds become actual iframes/media) instead of `postExcerpt()` `[embed]`/`[image]` text markers. Added a canonical post permalink: new `GET /api/posts/[id]` (single post, same visibility+approval gate as the feed) + `/posts/[id]` page rendering the real `PostCard`. Every post now links to it (feed/profile header timestamp → `/posts/[id]`); Share copies `/posts/[id]` (was `/feed#post-${id}`). Extracted `getVisibleElectionIds` to `src/lib/postVisibility.ts` (shared by list + single GET). Avatar audit: all renders already use the object-cover-in-fixed-round-container pattern (Session 11 next/image migration) — no clipping left. See Session 14 below.
 
 Prev: `2.1.0` — MINOR: **Activity-log & role/permission coverage audit (Session 13, `fix/gating-audit`)**. Filled activity-log gaps (logout, password change, election create/delete, candidate add/remove, comment create/delete, comment report, report resolve/dismiss, verifier assign/remove, role create/update/delete) + added `ACTION_BADGE` for every new + previously-raw action type. Tightened role/permission gating: election CRUD now requires `manageElections` (was `isAdmin` only / `manageElectionVisibility`); user CRUD requires `manageUsers`; report resolution requires `viewReports`. See Session 13 tables below.
 
@@ -17,6 +19,29 @@ Prev: `2.0.2` — FIX: **Pool exhaustion (`EMAXCONNSESSION`)** — Admin Users p
 Prev: `2.0.1` — FIX: **Post-cutover stability (Session 12, `fix/postgres-stability`)** — cold-start killer, redirect-loop fix, PG pool tuning. See Session 12 below.
 
 Prev: `2.0.0` — MAJOR: **Turso → Supabase Postgres migration (Session 11 Part 2), MERGED + LIVE in prod.** DB layer swapped to `pg` behind a libsql-shaped adapter; data migrated + verified; app reads `APP_DATABASE_URL` (Session pooler). See Session 11 Part 2 below for the cutover incident notes.
+
+---
+
+## What Was Done (Session 15 — UI/UX & Contrast Overhaul, v2.3.0, `fix/ui-contrast`)
+
+**Root cause of invisible text (from the prompt's screenshot: white "Group Structure" on white).** Admin surface theme: `AdminLayout` renders a **dark sidebar** (`bg-gray-900`, intended) but a **light content area** (`main` over `bg-gray-50`, white `Navbar`). Every admin page is light (`bg-white` cards, `text-gray-900`) — verified: settings/users/elections/posts/reports/logs/roles/verifications/face-verification all use `bg-white`+`text-gray-900`, their few `text-white` uses are on `bg-[#84050C]` primary buttons. **`admin/academic` was the lone exception** — authored entirely dark (`text-white` heading, `bg-gray-900 border-gray-800` cards, `bg-gray-800 text-white` inputs, `text-gray-300/400` labels) so it rendered dark-on-light / white-on-white against the light content area.
+
+**Fix — full theme conversion of `admin/academic/page.tsx`** to the shared light admin theme (restyle only; all structure/value CRUD, the 409 force-delete-with-users flow, leveled parent-value scoping, and the Verifier search/assign panel keep exact behavior):
+- Heading `text-white`→`text-gray-900`; subtitle `text-gray-400`→`text-gray-500`.
+- Cards `bg-gray-900 border-gray-800`→`bg-white border-gray-200 shadow-sm`; section dividers `border-gray-800`→`border-gray-100`; card titles `text-gray-200`→`text-gray-900`.
+- Inputs/selects `bg-gray-800 border-gray-700 text-white`→`bg-white border-gray-200 text-gray-900` + `focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C]`; placeholders `gray-500`→`gray-400`.
+- Chips/pills `bg-gray-700 text-gray-300`→`bg-gray-100 text-gray-700`; value chips `bg-gray-800 text-gray-300`→`bg-gray-50 text-gray-700`, inactive→`bg-gray-100 text-gray-400`; count badge `bg-gray-700`→`bg-gray-200 text-gray-600`.
+- Inactive structure tab `bg-gray-900 text-gray-300 border-gray-800`→`bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50` (selected keeps `bg-[#84050C] text-white`).
+- Hover icon buttons `text-gray-500 hover:text-white`→`text-gray-400 hover:text-gray-700` (rename), `hover:text-yellow-400`→`hover:text-amber-600` (toggle), `hover:text-red-400`→`hover:text-red-600` (delete); inline-edit ✓ `text-green-400`→`text-green-600`.
+- Both confirm modals `bg-gray-900 border-gray-700`→`bg-white border-gray-200`, `text-white`→`text-gray-900`, body `text-gray-300`→`text-gray-600`, cancel btn `bg-gray-700 text-gray-200`→`bg-gray-100 text-gray-700`, delete btn `bg-red-700`→`bg-red-600 hover:bg-red-700`.
+- Removed the page's own `p-6` outer wrapper (was double-padding — AdminLayout content wrapper already applies `p-4 md:p-6 lg:p-8 max-w-7xl mx-auto`).
+
+**App-wide contrast/theme sweep (no other fixes needed):**
+- No orphan white text: every `text-white` file also carries a dark bg (primary button / dark sidebar).
+- No other dark-themed page/card: `bg-gray-900/800` outside sidebar/nav appears only as modal `bg-black/60` overlays.
+- Remaining `text-gray-200/300` occurrences audited — all decorative (empty-state SVG icons, placeholder-avatar icons, `—` detail dashes, disabled/unchecked permission labels in roles, DateTimePicker disabled days, 404 numeral). None are readable body copy on a light bg.
+
+**QA:** `npx tsc --noEmit` clean, `npm run build` green. Live visual pass on `/admin/academic` (structure tabs, values editor, leveled parent selector, verifier list + assign editor, both delete modals) still wants an eyeball on deploy — auth-gated/remote-DB, not runnable headless — but every text/bg pair now uses the AA-passing light-admin pairings from `context.md`.
 
 ---
 

@@ -326,15 +326,15 @@ export default function GroupStructurePage() {
 
   return (
     <AdminLayout>
-      <div className="p-6 max-w-5xl mx-auto">
-        <h1 className="text-2xl font-bold text-white mb-1">Group Structure</h1>
-        <p className="text-gray-400 text-sm mb-6">Manage the values within each group structure and assign verifiers.</p>
+      <div className="max-w-5xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Group Structure</h1>
+        <p className="text-gray-500 text-sm mb-6">Manage the values within each group structure and assign verifiers.</p>
 
         {/* Structure tabs */}
         {loadingStructures ? (
           <div className="text-gray-500 text-sm">Loading structures…</div>
         ) : structures.length === 0 ? (
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-6 text-center text-gray-500 text-sm">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center text-gray-500 text-sm">
             No group structures defined. Create one in Settings → Group Structures.
           </div>
         ) : (
@@ -346,7 +346,7 @@ export default function GroupStructurePage() {
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
                     selectedStructureId === s.id
                       ? 'bg-[#84050C] text-white border-[#84050C]'
-                      : 'bg-gray-900 text-gray-300 border-gray-800 hover:border-gray-600'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                   }`}>
                   {s.name}
                   {!s.active && <span className="ml-1.5 text-xs opacity-70">(inactive)</span>}
@@ -355,9 +355,9 @@ export default function GroupStructurePage() {
             </div>
 
             {/* Values editor */}
-            <div className="bg-gray-900 rounded-xl border border-gray-800 mb-4">
-              <div className="px-4 py-3 border-b border-gray-800">
-                <h2 className="text-sm font-semibold text-gray-200">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h2 className="text-sm font-semibold text-gray-900">
                   {selectedStructure?.name} — Values
                   {parentStructure && (
                     <span className="ml-1 text-gray-500 font-normal">(under {parentStructure.name})</span>
@@ -367,12 +367,12 @@ export default function GroupStructurePage() {
 
               {/* Parent value selector for leveled structures */}
               {parentStructure && (
-                <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
-                  <label className="text-sm text-gray-400">{parentStructure.name}:</label>
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+                  <label className="text-sm text-gray-600">{parentStructure.name}:</label>
                   <select
                     value={selectedParentValueId ?? ''}
                     onChange={e => setSelectedParentValueId(e.target.value ? Number(e.target.value) : null)}
-                    className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#84050C]">
+                    className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C]">
                     <option value="">Select {parentStructure.name.toLowerCase()}…</option>
                     {parentValues.map(pv => <option key={pv.id} value={pv.id}>{pv.name}</option>)}
                   </select>
@@ -393,33 +393,33 @@ export default function GroupStructurePage() {
                     {values.map(v => (
                       <div key={v.id} className="group relative">
                         {editingValue?.id === v.id ? (
-                          <div className="flex items-center gap-1 bg-gray-800 border border-gray-600 rounded-full px-2 py-1">
-                            <input className="bg-transparent text-sm text-white focus:outline-none w-28"
+                          <div className="flex items-center gap-1 bg-white border border-gray-300 rounded-full px-2 py-1">
+                            <input className="bg-transparent text-sm text-gray-900 focus:outline-none w-28"
                               value={editingValue.name} autoFocus
                               onChange={e => setEditingValue({ ...editingValue, name: e.target.value })}
                               onKeyDown={e => { if (e.key === 'Enter') saveValue(); if (e.key === 'Escape') setEditingValue(null) }} />
-                            <button onClick={saveValue} disabled={saving} className="text-xs text-green-400 hover:text-green-300">✓</button>
-                            <button onClick={() => setEditingValue(null)} className="text-xs text-gray-400 hover:text-white">✕</button>
+                            <button onClick={saveValue} disabled={saving} className="text-xs text-green-600 hover:text-green-700">✓</button>
+                            <button onClick={() => setEditingValue(null)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
                           </div>
                         ) : (
                           <div className={`flex items-center gap-1 border rounded-full px-3 py-1 text-sm transition-colors ${
-                            v.active ? 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500' : 'bg-gray-800/50 border-gray-800 text-gray-500'
+                            v.active ? 'bg-gray-50 border-gray-200 text-gray-700 hover:border-gray-300' : 'bg-gray-100 border-gray-200 text-gray-400'
                           }`}>
                             <span>{v.name}</span>
                             {typeof v.user_count === 'number' && v.user_count > 0 && (
-                              <span className="text-xs bg-gray-700 text-gray-400 rounded-full px-1.5">{v.user_count}</span>
+                              <span className="text-xs bg-gray-200 text-gray-600 rounded-full px-1.5">{v.user_count}</span>
                             )}
-                            {!v.active && <span className="text-xs text-gray-500">(inactive)</span>}
+                            {!v.active && <span className="text-xs text-gray-400">(inactive)</span>}
                             <button onClick={() => setEditingValue({ id: v.id, name: v.name })}
-                              className="opacity-0 group-hover:opacity-100 ml-1 text-gray-500 hover:text-white transition-opacity" title="Rename">
+                              className="opacity-0 group-hover:opacity-100 ml-1 text-gray-400 hover:text-gray-700 transition-opacity" title="Rename">
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l-4 1 1-4 9.293-9.293a1 1 0 011.414 0l2.586 2.586a1 1 0 010 1.414L9 13z" /></svg>
                             </button>
                             <button onClick={() => toggleValueActive(v)}
-                              className="opacity-0 group-hover:opacity-100 ml-0.5 text-gray-500 hover:text-yellow-400 transition-opacity" title={v.active ? 'Deactivate' : 'Activate'}>
+                              className="opacity-0 group-hover:opacity-100 ml-0.5 text-gray-400 hover:text-amber-600 transition-opacity" title={v.active ? 'Deactivate' : 'Activate'}>
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
                             </button>
                             <button onClick={() => setPendingSimpleDelete({ name: v.name, onConfirm: () => deleteValue(v) })}
-                              className="opacity-0 group-hover:opacity-100 ml-0.5 text-gray-500 hover:text-red-400 transition-opacity" title="Delete">
+                              className="opacity-0 group-hover:opacity-100 ml-0.5 text-gray-400 hover:text-red-600 transition-opacity" title="Delete">
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                           </div>
@@ -432,11 +432,11 @@ export default function GroupStructurePage() {
                 {/* Add value */}
                 {(!parentStructure || selectedParentValueId != null) && (
                   <div className="mt-4 flex gap-2">
-                    <input className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#84050C]"
+                    <input className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C]"
                       placeholder={`New ${selectedStructure?.name.toLowerCase()} value…`} value={newValueName}
                       onChange={e => setNewValueName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addValue() }} />
                     <button onClick={addValue} disabled={!canAddValue || saving}
-                      className="px-3 py-1.5 bg-[#84050C] text-white text-sm rounded hover:bg-[#6B0409] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Add</button>
+                      className="px-3 py-1.5 bg-[#84050C] text-white text-sm rounded-lg hover:bg-[#6B0409] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Add</button>
                   </div>
                 )}
               </div>
@@ -445,10 +445,10 @@ export default function GroupStructurePage() {
         )}
 
         {/* Verifier Panel */}
-        <div className="bg-gray-900 rounded-xl border border-gray-800">
-          <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-sm font-semibold text-gray-200">Verifiers</h2>
+              <h2 className="text-sm font-semibold text-gray-900">Verifiers</h2>
               <p className="text-xs text-gray-500 mt-0.5">Assign which group value(s) each verifier covers.</p>
             </div>
             {!selectedVerifier && (
@@ -461,31 +461,31 @@ export default function GroupStructurePage() {
 
           {/* Current verifiers list */}
           {!selectedVerifier && (
-            <div className="divide-y divide-gray-800">
+            <div className="divide-y divide-gray-100">
               {loadingAllVerifiers ? (
                 <div className="px-4 py-6 text-center text-gray-500 text-sm">Loading…</div>
               ) : allVerifiers.length === 0 ? (
                 <div className="px-4 py-6 text-center text-gray-500 text-sm">No verifiers assigned yet.</div>
               ) : allVerifiers.map(u => (
-                <div key={u.id} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-800/50 transition-colors">
+                <div key={u.id} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                   <div className="w-8 h-8 rounded-full bg-[#84050C] flex items-center justify-center shrink-0 mt-0.5">
                     <span className="text-white text-xs font-medium select-none">{u.name.charAt(0).toUpperCase()}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm text-gray-200 font-medium">{u.name}</span>
+                      <span className="text-sm text-gray-900 font-medium">{u.name}</span>
                       <span className="text-xs text-gray-500">{getRoleLabel(u.role)}</span>
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {u.assignments.map(a => (
-                        <span key={`${a.structure_id}:${a.value_id}`} className="inline-flex items-center gap-1 text-xs bg-gray-700 text-gray-300 rounded-full px-2.5 py-0.5">
+                        <span key={`${a.structure_id}:${a.value_id}`} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 rounded-full px-2.5 py-0.5">
                           {a.structure_name}: {a.value_name}
                         </span>
                       ))}
                     </div>
                   </div>
                   <button onClick={() => selectVerifier(u)}
-                    className="text-xs text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 px-2.5 py-1 rounded transition-colors shrink-0 mt-0.5">
+                    className="text-xs text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-lg transition-colors shrink-0 mt-0.5">
                     Edit
                   </button>
                 </div>
@@ -493,33 +493,33 @@ export default function GroupStructurePage() {
             </div>
           )}
 
-          <div className="p-4 border-t border-gray-800">
+          <div className="p-4 border-t border-gray-100">
             {!selectedVerifier ? (
               /* Search state */
               <div className="max-w-md">
                 <input
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#84050C] transition-colors"
+                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C] transition-colors"
                   placeholder="Search moderators & above by name or email…"
                   value={verifierSearch}
                   onChange={e => setVerifierSearch(e.target.value)}
                 />
                 {verifierSearch.trim().length > 0 && (
-                  <div className="mt-2 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
+                  <div className="mt-2 bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                     {searchingVerifiers ? (
                       <div className="p-3 text-center text-gray-500 text-sm">Searching…</div>
                     ) : verifierSearchResults.length === 0 ? (
                       <div className="p-3 text-center text-gray-500 text-sm">No eligible users found.</div>
                     ) : verifierSearchResults.map(u => (
                       <button key={u.id} onClick={() => selectVerifier(u)}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-700 text-left transition-colors border-b border-gray-700/50 last:border-0">
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 text-left transition-colors border-b border-gray-100 last:border-0">
                         <div className="w-8 h-8 rounded-full bg-[#84050C] flex items-center justify-center shrink-0">
                           <span className="text-white text-xs font-medium select-none">{u.name.charAt(0).toUpperCase()}</span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-200 truncate">{u.name}</p>
+                          <p className="text-sm text-gray-900 truncate">{u.name}</p>
                           <p className="text-xs text-gray-500">{getRoleLabel(u.role)} · {u.email}</p>
                         </div>
-                        <svg className="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                       </button>
                     ))}
                   </div>
@@ -528,20 +528,20 @@ export default function GroupStructurePage() {
             ) : (
               /* Assignment editor */
               <div>
-                <div className="flex items-center gap-3 mb-4 p-3 bg-gray-800 rounded-lg border border-gray-700">
+                <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <div className="w-9 h-9 rounded-full bg-[#84050C] flex items-center justify-center shrink-0">
                     <span className="text-white text-sm font-medium select-none">{selectedVerifier.name.charAt(0).toUpperCase()}</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-200 font-medium">{selectedVerifier.name}</p>
+                    <p className="text-sm text-gray-900 font-medium">{selectedVerifier.name}</p>
                     <p className="text-xs text-gray-500">{getRoleLabel(selectedVerifier.role)}</p>
                   </div>
-                  <button onClick={clearVerifier} className="text-xs text-gray-400 hover:text-white transition-colors px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 shrink-0">
+                  <button onClick={clearVerifier} className="text-xs text-gray-600 hover:text-gray-900 transition-colors px-2 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 shrink-0">
                     Done
                   </button>
                 </div>
 
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">Covers these group values</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Covers these group values</p>
 
                 {loadingAssignments ? (
                   <div className="text-center text-gray-500 text-sm py-4">Loading…</div>
@@ -550,21 +550,21 @@ export default function GroupStructurePage() {
                 ) : (
                   <div className="flex flex-wrap gap-2 mb-4">
                     {verifierAssignments.map(a => (
-                      <span key={a.id} className="inline-flex items-center gap-1.5 text-xs bg-gray-700 text-gray-200 rounded-full pl-3 pr-1.5 py-1">
+                      <span key={a.id} className="inline-flex items-center gap-1.5 text-xs bg-gray-100 text-gray-700 rounded-full pl-3 pr-1.5 py-1">
                         {a.structure_name}: {a.value_name}
                         <button onClick={() => removeVerifierAssignment(a.id)}
-                          className="text-gray-400 hover:text-red-400 transition-colors" title="Remove">✕</button>
+                          className="text-gray-400 hover:text-red-600 transition-colors" title="Remove">✕</button>
                       </span>
                     ))}
                   </div>
                 )}
 
                 {/* Add assignment row */}
-                <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-gray-800">
+                <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-gray-100">
                   <select
                     value={assignStructureId ?? ''}
                     onChange={e => setAssignStructureId(e.target.value ? Number(e.target.value) : null)}
-                    className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#84050C]">
+                    className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C]">
                     <option value="">Structure…</option>
                     {structures.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
@@ -572,12 +572,12 @@ export default function GroupStructurePage() {
                     value={assignValueId ?? ''}
                     disabled={assignStructureId == null}
                     onChange={e => setAssignValueId(e.target.value ? Number(e.target.value) : null)}
-                    className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-[#84050C] disabled:opacity-50">
+                    className="bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#84050C]/20 focus:border-[#84050C] disabled:opacity-50">
                     <option value="">Value…</option>
                     {assignValues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                   </select>
                   <button onClick={addVerifierAssignment} disabled={assignStructureId == null || assignValueId == null || assigning}
-                    className="px-3 py-1.5 bg-[#84050C] hover:bg-[#6B0409] disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm rounded transition-colors">
+                    className="px-3 py-1.5 bg-[#84050C] hover:bg-[#6B0409] disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors">
                     {assigning ? 'Adding…' : 'Add'}
                   </button>
                 </div>
@@ -590,14 +590,14 @@ export default function GroupStructurePage() {
       {/* Simple delete confirmation */}
       {pendingSimpleDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
-            <h3 className="text-base font-semibold text-white">Delete &ldquo;{pendingSimpleDelete.name}&rdquo;?</h3>
-            <p className="text-sm text-gray-300">This value will be permanently deleted. This cannot be undone.</p>
+          <div className="bg-white border border-gray-200 rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-base font-semibold text-gray-900">Delete &ldquo;{pendingSimpleDelete.name}&rdquo;?</h3>
+            <p className="text-sm text-gray-600">This value will be permanently deleted. This cannot be undone.</p>
             <div className="flex gap-3 pt-2">
               <button onClick={() => { const fn = pendingSimpleDelete.onConfirm; setPendingSimpleDelete(null); fn() }}
-                className="flex-1 px-4 py-2 bg-red-700 hover:bg-red-600 text-white text-sm rounded-lg font-medium transition-colors">Delete</button>
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg font-medium transition-colors">Delete</button>
               <button onClick={() => setPendingSimpleDelete(null)}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded-lg transition-colors">Cancel</button>
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-lg transition-colors">Cancel</button>
             </div>
           </div>
         </div>
@@ -606,19 +606,19 @@ export default function GroupStructurePage() {
       {/* Force-delete (value has users) confirmation */}
       {valueForceDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
-            <h3 className="text-base font-semibold text-white">Cannot delete &ldquo;{valueForceDelete.name}&rdquo;</h3>
-            <p className="text-sm text-gray-300">
-              This value has <strong className="text-white">{valueForceDelete.userCount} user(s)</strong> assigned.
+          <div className="bg-white border border-gray-200 rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <h3 className="text-base font-semibold text-gray-900">Cannot delete &ldquo;{valueForceDelete.name}&rdquo;</h3>
+            <p className="text-sm text-gray-600">
+              This value has <strong className="text-gray-900">{valueForceDelete.userCount} user(s)</strong> assigned.
               Force-deleting will clear their assignment and flag them for re-verification. This cannot be undone.
             </p>
             <div className="flex gap-3 pt-2">
               <button onClick={confirmForceDeleteValue} disabled={deleting}
-                className="flex-1 px-4 py-2 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-sm rounded-lg font-medium transition-colors">
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm rounded-lg font-medium transition-colors">
                 {deleting ? 'Deleting…' : 'Delete and reset users'}
               </button>
               <button onClick={() => setValueForceDelete(null)}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded-lg transition-colors">Cancel</button>
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-lg transition-colors">Cancel</button>
             </div>
           </div>
         </div>
