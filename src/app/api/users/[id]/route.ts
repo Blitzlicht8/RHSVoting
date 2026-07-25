@@ -100,6 +100,16 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const body = await request.json()
+
+  // Admin-only user-management fields require the manageUsers scope (self-edits
+  // of name/bio are exempt; timeout additionally requires manageUserPenalties below).
+  const ADMIN_FIELDS = ['role', 'active', 'email', 'email_verified', 'id_verified', 'grade_level_id', 'subtype_id', 'section_id', 'timeout_days']
+  if (adminUser && ADMIN_FIELDS.some((f) => body[f] !== undefined)) {
+    if (!(await hasPermission(authUser.role as Role, 'manageUsers'))) {
+      return NextResponse.json({ error: 'Forbidden — missing user management permission' }, { status: 403 })
+    }
+  }
+
   const setClauses: string[] = []
   const values: InValue[] = []
 
@@ -277,6 +287,9 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
   const actorRole = authUser.role as string
   if (!['master_admin', 'admin'].includes(actorRole)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!(await hasPermission(authUser.role as Role, 'manageUsers'))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

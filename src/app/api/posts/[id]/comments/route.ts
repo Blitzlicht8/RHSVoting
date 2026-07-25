@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   await ensureInit()
@@ -31,6 +32,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     args: [parseInt(params.id), authUser.id, body.content.trim()],
   })
   const avatarRow = await db.execute({ sql: `SELECT avatar_url FROM users WHERE id = ?`, args: [authUser.id] })
+  const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
+  await logActivity(authUser.id, 'comment_created', `Commented on post ${params.id}`, ip)
   return NextResponse.json({
     data: { ...result.rows[0], author_id: authUser.id, author_name: authUser.name, author_avatar: avatarRow.rows[0]?.avatar_url ?? null }
   }, { status: 201 })
@@ -61,5 +64,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   }
 
   await db.execute({ sql: `DELETE FROM post_comments WHERE id = ?`, args: [commentId] })
+  const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
+  await logActivity(authUser.id, 'comment_deleted', `Deleted comment ${commentId} on post ${postId}`, ip)
   return NextResponse.json({ message: 'Deleted' })
 }

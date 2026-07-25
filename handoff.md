@@ -8,11 +8,72 @@
 2026-07-25
 
 ## Version After This Session
-`2.0.2` — FIX: **Pool exhaustion (`EMAXCONNSESSION`)** — Admin Users page 500'd with "max clients reached in session mode - pool_size:15". Per-lambda `max` lowered 5→3 (`PG_POOL_MAX` override), `idleTimeoutMillis` 30s→10s so connections free fast. **ACTION for Rhen: switch `APP_DATABASE_URL` in Vercel to the Supabase Transaction pooler (port 6543) URL** — session pooler (5432) caps total clients ~15 and serverless blows past it; transaction pooler multiplexes and is the correct serverless mode. (pg default uses unnamed prepared stmts → transaction-pooler compatible.)
+`2.1.0` — MINOR: **Activity-log & role/permission coverage audit (Session 13, `fix/gating-audit`)**. Filled activity-log gaps (logout, password change, election create/delete, candidate add/remove, comment create/delete, comment report, report resolve/dismiss, verifier assign/remove, role create/update/delete) + added `ACTION_BADGE` for every new + previously-raw action type. Tightened role/permission gating: election CRUD now requires `manageElections` (was `isAdmin` only / `manageElectionVisibility`); user CRUD requires `manageUsers`; report resolution requires `viewReports`. See Session 13 tables below.
+
+Prev: `2.0.2` — FIX: **Pool exhaustion (`EMAXCONNSESSION`)** — Admin Users page 500'd with "max clients reached in session mode - pool_size:15". Per-lambda `max` lowered 5→3 (`PG_POOL_MAX` override), `idleTimeoutMillis` 30s→10s so connections free fast. **ACTION for Rhen: switch `APP_DATABASE_URL` in Vercel to the Supabase Transaction pooler (port 6543) URL** — session pooler (5432) caps total clients ~15 and serverless blows past it; transaction pooler multiplexes and is the correct serverless mode. (pg default uses unnamed prepared stmts → transaction-pooler compatible.)
 
 Prev: `2.0.1` — FIX: **Post-cutover stability (Session 12, `fix/postgres-stability`)** — cold-start killer, redirect-loop fix, PG pool tuning. See Session 12 below.
 
 Prev: `2.0.0` — MAJOR: **Turso → Supabase Postgres migration (Session 11 Part 2), MERGED + LIVE in prod.** DB layer swapped to `pg` behind a libsql-shaped adapter; data migrated + verified; app reads `APP_DATABASE_URL` (Session pooler). See Session 11 Part 2 below for the cutover incident notes.
+
+---
+
+## What Was Done (Session 13 — Activity-Log & Role/Permission Coverage Audit, v2.1.0, `fix/gating-audit`)
+
+Two mechanical, evidence-based audits over every state-mutating API route under `src/app/api/`. `tsc --noEmit` clean, `npm run build` green.
+
+### Part 1 — Activity-log coverage
+
+**Already logged (Sessions 5–12, verified still firing):** `login_success`/`login_failed`/`login_otp_sent`/`otp_failed` (auth/login + verify-otp), `vote_cast`, `post_created`/`post_deleted`/`post_approved`/`post_rejected`/`post_reported`, `settings_changed`, `election_visibility_changed`, `user_created`/`user_role_changed`/`user_activated`/`user_deactivated`/`user_deleted`/`user_edited`/`user_timeout`/`email_verified_admin`/`id_verified_admin`, `password_reset_admin` (admin/users/[id]/reset-password), `admin_verified_user` (verify-upload), `verification_submitted`/`reverified`/`approved`/`rejected`/`cancelled`, `group_structure_created`/`deleted`, `group_value_created`/`deleted`, `student_academic_removed`, `face_enrolled`/`face_verify_reported`/`face_admin_action`, `profile_updated`.
+
+**Gaps found + fixed (new `logActivity` calls added):**
+
+| Route | Action logged (new) |
+|---|---|
+| `POST /api/auth/logout` | `logout` |
+| `POST /api/auth/change-password` | `password_changed` |
+| `POST /api/elections` | `election_created` |
+| `DELETE /api/elections/[id]` | `election_deleted` |
+| `POST /api/elections/[id]/candidates` | `candidate_added` |
+| `DELETE /api/elections/[id]/candidates` | `candidate_removed` |
+| `POST /api/posts/[id]/comments` | `comment_created` |
+| `DELETE /api/posts/[id]/comments` | `comment_deleted` |
+| `POST /api/comments/[id]/report` + `POST /api/posts/[id]/comments/[commentId]/report` | `comment_reported` |
+| `PATCH /api/admin/reports/[id]` | `report_resolved` / `report_dismissed` |
+| `PATCH /api/admin/comment-reports/[id]` | `report_resolved` / `report_dismissed` |
+| `POST /api/admin/verifiers` | `verifier_assigned` |
+| `DELETE /api/admin/verifiers/[id]` | `verifier_removed` |
+| `POST /api/admin/roles` | `role_created` |
+| `PATCH /api/admin/roles/[id]` | `role_updated` |
+| `DELETE /api/admin/roles/[id]` | `role_deleted` |
+
+`ACTION_BADGE` in `src/app/admin/logs/page.tsx` gained a colored pill for every new action **and** every previously-raw (gray-fallback) type (vote_cast, post_created/deleted/reported, profile_updated, face_*, verification_cancelled, admin_verified_user, password_reset_admin, etc.).
+
+**Not logged, deliberately:** read-only GETs; `posts/[id]/react` (too noisy, per-toggle); config CRUD on `admin/verification-requirements` (low-value, admin-only). Deprecated 410-stub routes (`admin/students`, `admin/teacher-assignments`, `admin/users/[id]/remove-academic`) — no-ops, nothing to log.
+
+### Part 2 — Role/permission gating
+
+Scope taxonomy (seeded in `db.ts` role seeds + Session-8 backfill): admin role holds `manageUsers, manageElections, viewReports, verifyMembers, managePosts`; moderator holds `viewReports, managePosts` (+ Session-9 `reviewVerificationFields, managePostApproval`); master_admin bypasses all (`hasPermission` returns true).
+
+| Route | Required scope | Before | After |
+|---|---|---|---|
+| `POST /api/elections` | manageElections | `isAdmin` only | `isAdmin` + **manageElections** |
+| `PATCH /api/elections/[id]` | manageElections (+ manageElectionVisibility if visibility/warn fields change) | `manageElectionVisibility` gated **all** edits | base **manageElections**; visibility toggles additionally gated on manageElectionVisibility |
+| `DELETE /api/elections/[id]` | manageElections | `manageElectionVisibility` | **manageElections** |
+| `POST`/`DELETE /api/elections/[id]/candidates` | manageElections | `isAdmin` only | `isAdmin` + **manageElections** |
+| `POST /api/admin/users/create` | manageUsers | admin-role list only | + **manageUsers** |
+| `PATCH /api/users/[id]` (admin fields) | manageUsers (+ manageUserPenalties for timeout) | `isAdmin` per-field; only timeout gated | admin-management fields gated on **manageUsers** (self name/bio exempt); timeout still manageUserPenalties |
+| `DELETE /api/users/[id]` | manageUsers | admin-role list only | + **manageUsers** |
+| `POST /api/admin/users/[id]/reset-password` | manageUsers | admin-role list only | + **manageUsers** |
+| `PATCH /api/admin/reports/[id]` | viewReports | admin-role list only | + **viewReports** |
+| `PATCH /api/admin/comment-reports/[id]` | viewReports | admin-role list only | + **viewReports** |
+
+**Already correct (Session 9, re-verified no regression post-cutover):** `PATCH /api/verifications/[id]` (reviewVerificationFields), `PATCH /api/posts/[id]` (managePostApproval), `users/[id]` timeout branch (manageUserPenalties), election visibility (manageElectionVisibility). **Left admin-only (acceptable, no scope split):** `admin/verifiers` (master_admin/admin write-guard), `admin/roles` (master_admin-only — strictest), `admin/verification-requirements`, `admin/face-verification`, `admin/users/[id]/documents`, `verify-upload`.
+
+**Net gating effect:** moderator (isAdmin=true but lacks manageElections/manageUsers) can no longer create/edit/delete elections+candidates or manage/delete users — previously slipped through the blanket `isAdmin` gate. Intended tightening.
+
+### Unverified-user read-only (API-level, confirmed 403 not just UI)
+`id_verified` checked server-side on all create paths: `posts` POST (`route.ts:153`), `posts/[id]/react` POST (`:11`), `posts/[id]/comments` POST (`:24`), `elections/[id]/vote` POST (`:86`). All 403 for `id_verified=0`. ✓
 
 ---
 

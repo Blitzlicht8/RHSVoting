@@ -208,7 +208,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (!isAdmin(authUser.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  if (!(await hasPermission(authUser.role, 'manageElectionVisibility'))) {
+  if (!(await hasPermission(authUser.role, 'manageElections'))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -227,6 +227,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const body = await request.json()
+
+  // Visibility/warning toggles are a separate granular capability.
+  const touchesVisibility =
+    (body.visible_to_all !== undefined && !!body.visible_to_all !== !!existing.visible_to_all) ||
+    (body.warn_non_voters !== undefined && !!body.warn_non_voters !== !!existing.warn_non_voters)
+  if (touchesVisibility && !(await hasPermission(authUser.role, 'manageElectionVisibility'))) {
+    return NextResponse.json({ error: 'Forbidden — missing election visibility permission' }, { status: 403 })
+  }
+
   const setClauses: string[] = []
   const values: InValue[] = []
 
@@ -451,7 +460,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   if (!isAdmin(authUser.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  if (!(await hasPermission(authUser.role, 'manageElectionVisibility'))) {
+  if (!(await hasPermission(authUser.role, 'manageElections'))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -461,7 +470,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   }
 
   const existingResult = await db.execute({
-    sql: 'SELECT id, status FROM elections WHERE id = ?',
+    sql: 'SELECT id, status, title FROM elections WHERE id = ?',
     args: [electionId],
   })
   const existing = existingResult.rows[0]
@@ -477,6 +486,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     // votes FK has no CASCADE — must delete manually before the election row
     await db.execute({ sql: 'DELETE FROM votes WHERE election_id = ?', args: [electionId] })
     await db.execute({ sql: 'DELETE FROM elections WHERE id = ?', args: [electionId] })
+    const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
+    await logActivity(authUser.id, 'election_deleted', `Deleted ${status} election ${electionId} "${existing.title as string}"`, ip)
   }
 
   if (status === 'draft') {

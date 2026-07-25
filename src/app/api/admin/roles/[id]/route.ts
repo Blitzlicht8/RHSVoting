@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 import { invalidate, CACHE_KEYS } from '@/lib/cache'
 
 async function checkAdmin() {
@@ -32,10 +33,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   args.push(id)
   await db.execute({ sql: `UPDATE roles SET ${updates.join(',')} WHERE id=?`, args })
   invalidate(CACHE_KEYS.rolesList)
+  const ip = req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? 'unknown'
+  await logActivity(auth.id, 'role_updated', `Updated role "${roleName}" (${updates.map(u => u.split('=')[0]).join(', ')})`, ip)
   return NextResponse.json({ message: 'Updated' })
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   await ensureInit()
   const auth = await checkAdmin()
   if (!auth) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -49,5 +52,7 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
   if (Number((users.rows[0] as any)?.c) > 0) return NextResponse.json({ error: 'Role has assigned members' }, { status: 400 })
   await db.execute({ sql: `DELETE FROM roles WHERE id=?`, args: [id] })
   invalidate(CACHE_KEYS.rolesList)
+  const ip = req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? 'unknown'
+  await logActivity(auth.id, 'role_deleted', `Deleted role "${roleName}"`, ip)
   return NextResponse.json({ message: 'Deleted' })
 }

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   await ensureInit()
@@ -21,5 +22,7 @@ export async function POST(request: NextRequest) {
 
   const hash = await bcrypt.hash(newPassword, 12)
   await db.execute({ sql: `UPDATE users SET password_hash=?, updated_at=datetime('now') WHERE id=?`, args: [hash, authUser.id] })
+  const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
+  await logActivity(authUser.id, 'password_changed', 'Changed own account password', ip)
   return NextResponse.json({ message: 'Password changed successfully' })
 }

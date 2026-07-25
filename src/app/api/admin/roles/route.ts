@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 import { cached, invalidate, CACHE_KEYS, CONFIG_TTL } from '@/lib/cache'
 
 export async function GET() {
@@ -34,10 +35,13 @@ export async function POST(req: NextRequest) {
   if (!auth || auth.role !== 'master_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { name, permissions } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 })
+  const roleName = name.trim().toLowerCase().replace(/\s+/g, '_')
   await db.execute({
     sql: `INSERT INTO roles (name, permissions) VALUES (?,?)`,
-    args: [name.trim().toLowerCase().replace(/\s+/g, '_'), JSON.stringify(permissions ?? {})],
+    args: [roleName, JSON.stringify(permissions ?? {})],
   })
   invalidate(CACHE_KEYS.rolesList)
+  const ip = req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? 'unknown'
+  await logActivity(auth.id, 'role_created', `Created role "${roleName}"`, ip)
   return NextResponse.json({ message: 'Created' })
 }

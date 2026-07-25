@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 
 export async function POST(
   request: NextRequest,
@@ -19,5 +20,7 @@ export async function POST(
     sql: `INSERT OR IGNORE INTO comment_reports (comment_id, reporter_id, reason) VALUES (?,?,?)`,
     args: [commentId, authUser.id, reason],
   })
+  const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
+  await logActivity(authUser.id, 'comment_reported', `Reported comment ${commentId}${reason ? `: ${reason}` : ''}`, ip)
   return NextResponse.json({ message: 'Reported' })
 }

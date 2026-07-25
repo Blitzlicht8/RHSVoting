@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { logActivity } from '@/lib/logger'
 
 function requireWrite(role: string) {
   return ['master_admin', 'admin'].includes(role)
@@ -113,5 +114,7 @@ export async function POST(request: NextRequest) {
     sql: `SELECT id FROM group_verifier_values WHERE user_id = ? AND structure_id = ? AND value_id = ?`,
     args: [user_id, structure_id, value_id],
   })
+  const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
+  await logActivity(authUser.id, 'verifier_assigned', `Assigned user ${user_id} as verifier for value ${value_id} (structure ${structure_id})`, ip)
   return NextResponse.json({ data: { id: Number(row.rows[0]?.id) } }, { status: 201 })
 }
