@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { hasPermission } from '@/lib/permissions'
 import { logActivity } from '@/lib/logger'
 
 function generatePassword(): string {
@@ -14,6 +15,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   await ensureInit()
   const authUser = await getAuthUser()
   if (!authUser || !['master_admin', 'admin'].includes(authUser.role as string))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!(await hasPermission(authUser.role, 'manageUsers')))
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const targetId = parseInt(params.id, 10)

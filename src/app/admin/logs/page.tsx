@@ -128,6 +128,115 @@ const ACTION_BADGE: Record<string, { label: string; className: string }> = {
     label: 'Settings Changed',
     className: 'bg-purple-100 text-purple-700 border border-purple-200',
   },
+  // Session 13 — activity-log coverage audit
+  logout: {
+    label: 'Logout',
+    className: 'bg-gray-100 text-gray-600 border border-gray-200',
+  },
+  password_changed: {
+    label: 'Password Changed',
+    className: 'bg-amber-100 text-amber-700 border border-amber-200',
+  },
+  password_reset_admin: {
+    label: 'Password Reset (Admin)',
+    className: 'bg-amber-100 text-amber-700 border border-amber-200',
+  },
+  election_created: {
+    label: 'Election Created',
+    className: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+  },
+  election_deleted: {
+    label: 'Election Deleted',
+    className: 'bg-red-100 text-red-700 border border-red-200',
+  },
+  candidate_added: {
+    label: 'Candidate Added',
+    className: 'bg-green-100 text-green-700 border border-green-200',
+  },
+  candidate_removed: {
+    label: 'Candidate Removed',
+    className: 'bg-rose-100 text-rose-700 border border-rose-200',
+  },
+  vote_cast: {
+    label: 'Vote Cast',
+    className: 'bg-blue-100 text-blue-700 border border-blue-200',
+  },
+  verifier_assigned: {
+    label: 'Verifier Assigned',
+    className: 'bg-indigo-100 text-indigo-700 border border-indigo-200',
+  },
+  verifier_removed: {
+    label: 'Verifier Removed',
+    className: 'bg-rose-100 text-rose-700 border border-rose-200',
+  },
+  role_created: {
+    label: 'Role Created',
+    className: 'bg-purple-100 text-purple-700 border border-purple-200',
+  },
+  role_updated: {
+    label: 'Role Updated',
+    className: 'bg-purple-100 text-purple-700 border border-purple-200',
+  },
+  role_deleted: {
+    label: 'Role Deleted',
+    className: 'bg-red-100 text-red-700 border border-red-200',
+  },
+  post_created: {
+    label: 'Post Created',
+    className: 'bg-green-100 text-green-700 border border-green-200',
+  },
+  post_deleted: {
+    label: 'Post Deleted',
+    className: 'bg-red-100 text-red-700 border border-red-200',
+  },
+  post_reported: {
+    label: 'Post Reported',
+    className: 'bg-orange-100 text-orange-700 border border-orange-200',
+  },
+  comment_created: {
+    label: 'Comment Created',
+    className: 'bg-green-100 text-green-700 border border-green-200',
+  },
+  comment_deleted: {
+    label: 'Comment Deleted',
+    className: 'bg-rose-100 text-rose-700 border border-rose-200',
+  },
+  comment_reported: {
+    label: 'Comment Reported',
+    className: 'bg-orange-100 text-orange-700 border border-orange-200',
+  },
+  report_resolved: {
+    label: 'Report Resolved',
+    className: 'bg-green-100 text-green-700 border border-green-200',
+  },
+  report_dismissed: {
+    label: 'Report Dismissed',
+    className: 'bg-gray-100 text-gray-600 border border-gray-200',
+  },
+  profile_updated: {
+    label: 'Profile Updated',
+    className: 'bg-sky-100 text-sky-700 border border-sky-200',
+  },
+  face_enrolled: {
+    label: 'Face Enrolled',
+    className: 'bg-teal-100 text-teal-700 border border-teal-200',
+  },
+  face_verify_reported: {
+    label: 'Face Verify Reported',
+    className: 'bg-orange-100 text-orange-700 border border-orange-200',
+  },
+  face_admin_action: {
+    label: 'Face Admin Action',
+    className: 'bg-cyan-100 text-cyan-700 border border-cyan-200',
+  },
+  verification_cancelled: {
+    label: 'Verification Cancelled',
+    className: 'bg-gray-100 text-gray-600 border border-gray-200',
+  },
+  admin_verified_user: {
+    label: 'Admin Verified User',
+    className: 'bg-cyan-100 text-cyan-700 border border-cyan-200',
+  },
 }
 
 function ActionBadge({ action }: { action: string }) {

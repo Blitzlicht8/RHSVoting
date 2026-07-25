@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { hasPermission } from '@/lib/permissions'
+import { logActivity } from '@/lib/logger'
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   await ensureInit()
@@ -44,6 +46,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!isAdmin(authUser.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!(await hasPermission(authUser.role, 'manageElections'))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -92,6 +97,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     args: [Number(insertResult.lastInsertRowid)],
   })
 
+  const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
+  await logActivity(authUser.id, 'candidate_added', `Added candidate "${name.trim()}" to election ${electionId}`, ip)
+
   return NextResponse.json({ data: { candidate: candidate.rows[0] } }, { status: 201 })
 }
 
@@ -103,6 +111,9 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!isAdmin(authUser.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!(await hasPermission(authUser.role, 'manageElections'))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -138,5 +149,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   }
 
   await db.execute({ sql: 'DELETE FROM candidates WHERE id = ?', args: [candidateId] })
+  const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
+  await logActivity(authUser.id, 'candidate_removed', `Removed candidate ${candidateId} from election ${electionId}`, ip)
   return NextResponse.json({ message: 'Candidate removed successfully' })
 }

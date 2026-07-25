@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
+import { hasPermission } from '@/lib/permissions'
+import { logActivity } from '@/lib/logger'
 import { checkAutoTransition } from '@/lib/autoTransition'
 import { evaluateEligibility, getUserValueSet, EligibilityRule } from '@/lib/groups'
 
@@ -171,6 +173,9 @@ export async function POST(request: NextRequest) {
   if (!isAdmin(authUser.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
+  if (!(await hasPermission(authUser.role, 'manageElections'))) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const body = await request.json()
   const { title, description, start_date, end_date } = body
@@ -247,6 +252,9 @@ export async function POST(request: NextRequest) {
     sql: 'SELECT * FROM elections WHERE id = ?',
     args: [electionId],
   })
+
+  const ip = request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? 'unknown'
+  await logActivity(authUser.id, 'election_created', `Created election "${title.trim()}" (${status})`, ip)
 
   return NextResponse.json({ data: { election: election.rows[0] } }, { status: 201 })
 }
