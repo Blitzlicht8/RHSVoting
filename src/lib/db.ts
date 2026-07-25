@@ -146,14 +146,22 @@ function getPool(): Pool {
       process.env.DATABASE_URL
     if (!url) throw new Error('APP_DATABASE_URL / POSTGRES_URL is not set')
     const cfg = parsePgUrl(url)
+    // Serverless + Supabase pooler connection budget:
+    //   - Session pooler (5432) caps TOTAL clients at ~15 → a few concurrent cold
+    //     lambdas × max:5 = EMAXCONNSESSION "max clients reached in session mode".
+    //   - Transaction pooler (6543) multiplexes server-side; prefer it in prod
+    //     (set APP_DATABASE_URL to the 6543 URL).
+    // Keep max small per instance so many instances still fit the budget. Release
+    // idle connections fast so they return to the pooler between bursts.
     _pool = new Pool({
       ...cfg,
       ssl: { rejectUnauthorized: false },
-      max: 5,
+      max: Number(process.env.PG_POOL_MAX) || 3,
       keepAlive: true,
       // Fail fast instead of hanging a page for 10s on a dead/slow connection.
       connectionTimeoutMillis: 10_000,
-      idleTimeoutMillis: 30_000,
+      // Short so idle connections free quickly under the session-pooler client cap.
+      idleTimeoutMillis: 10_000,
       // Server-side cap so a runaway query aborts rather than pinning the request.
       statement_timeout: 15_000,
     })

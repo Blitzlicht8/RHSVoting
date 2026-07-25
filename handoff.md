@@ -8,7 +8,9 @@
 2026-07-25
 
 ## Version After This Session
-`2.0.1` — FIX: **Post-cutover stability (Session 12, `fix/postgres-stability`)** — cold-start killer, redirect-loop fix, PG pool tuning. See Session 12 below.
+`2.0.2` — FIX: **Pool exhaustion (`EMAXCONNSESSION`)** — Admin Users page 500'd with "max clients reached in session mode - pool_size:15". Per-lambda `max` lowered 5→3 (`PG_POOL_MAX` override), `idleTimeoutMillis` 30s→10s so connections free fast. **ACTION for Rhen: switch `APP_DATABASE_URL` in Vercel to the Supabase Transaction pooler (port 6543) URL** — session pooler (5432) caps total clients ~15 and serverless blows past it; transaction pooler multiplexes and is the correct serverless mode. (pg default uses unnamed prepared stmts → transaction-pooler compatible.)
+
+Prev: `2.0.1` — FIX: **Post-cutover stability (Session 12, `fix/postgres-stability`)** — cold-start killer, redirect-loop fix, PG pool tuning. See Session 12 below.
 
 Prev: `2.0.0` — MAJOR: **Turso → Supabase Postgres migration (Session 11 Part 2), MERGED + LIVE in prod.** DB layer swapped to `pg` behind a libsql-shaped adapter; data migrated + verified; app reads `APP_DATABASE_URL` (Session pooler). See Session 11 Part 2 below for the cutover incident notes.
 
