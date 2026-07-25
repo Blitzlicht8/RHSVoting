@@ -164,7 +164,7 @@ export default function PostCard({ post, currentUserId, currentUserRole, current
   }
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/feed#post-${post.id}`
+    const url = `${window.location.origin}/posts/${post.id}`
     await navigator.clipboard.writeText(url).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -189,7 +189,7 @@ export default function PostCard({ post, currentUserId, currentUserRole, current
           </div>
           <div>
             <a href={`/users/${post.author_id}`} className="font-semibold text-gray-900 hover:text-[#84050C] transition-colors text-sm leading-tight">{post.author_name}</a>
-            <div className="text-xs text-gray-400">{relTime(post.created_at)}</div>
+            <a href={`/posts/${post.id}`} className="block text-xs text-gray-400 hover:text-[#84050C] hover:underline transition-colors" title="View post">{relTime(post.created_at)}</a>
           </div>
         </div>
         <div className="flex items-center gap-2">
