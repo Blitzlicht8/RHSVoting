@@ -22,6 +22,7 @@ interface User {
   submitted_lrn?: string | null
   submitted_doc_type?: string | null
   submitted_profile_photo_url?: string | null
+  avatar_url?: string | null
   denied_fields?: string[]
   missing_required_groups?: string[]
 }
@@ -170,7 +171,9 @@ export default function VerifyIdPage() {
 
       // Prefill submitted values (so locked fields show what was submitted).
       if (u.submitted_lrn ?? u.lrn) setLrn(String(u.submitted_lrn ?? u.lrn))
-      if (u.submitted_profile_photo_url) setProfilePreview(u.submitted_profile_photo_url)
+      // Prefill photo from a prior submission or the user's existing avatar — a
+      // returning user with a photo isn't forced to re-upload unless they change it.
+      if (u.submitted_profile_photo_url ?? u.avatar_url) setProfilePreview(String(u.submitted_profile_photo_url ?? u.avatar_url))
       if (u.submitted_doc_type) setDocType(u.submitted_doc_type)
 
       deriveUiState(u)
@@ -277,7 +280,9 @@ export default function VerifyIdPage() {
         return
       }
     }
-    if (!locked('profile_photo') && !profilePhoto) {
+    // A photo is required, but an existing one (preview) counts — only first-time
+    // users with no photo at all must upload.
+    if (!locked('profile_photo') && !profilePhoto && !profilePreview) {
       setFormError('Please upload a profile photo of your face.')
       return
     }

@@ -8,7 +8,15 @@
 2026-07-25
 
 ## Version After This Session
-`2.5.0` — MINOR: **Admin group editing + derived required-group reverification (`feat/group-reverify`)**. Three linked fixes to the configurable group-structure model (Sessions 1–2 lineage).
+`2.6.0` — MINOR: **Profile group-structure display + self re-verification (`feat/profile-groups`)**. Builds on v2.5.0's derived required-group model.
+
+- **Profile page (`src/app/profile/page.tsx`) now shows the configurable Group Structure.** Replaced the dead legacy "Group Info (students only)" card (grade_level_name/subtype_name/section_name scalars) with a card driven by the new model: fetches all structures from `GET /api/groups` + the user's assignments from `GET /api/users/me` (`groups`). Required structures **always** render (value pill, or amber "Not set" when blank); optional structures render **only when set**. Removed now-unused `isStudent`.
+- **"Re-verify / Change Groups" button** on that card → `POST /api/users/me/reverify` (new route) then routes to `/verify-id`. The endpoint sets `id_verified=0`, `verification_status=NULL`, and `role='unverified'` (master_admin keeps its role — same guard as `PATCH /api/users/[id]` id_verified=0 — to avoid orphaning admin access), so the user re-runs the full group-select + document flow.
+- **Re-verification reuses an existing profile photo.** `verify-id/page.tsx` prefills `profilePreview` from `submitted_profile_photo_url ?? avatar_url` and no longer forces an upload when a photo already exists (`!profilePhoto && !profilePreview` gate). Server `POST /api/verifications` mirrors this: when no new `profile_photo` is uploaded (and not locked), it reuses the prior request's photo or the user's `avatar_url`, only erroring if there's none at all. `avatar_url` added to verify-id's local `User` type.
+
+`tsc --noEmit` clean, `npm run build` green. Live auth-gated visual pass on deploy still wanted (remote-DB).
+
+Prev: `2.5.0` — MINOR: **Admin group editing + derived required-group reverification (`feat/group-reverify`)**. Three linked fixes to the configurable group-structure model (Sessions 1–2 lineage).
 
 **1. Admins can now edit a user's group values.** New Group Structure section in the Members edit modal (`src/app/admin/users/page.tsx`) — a second `useGroupSelections()` instance (`editStructures/editSelected/editSetValue/editSetSelection/editAssignments/editOptionsFor`), seeded from the user's current assignments. `GET /api/users/[id]` now also returns `groups` (`{structure_id,value_id}[]`). `PATCH /api/users/[id]` accepts `assignments` (admin+`manageUsers`), validates each value belongs to its structure via new `validateAssignmentValues` (no required-completeness check), writes with `setUserAssignments`. Save only sends `assignments` when changed (order-independent `groupKey` diff vs `initialGroupKey`). `GroupSelects` hook gained `setSelection(sel)` for prefill.
 

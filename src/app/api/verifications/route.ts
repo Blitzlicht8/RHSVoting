@@ -215,22 +215,31 @@ export async function POST(request: NextRequest) {
   const profilePhoto = formData.get('profile_photo') as File | null
   let profilePhotoUrl = (prior?.profile_photo_url as string) ?? null
   const photoLocked = isLocked('profile_photo')
+  const hasNewPhoto = !!profilePhoto && typeof (profilePhoto as File).arrayBuffer === 'function' && profilePhoto.size > 0
   if (!photoLocked) {
-    if (!profilePhoto || typeof (profilePhoto as File).arrayBuffer !== 'function' || profilePhoto.size === 0) {
-      return NextResponse.json({ error: 'A profile photo is required.' }, { status: 400 })
+    if (hasNewPhoto) {
+      const imgTypes = ['image/jpeg', 'image/png', 'image/webp']
+      if (!imgTypes.includes(profilePhoto!.type)) {
+        return NextResponse.json({ error: 'Profile photo must be a JPEG, PNG, or WebP image.' }, { status: 400 })
+      }
+      if (profilePhoto!.size < 3 * 1024) {
+        return NextResponse.json({ error: 'Profile photo looks empty or too small — upload a clear photo of your face.' }, { status: 400 })
+      }
+      if (profilePhoto!.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Profile photo exceeds the 5 MB limit.' }, { status: 400 })
+      }
+      const pblob = await put(`avatars/${authUser.id}/${Date.now()}-${profilePhoto!.name}`, profilePhoto!, { access: 'public' })
+      profilePhotoUrl = pblob.url
+    } else {
+      // No new upload — reuse the prior submission's photo or the user's existing avatar.
+      if (!profilePhotoUrl) {
+        const existing = await db.execute({ sql: `SELECT avatar_url FROM users WHERE id = ?`, args: [authUser.id] })
+        profilePhotoUrl = (existing.rows[0]?.avatar_url as string) ?? null
+      }
+      if (!profilePhotoUrl) {
+        return NextResponse.json({ error: 'A profile photo is required.' }, { status: 400 })
+      }
     }
-    const imgTypes = ['image/jpeg', 'image/png', 'image/webp']
-    if (!imgTypes.includes(profilePhoto.type)) {
-      return NextResponse.json({ error: 'Profile photo must be a JPEG, PNG, or WebP image.' }, { status: 400 })
-    }
-    if (profilePhoto.size < 3 * 1024) {
-      return NextResponse.json({ error: 'Profile photo looks empty or too small — upload a clear photo of your face.' }, { status: 400 })
-    }
-    if (profilePhoto.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: 'Profile photo exceeds the 5 MB limit.' }, { status: 400 })
-    }
-    const pblob = await put(`avatars/${authUser.id}/${Date.now()}-${profilePhoto.name}`, profilePhoto, { access: 'public' })
-    profilePhotoUrl = pblob.url
   }
 
   // ── Session 10 (experimental): client-computed face descriptor ──
