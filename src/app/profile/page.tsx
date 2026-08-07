@@ -76,6 +76,11 @@ export default function ProfilePage() {
   const avatarFileRef = useRef<HTMLInputElement>(null)
   const [avatarInput, setAvatarInput] = useState('')
 
+  // Configurable group structure (new model)
+  const [groups, setGroups] = useState<{ structure_id: number; structure_name: string; value_id: number; value_name: string }[]>([])
+  const [structures, setStructures] = useState<{ id: number; name: string; is_required: number; order_index: number; active: number }[]>([])
+  const [reverifying, setReverifying] = useState(false)
+
   // Academic change state
   const [showAcademicModal, setShowAcademicModal] = useState(false)
   const [showAcademicWarning, setShowAcademicWarning] = useState(false)
@@ -124,6 +129,7 @@ export default function ProfilePage() {
       if (res.ok) {
         setProfile(json.data.user)
         setAchievements(json.data.achievements)
+        setGroups(json.data.groups ?? [])
       }
     } finally {
       setLoading(false)
@@ -137,6 +143,28 @@ export default function ProfilePage() {
   useEffect(() => {
     fetch('/api/settings').then(r=>r.json()).then(j=>setSettings(j.data??{}))
   }, [])
+
+  // All group structures (for showing required-but-blank rows).
+  useEffect(() => {
+    fetch('/api/groups', { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => setStructures(j.data ?? []))
+      .catch(() => {})
+  }, [])
+
+  const startReverify = async () => {
+    setReverifying(true)
+    try {
+      const res = await fetch('/api/users/me/reverify', { method: 'POST', credentials: 'include' })
+      if (!res.ok) { addToast('Could not start re-verification.', 'error'); return }
+      await refetch()
+      router.push('/verify-id')
+    } catch {
+      addToast('Network error.', 'error')
+    } finally {
+      setReverifying(false)
+    }
+  }
 
   // Load grade levels when modal opens; pre-populate selections from profile
   useEffect(() => {
@@ -173,8 +201,6 @@ export default function ProfilePage() {
       .then(sc => setSections(sc.data ?? []))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSubtype, selectedGrade, showAcademicModal])
-
-  const isStudent = authUser?.role === 'member' || authUser?.role === 'moderator'
 
   const l1 = settings.group_label_l1 ?? 'Grade Level'
   const l2 = settings.group_label_l2 ?? 'Track / Strand'
@@ -563,43 +589,40 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── 3. GROUP INFO (students only) ── */}
-        {isStudent && (
+        {/* ── 3. GROUP STRUCTURE (configurable model) ── */}
+        {(structures.some(s => s.active && s.is_required) || groups.length > 0) && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-gray-800">Group Info</h2>
-              <Button size="sm" variant="secondary" onClick={() => setShowAcademicModal(true)}>
-                Request Change
+              <h2 className="text-base font-semibold text-gray-800">Group Structure</h2>
+              <Button size="sm" variant="secondary" loading={reverifying} onClick={startReverify}>
+                Re-verify / Change Groups
               </Button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {profile.grade_level_name ? (
-                <span className="bg-[#84050C]/10 text-[#84050C] text-xs font-medium px-3 py-1 rounded-full">
-                  {profile.grade_level_name}
-                </span>
-              ) : null}
-              {profile.subtype_name ? (
-                <span className="bg-amber-100 text-amber-800 text-xs font-medium px-3 py-1 rounded-full">
-                  {profile.subtype_name}
-                </span>
-              ) : null}
-              {profile.section_name ? (
-                <span className="bg-blue-100 text-blue-800 text-xs font-medium px-3 py-1 rounded-full">
-                  {l3} {profile.section_name}
-                </span>
-              ) : null}
-              {!profile.grade_level_name && !profile.subtype_name && !profile.section_name && (
-                <span className="text-sm text-gray-400">No group info set</span>
-              )}
+            <div className="space-y-2">
+              {structures
+                .filter(s => s.active)
+                .sort((a, b) => a.order_index - b.order_index)
+                .map(s => {
+                  const g = groups.find(x => x.structure_id === s.id)
+                  // Required always show (even blank); optional only when set.
+                  if (!s.is_required && !g) return null
+                  return (
+                    <div key={s.id} className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        {s.name}{s.is_required ? <span className="text-red-500"> *</span> : null}
+                      </span>
+                      {g ? (
+                        <span className="text-sm text-gray-900 bg-gray-100 px-3 py-0.5 rounded-full">{g.value_name}</span>
+                      ) : (
+                        <span className="text-xs text-amber-700 bg-amber-50 px-3 py-0.5 rounded-full">Not set</span>
+                      )}
+                    </div>
+                  )
+                })}
             </div>
-            {profile.id_verified ? (
-              <p className="mt-3 text-xs text-green-600 flex items-center gap-1">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
-                ID verified
-              </p>
-            ) : (
-              <p className="mt-3 text-xs text-amber-600">ID pending verification</p>
-            )}
+            <p className="mt-3 text-xs text-gray-400">
+              Re-verifying resets your role to unverified until an admin re-approves. You&apos;ll re-select your groups and re-submit your document.
+            </p>
           </div>
         )}
 
