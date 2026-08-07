@@ -85,14 +85,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     return NextResponse.json({ error: 'has_dependencies', valueCount, userCount }, { status: 409 })
   }
 
-  if (force && userCount > 0) {
-    await db.execute({
-      sql: `UPDATE users SET needs_academic_update = 1, id_verified = 0
-            WHERE id IN (SELECT user_id FROM user_group_values WHERE structure_id = ?)`,
-      args: [id],
-    })
-  }
-
+  // Deleting the whole structure removes the requirement itself, so affected users
+  // are not left "missing a required group" — no id_verified reset needed.
   // FK ON DELETE CASCADE removes group_values, user_group_values, etc.
   await db.execute({ sql: `DELETE FROM group_structures WHERE id = ?`, args: [id] })
 

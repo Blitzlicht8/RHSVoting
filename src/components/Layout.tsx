@@ -37,6 +37,10 @@ export default function Layout({ children }: LayoutProps) {
 
   if (!user) return null
 
+  // Required group structure(s) left blank → user is treated as unverified until they refill.
+  const missingGroups = user.missing_required_groups ?? []
+  const needsGroupReverify = missingGroups.length > 0
+
   async function resendVerification() {
     try {
       const res = await fetch('/api/auth/resend-otp', { method: 'POST' })
@@ -78,7 +82,7 @@ export default function Layout({ children }: LayoutProps) {
         )}
 
         {/* ID rejected banner */}
-        {user.email_verified && !user.id_verified && !user.needs_academic_update && user.verification_status === 'rejected' && (
+        {user.email_verified && !user.id_verified && !needsGroupReverify && user.verification_status === 'rejected' && (
           <div className="bg-red-50 border-b border-red-300 px-4 py-3 flex items-center gap-2 text-sm text-red-700">
             <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
@@ -91,7 +95,7 @@ export default function Layout({ children }: LayoutProps) {
         )}
 
         {/* ID pending banner */}
-        {user.email_verified && !user.id_verified && !user.needs_academic_update && user.verification_status === 'pending' && (
+        {user.email_verified && !user.id_verified && !needsGroupReverify && user.verification_status === 'pending' && (
           <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-center gap-2 text-sm text-amber-700">
             <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
@@ -101,7 +105,7 @@ export default function Layout({ children }: LayoutProps) {
         )}
 
         {/* ID not yet submitted banner */}
-        {user.email_verified && !user.id_verified && !user.needs_academic_update && !user.verification_status && (
+        {user.email_verified && !user.id_verified && !needsGroupReverify && !user.verification_status && (
           <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-center gap-2 text-sm text-amber-700">
             <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
@@ -113,17 +117,19 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         )}
 
-        {/* Academic info needs update banner */}
-        {user.needs_academic_update ? (
-          <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-center justify-between">
+        {/* Missing required group(s) — treated as unverified until refilled + resubmitted */}
+        {needsGroupReverify ? (
+          <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <span className="text-amber-600">⚠️</span>
               <div>
-                <p className="text-sm font-medium text-amber-800">Your group information was updated by an administrator.</p>
-                <p className="text-xs text-amber-600">Please update your group information and re-upload your verification documents.</p>
+                <p className="text-sm font-medium text-amber-800">Your group information needs updating.</p>
+                <p className="text-xs text-amber-600">
+                  {missingGroups.join(', ')} {missingGroups.length === 1 ? 'is' : 'are'} missing. Re-select your group{missingGroups.length === 1 ? '' : 's'} and re-submit your verification to keep voting access.
+                </p>
               </div>
             </div>
-            <Link href="/profile" className="text-sm font-semibold text-amber-700 hover:underline">Update Info →</Link>
+            <Link href="/verify-id" className="shrink-0 text-sm font-semibold text-amber-700 hover:underline">Update Info →</Link>
           </div>
         ) : null}
 

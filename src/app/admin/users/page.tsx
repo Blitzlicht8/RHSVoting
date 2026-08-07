@@ -69,6 +69,10 @@ const ROLE_LEVEL: Record<string, number> = {
   unverified: -1, member: 0, staff: 1, moderator: 2, admin: 3, master_admin: 4,
 }
 
+// Stable key for a set of group assignments (order-independent) — used to detect edits.
+const groupKey = (as: { structure_id: number; value_id: number }[]) =>
+  as.map(a => `${a.structure_id}:${a.value_id}`).sort().join('|')
+
 function getAssignableRoles(currentUserRole: Role): Role[] {
   // 'unverified' is an auto role — never manually assignable
   if (currentUserRole === 'master_admin') return ['master_admin', 'admin', 'moderator', 'staff', 'member']
@@ -194,6 +198,17 @@ export default function UsersPage() {
     firstMissingRequired: createFirstMissingRequired,
   } = useGroupSelections()
 
+  // Group selection for the Edit modal, prefilled with the user's current assignments.
+  const {
+    structures: editStructures,
+    selected: editSelected,
+    setValue: editSetValue,
+    setSelection: editSetSelection,
+    assignments: editAssignments,
+    optionsFor: editOptionsFor,
+  } = useGroupSelections()
+  const [initialGroupKey, setInitialGroupKey] = useState('')
+
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
@@ -252,17 +267,24 @@ export default function UsersPage() {
 
   // Edit modal — load user documents + name history
   useEffect(() => {
-    if (!editUser) { setUserDocs([]); setNameHistory([]); return }
+    if (!editUser) { setUserDocs([]); setNameHistory([]); editSetSelection({}); setInitialGroupKey(''); return }
     setDocsLoading(true)
     fetch(`/api/users/${editUser.id}`, { credentials: 'include' })
       .then(r => r.json())
-      .then(j => setUserDocs((j.data?.documents as { id: number; file_path: string }[]) ?? []))
+      .then(j => {
+        setUserDocs((j.data?.documents as { id: number; file_path: string }[]) ?? [])
+        const gs = (j.data?.groups as { structure_id: number; value_id: number }[]) ?? []
+        const sel: Record<number, string> = {}
+        gs.forEach(g => { sel[g.structure_id] = String(g.value_id) })
+        editSetSelection(sel)
+        setInitialGroupKey(groupKey(gs))
+      })
       .catch(() => setUserDocs([]))
       .finally(() => setDocsLoading(false))
     fetch(`/api/admin/users/${editUser.id}/name-history`, { credentials: 'include' })
       .then(r => r.json()).then(j => setNameHistory(j.data ?? []))
       .catch(() => {})
-  }, [editUser])
+  }, [editUser, editSetSelection])
 
   const openEditModal = (u: UserRow) => {
     setEditUser(u)
@@ -288,6 +310,8 @@ export default function UsersPage() {
       if (editForm.role !== editUser.role) patch.role = editForm.role
       if (editForm.email_verified !== !!editUser.email_verified) patch.email_verified = editForm.email_verified
       if (editForm.active !== !!editUser.active) patch.active = editForm.active
+      // Only send group assignments when the admin actually changed them.
+      if (groupKey(editAssignments) !== initialGroupKey) patch.assignments = editAssignments
 
       if (Object.keys(patch).length > 0) {
         const res = await fetch(`/api/users/${editUser.id}`, {
@@ -1062,6 +1086,25 @@ export default function UsersPage() {
                 <span className="text-sm text-gray-700">Active</span>
               </label>
             </div>
+
+            {/* Group Structure — edit the user's configurable group values directly */}
+            {canVerify && editStructures.length > 0 && (
+              <div className="border-t pt-4">
+                <div className="text-sm font-medium text-gray-700 mb-1">Group Structure</div>
+                <p className="text-xs text-gray-400 mb-3">
+                  Changing groups here does not force reverification. Leaving a required group blank flags the user to re-verify before voting.
+                </p>
+                <div className="space-y-3">
+                  <GroupSelects
+                    structures={editStructures}
+                    selected={editSelected}
+                    setValue={editSetValue}
+                    optionsFor={editOptionsFor}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Reset Password */}
             <div className="border-t pt-4">
               <div className="text-sm font-medium text-gray-700 mb-2">Reset Password</div>

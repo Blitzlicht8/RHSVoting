@@ -121,6 +121,46 @@ export async function validateAssignments(assignments: Assignment[]): Promise<st
   return null
 }
 
+export interface MissingStructure {
+  id: number
+  name: string
+}
+
+/**
+ * Active required structures the user has NO value for. A non-empty result means
+ * the user is treated as unverified for voting until they refill their groups.
+ * Derived from live structures — no stored flag — so deleting a value inside a
+ * required structure (or adding a new required structure) auto-flags affected users,
+ * while an admin simply *changing* a user's group (still filled) never flags them.
+ */
+export async function getMissingRequiredStructures(userId: number): Promise<MissingStructure[]> {
+  const structures = await getStructures(true)
+  const required = structures.filter((s) => Number(s.is_required) === 1)
+  if (required.length === 0) return []
+  const assigned = await getUserAssignments(userId)
+  const have = new Set(assigned.map((a) => Number(a.structure_id)))
+  return required
+    .filter((s) => !have.has(Number(s.id)))
+    .map((s) => ({ id: Number(s.id), name: s.name }))
+}
+
+/**
+ * Validate assignments as an admin edit (value-belongs-to-structure only, no
+ * required-completeness check — admins may intentionally leave a required
+ * structure blank, which flags the user for reverification).
+ */
+export async function validateAssignmentValues(assignments: Assignment[]): Promise<string | null> {
+  for (const a of assignments) {
+    if (a.structure_id == null || a.value_id == null) continue
+    const r = await db.execute({
+      sql: `SELECT 1 FROM group_values WHERE id = ? AND structure_id = ?`,
+      args: [a.value_id, a.structure_id],
+    })
+    if (r.rows.length === 0) return `Invalid selection for structure ${a.structure_id}`
+  }
+  return null
+}
+
 /** In-memory view of a user's assignments for fast eligibility evaluation. */
 export interface UserValueSet {
   valueIds: Set<number>
