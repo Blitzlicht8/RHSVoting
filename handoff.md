@@ -8,7 +8,9 @@
 2026-07-25
 
 ## Version After This Session
-`2.6.0` — MINOR: **Profile group-structure display + self re-verification (`feat/profile-groups`)**. Builds on v2.5.0's derived required-group model.
+`2.6.1` — FIX: **Re-verify demotes only plain members (`fix/reverify-role`)**. `POST /api/users/me/reverify` role CASE changed from `WHEN role='master_admin' THEN role ELSE 'unverified'` to `WHEN role='member' THEN 'unverified' ELSE role END` — only a `member` drops to `unverified`; staff/moderator/admin/master_admin keep their role (re-verifying never strips admin permissions). `id_verified`/`verification_status` still reset for all.
+
+Prev: `2.6.0` — MINOR: **Profile group-structure display + self re-verification (`feat/profile-groups`)**. Builds on v2.5.0's derived required-group model.
 
 - **Profile page (`src/app/profile/page.tsx`) now shows the configurable Group Structure.** Replaced the dead legacy "Group Info (students only)" card (grade_level_name/subtype_name/section_name scalars) with a card driven by the new model: fetches all structures from `GET /api/groups` + the user's assignments from `GET /api/users/me` (`groups`). Required structures **always** render (value pill, or amber "Not set" when blank); optional structures render **only when set**. Removed now-unused `isStudent`.
 - **"Re-verify / Change Groups" button** on that card → `POST /api/users/me/reverify` (new route) then routes to `/verify-id`. The endpoint sets `id_verified=0`, `verification_status=NULL`, and `role='unverified'` (master_admin keeps its role — same guard as `PATCH /api/users/[id]` id_verified=0 — to avoid orphaning admin access), so the user re-runs the full group-select + document flow.
