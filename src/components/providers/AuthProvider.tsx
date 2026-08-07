@@ -14,6 +14,7 @@ export interface User {
   active: boolean | number
   created_at: string
   needs_academic_update?: boolean | number
+  missing_required_groups?: string[]
   avatar_url?: string | null
   bio?: string | null
   verification_status?: 'pending' | 'rejected' | null

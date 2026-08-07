@@ -23,6 +23,7 @@ interface User {
   submitted_doc_type?: string | null
   submitted_profile_photo_url?: string | null
   denied_fields?: string[]
+  missing_required_groups?: string[]
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -181,6 +182,9 @@ export default function VerifyIdPage() {
   useEffect(() => { fetchUser() }, [fetchUser])
 
   function deriveUiState(u: User) {
+    // A required group left blank overrides "verified": force the user back through
+    // group re-selection + document resubmission before they regain voting access.
+    if (u.missing_required_groups && u.missing_required_groups.length > 0) { setUiState('upload'); return }
     if (u.id_verified)                        { setUiState('verified'); return }
     if (u.verification_status === 'pending')  { setUiState('pending');  return }
     if (u.verification_status === 'rejected') { setUiState('rejected'); return }

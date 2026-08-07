@@ -4,7 +4,7 @@ import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
 import { InValue } from '@libsql/client'
-import { getUserValueSet, evaluateEligibility, EligibilityRule } from '@/lib/groups'
+import { getUserValueSet, evaluateEligibility, EligibilityRule, getMissingRequiredStructures } from '@/lib/groups'
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   await ensureInit()
@@ -85,6 +85,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
   if (!user.id_verified) {
     return NextResponse.json({ error: 'ID must be verified before voting' }, { status: 403 })
+  }
+  // A required group structure is blank (e.g. its value was removed) → must refill before voting.
+  const missingReq = await getMissingRequiredStructures(authUser.id as number)
+  if (missingReq.length > 0) {
+    return NextResponse.json(
+      { error: `Update your group information (${missingReq.map((m) => m.name).join(', ')}) before voting.` },
+      { status: 403 }
+    )
   }
 
   const electionResult = await db.execute({

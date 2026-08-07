@@ -96,7 +96,10 @@ export function useGroupSelections() {
     return null
   }, [ordered, selected])
 
-  return { structures: ordered, selected, setValue, assignments, optionsFor, firstMissingRequired, loading }
+  // Replace the whole selection at once (used to prefill an existing user's groups).
+  const setSelection = useCallback((sel: GroupSelection) => setSelected(sel), [])
+
+  return { structures: ordered, selected, setValue, setSelection, assignments, optionsFor, firstMissingRequired, loading }
 }
 
 // ─── Presentational component ───────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import { hasPermission } from '@/lib/permissions'
 import { logActivity } from '@/lib/logger'
 import { Role } from '@/types'
 import { InValue } from '@libsql/client'
+import { setUserAssignments, validateAssignmentValues, Assignment } from '@/lib/groups'
 
 const ALL_ROLES: Role[] = ['master_admin', 'admin', 'moderator', 'staff', 'member', 'unverified']
 
@@ -60,7 +61,22 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     args: [targetId]
   })
 
-  return NextResponse.json({ data: { user, documents: docs.rows.map(r => ({ id: Number(r.id), file_path: String(r.file_path) })) } })
+  // Current configurable group assignments (for the admin group editor).
+  const groups = await db.execute({
+    sql: `SELECT gs.id as structure_id, gs.name as structure_name, gvv.id as value_id, gvv.name as value_name
+          FROM user_group_values ugv
+          JOIN group_structures gs ON gs.id = ugv.structure_id
+          JOIN group_values gvv ON gvv.id = ugv.value_id
+          WHERE ugv.user_id = ?
+          ORDER BY gs.order_index, gs.id`,
+    args: [targetId],
+  })
+
+  return NextResponse.json({ data: {
+    user,
+    documents: docs.rows.map(r => ({ id: Number(r.id), file_path: String(r.file_path) })),
+    groups: groups.rows.map(r => ({ structure_id: Number(r.structure_id), value_id: Number(r.value_id) })),
+  } })
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
@@ -103,7 +119,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   // Admin-only user-management fields require the manageUsers scope (self-edits
   // of name/bio are exempt; timeout additionally requires manageUserPenalties below).
-  const ADMIN_FIELDS = ['role', 'active', 'email', 'email_verified', 'id_verified', 'grade_level_id', 'subtype_id', 'section_id', 'timeout_days']
+  const ADMIN_FIELDS = ['role', 'active', 'email', 'email_verified', 'id_verified', 'grade_level_id', 'subtype_id', 'section_id', 'timeout_days', 'assignments']
   if (adminUser && ADMIN_FIELDS.some((f) => body[f] !== undefined)) {
     if (!(await hasPermission(authUser.role as Role, 'manageUsers'))) {
       return NextResponse.json({ error: 'Forbidden — missing user management permission' }, { status: 403 })
@@ -207,17 +223,35 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
   }
 
-  if (setClauses.length === 0) {
+  // Admin edit of the user's configurable group values. Deliberately does NOT reset
+  // id_verified: changing a user's groups must not force reverification. If the admin
+  // leaves a required structure blank, the derived missing-required check flags them.
+  const hasAssignments = adminUser && Array.isArray(body.assignments)
+  if (hasAssignments) {
+    const assignments: Assignment[] = (body.assignments as unknown[])
+      .filter((a): a is Assignment =>
+        !!a && typeof a === 'object' &&
+        Number.isFinite(Number((a as Assignment).structure_id)) &&
+        Number.isFinite(Number((a as Assignment).value_id)))
+      .map(a => ({ structure_id: Number(a.structure_id), value_id: Number(a.value_id) }))
+    const err = await validateAssignmentValues(assignments)
+    if (err) return NextResponse.json({ error: err }, { status: 400 })
+    await setUserAssignments(targetId, assignments)
+  }
+
+  if (setClauses.length === 0 && !hasAssignments) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
   }
 
-  setClauses.push("updated_at = datetime('now')")
-  values.push(targetId)
+  if (setClauses.length > 0) {
+    setClauses.push("updated_at = datetime('now')")
+    values.push(targetId)
 
-  await db.execute({
-    sql: `UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`,
-    args: values,
-  })
+    await db.execute({
+      sql: `UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`,
+      args: values,
+    })
+  }
 
   if (body.name !== undefined && (isSelf || adminUser)) {
     const oldName = existingUser.name as string

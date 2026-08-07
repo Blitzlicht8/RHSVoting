@@ -73,11 +73,9 @@ export async function DELETE(request: NextRequest, { params }: { params: { vid: 
   }
 
   if (force && userCount > 0) {
-    await db.execute({
-      sql: `UPDATE users SET needs_academic_update = 1, id_verified = 0
-            WHERE id IN (SELECT user_id FROM user_group_values WHERE value_id = ?)`,
-      args: [vid],
-    })
+    // Just clear the assignment. If this value's structure is required, those users
+    // now fail the derived required-groups check and are prompted to reverify; if
+    // it's optional, they keep full access. We no longer blanket-reset id_verified.
     await db.execute({ sql: `DELETE FROM user_group_values WHERE value_id = ?`, args: [vid] })
   }
 

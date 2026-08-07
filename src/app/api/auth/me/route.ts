@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { getMissingRequiredStructures } from '@/lib/groups'
 
 export async function GET(_request: NextRequest) {
   await ensureInit()
@@ -40,9 +41,13 @@ export async function GET(_request: NextRequest) {
     } catch {}
   }
 
+  // Active required structures with no value → treated as unverified for voting.
+  const missing = await getMissingRequiredStructures(authUser.id)
+
   return NextResponse.json({
     data: {
       ...user,
+      missing_required_groups: missing.map((m) => m.name),
       id_photo_url: req?.image_path ?? null,
       verification_notes: req?.notes ?? user.verification_notes ?? null,
       submitted_doc_type: req?.doc_type ?? null,
