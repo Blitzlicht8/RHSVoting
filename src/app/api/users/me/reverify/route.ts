@@ -4,10 +4,10 @@ import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
 
-// User-initiated re-verification: drop back to unverified and clear ID verification
-// so the /verify-id flow re-runs (re-select groups + resubmit document).
-// master_admin keeps its role (mirrors PATCH /api/users/[id] id_verified=0 behavior)
-// to avoid orphaning admin access, but still resets verification state.
+// User-initiated re-verification: clear ID verification so the /verify-id flow
+// re-runs (re-select groups + resubmit document). Only a plain `member` is demoted
+// to `unverified`; privileged roles (staff/moderator/admin/master_admin) keep their
+// role so re-verifying never strips admin permissions.
 export async function POST(request: NextRequest) {
   await ensureInit()
   const authUser = await getAuthUser()
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     sql: `UPDATE users SET
             id_verified = 0,
             verification_status = NULL,
-            role = CASE WHEN role = 'master_admin' THEN role ELSE 'unverified' END,
+            role = CASE WHEN role = 'member' THEN 'unverified' ELSE role END,
             updated_at = datetime('now')
           WHERE id = ?`,
     args: [authUser.id],
