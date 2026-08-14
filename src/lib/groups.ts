@@ -201,7 +201,9 @@ export function buildEligibilitySql(rules: EligibilityRule[], userAlias = 'u'): 
   const args: number[] = []
 
   const clauseFor = (subset: EligibilityRule[]): string => {
-    if (subset.some((r) => Number(r.is_all_groups) === 1)) return '1'
+    // Emit real SQL booleans (TRUE/FALSE), not 0/1 — Postgres rejects
+    // `NOT (0)` / `0 AND ...` with "argument of NOT must be type boolean".
+    if (subset.some((r) => Number(r.is_all_groups) === 1)) return 'TRUE'
     const valIds = subset.filter((r) => r.value_id != null).map((r) => Number(r.value_id))
     const structIds = subset
       .filter((r) => r.value_id == null && r.structure_id != null)
@@ -215,13 +217,13 @@ export function buildEligibilitySql(rules: EligibilityRule[], userAlias = 'u'): 
       conds.push(`ugv.structure_id IN (${structIds.map(() => '?').join(',')})`)
       args.push(...structIds)
     }
-    if (!conds.length) return '0'
+    if (!conds.length) return 'FALSE'
     return `EXISTS (SELECT 1 FROM user_group_values ugv WHERE ugv.user_id = ${userAlias}.id AND (${conds.join(' OR ')}))`
   }
 
   const includes = rules.filter((r) => !Number(r.is_exclude))
   const excludes = rules.filter((r) => Number(r.is_exclude))
-  const incSql = includes.length ? clauseFor(includes) : '0'
-  const excSql = excludes.length ? clauseFor(excludes) : '0'
+  const incSql = includes.length ? clauseFor(includes) : 'FALSE'
+  const excSql = excludes.length ? clauseFor(excludes) : 'FALSE'
   return { sql: `(${incSql}) AND NOT (${excSql})`, args }
 }
