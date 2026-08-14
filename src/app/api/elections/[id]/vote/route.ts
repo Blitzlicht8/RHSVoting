@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
-import { InValue } from '@libsql/client'
+import type { InValue } from '@/lib/db'
 import { getUserValueSet, evaluateEligibility, EligibilityRule, getMissingRequiredStructures } from '@/lib/groups'
 
 export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {

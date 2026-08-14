@@ -5,7 +5,7 @@ import { db, ensureInit } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
 import { setUserAssignments, validateAssignments, type Assignment } from '@/lib/groups'
-import { InValue } from '@libsql/client'
+import type { InValue } from '@/lib/db'
 
 const MAX_FILES = 3
 

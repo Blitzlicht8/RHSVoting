@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
-import { InValue } from '@libsql/client'
+import type { InValue } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   await ensureInit()

@@ -1,6 +1,6 @@
 {
   "name": "school-voting",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,7 +8,6 @@
     "start": "next start"
   },
   "dependencies": {
-    "@libsql/client": "^0.14.0",
     "@vercel/blob": "^0.27.0",
     "@vladmandic/face-api": "^1.7.15",
     "bcryptjs": "^2.4.3",

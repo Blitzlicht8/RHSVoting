@@ -10,5 +10,16 @@ const nextConfig = {
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
     ],
   },
+  webpack: (config) => {
+    // @vladmandic/face-api uses a dynamic require() that webpack can't statically
+    // analyze. It's harmless (face compute runs in the browser from /public/models),
+    // but it spams "Critical dependency: require function is used..." on every
+    // compile. Silence just that warning so the dev console stays readable.
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings ?? []),
+      { module: /@vladmandic[\\/]face-api/ },
+    ]
+    return config
+  },
 }
 module.exports = nextConfig

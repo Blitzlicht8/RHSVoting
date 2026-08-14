@@ -143,26 +143,41 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) return
+    // Tolerant fetch: never throws. Returns parsed JSON, or null on a non-OK /
+    // empty / aborted response. On a cold dev start a route may still be
+    // compiling and briefly return an empty body — without this, `r.json()`
+    // throws "Unexpected end of JSON input" and blanks the whole dashboard.
+    const safeJson = async (input: string): Promise<{ data?: Record<string, unknown> } | null> => {
+      try {
+        const r = await fetch(input)
+        if (!r.ok) return null
+        const text = await r.text()
+        return text ? JSON.parse(text) : null
+      } catch {
+        return null
+      }
+    }
+
     const fetchData = async () => {
       try {
         // Fire elections + (admin stats) concurrently — they're independent.
-        const electionsP = fetch('/api/elections').then((r) => r.json())
+        const electionsP = safeJson('/api/elections')
         const adminP = isAdmin
           ? Promise.all([
-              fetch('/api/users?limit=1').then((r) => r.json()),
-              fetch('/api/verifications?status=pending&limit=1').then((r) => r.json()),
+              safeJson('/api/users?limit=1'),
+              safeJson('/api/verifications?status=pending&limit=1'),
             ])
           : null
 
         const electionsJson = await electionsP
-        const rawElections: Election[] = electionsJson.data?.elections ?? []
+        const rawElections: Election[] = (electionsJson?.data?.elections as Election[]) ?? []
         // hasVoted is returned directly from the elections API (no N+1 per-election fetch)
         setElections(rawElections.map((e) => ({ ...e, hasVoted: !!e.hasVoted })))
 
         if (adminP) {
           const [usersJson, verificationsJson] = await adminP
-          setTotalUsers(usersJson.data?.total ?? 0)
-          setPendingVerifications(verificationsJson.data?.total ?? 0)
+          setTotalUsers((usersJson?.data?.total as number) ?? 0)
+          setPendingVerifications((verificationsJson?.data?.total as number) ?? 0)
         }
       } finally {
         setLoading(false)

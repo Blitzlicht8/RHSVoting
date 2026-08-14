@@ -5,7 +5,7 @@ import { getAuthUser, isAdmin } from '@/lib/auth'
 import { hasPermission } from '@/lib/permissions'
 import { logActivity } from '@/lib/logger'
 import { Role } from '@/types'
-import { InValue } from '@libsql/client'
+import type { InValue } from '@/lib/db'
 import { setUserAssignments, validateAssignmentValues, Assignment } from '@/lib/groups'
 
 const ALL_ROLES: Role[] = ['master_admin', 'admin', 'moderator', 'staff', 'member', 'unverified']

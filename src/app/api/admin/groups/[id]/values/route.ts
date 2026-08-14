@@ -4,7 +4,7 @@ import { db, ensureInit } from '@/lib/db'
 import { getAuthUser, isAdmin } from '@/lib/auth'
 import { logActivity } from '@/lib/logger'
 import { invalidateGroupsCache } from '@/lib/groups'
-import type { InValue } from '@libsql/client'
+import type { InValue } from '@/lib/db'
 
 function requireWrite(role: string) {
   return ['master_admin', 'admin'].includes(role)

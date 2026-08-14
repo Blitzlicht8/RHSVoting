@@ -36,6 +36,12 @@ export interface DbStatement {
   args?: unknown[]
 }
 
+// SQL argument value type. Formerly imported from @libsql/client (Turso); kept
+// here after the Supabase/Postgres migration so no runtime dependency on the
+// old libsql package remains. Matches the set of values our translate()/pg path
+// accepts as positional args.
+export type InValue = string | number | bigint | boolean | null | Uint8Array | Date
+
 // ── SQLite → Postgres statement translation ──
 function translate(sql: string): string {
   let out = sql
